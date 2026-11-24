@@ -1,0 +1,10 @@
+# Only what the build needs; keeps local secrets and personal data out of the public image.
+*
+!package.json
+!package-lock.json
+!tsconfig*.json
+!vite.config.*
+!index.html
+!src/
+!public/
+!drizzle/

@@ -1,0 +1,105 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "enabledManagers": ["npm", "dockerfile", "docker-compose", "github-actions"],
+  "timezone": "Europe/Berlin",
+  "schedule": ["after 2am and before 5am"],
+  "prConcurrentLimit": 10,
+  "prHourlyLimit": 4,
+  "labels": ["renovate", "dependencies"],
+  "reviewers": ["jp1337"],
+  "rebaseWhen": "conflicted",
+  "platformAutomerge": true,
+  "minimumReleaseAge": "3 days",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on monday"],
+    "automerge": false
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "schedule": ["at any time"],
+    "labels": ["renovate", "security"],
+    "semanticCommitType": "fix"
+  },
+  "packageRules": [
+    {
+      "description": "Patch, pin and digest updates merge themselves once CI is green",
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "labels": ["renovate", "automerge"]
+    },
+    {
+      "matchUpdateTypes": ["minor"],
+      "automerge": false,
+      "labels": ["renovate", "needs-review"]
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["renovate", "major", "needs-review"]
+    },
+    {
+      "description": "Security-relevant packages and the database are never automerged, whatever the update type",
+      "matchPackageNames": [
+        "fastify",
+        "@fastify/cookie",
+        "@fastify/websocket",
+        "@fastify/static",
+        "pg",
+        "drizzle-orm",
+        "zod",
+        "postgres"
+      ],
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "automerge": false,
+      "labels": ["renovate", "needs-review"]
+    },
+    {
+      "description": "Mark packages that handle sessions, sockets, input validation or SQL",
+      "matchPackageNames": [
+        "fastify",
+        "@fastify/cookie",
+        "@fastify/websocket",
+        "@fastify/static",
+        "pg",
+        "drizzle-orm",
+        "zod"
+      ],
+      "automerge": false,
+      "addLabels": ["security-relevant"]
+    },
+    {
+      "description": "A PostgreSQL major update needs a data migration, so every PostgreSQL update is merged by hand",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["postgres"],
+      "groupName": "PostgreSQL",
+      "automerge": false
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "semanticCommitScope": "ci"
+    },
+    {
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "semanticCommitScope": "docker",
+      "pinDigests": true
+    },
+    {
+      "description": "Node.js image, engines field and CI setup-node move together; minor and major stay manual",
+      "matchDepNames": ["node"],
+      "groupName": "Node.js runtime"
+    },
+    {
+      "description": "Our own image is built by CI, not a dependency",
+      "matchPackageNames": ["ghcr.io/jp1337/dice"],
+      "enabled": false
+    }
+  ]
+}
