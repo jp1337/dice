@@ -1,0 +1,159 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # Explicit bash runs with -eo pipefail, so a failing command in a pipe fails the step.
+    shell: bash
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:19-alpine@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f
+        env:
+          POSTGRES_USER: dice
+          POSTGRES_PASSWORD: dice
+          POSTGRES_DB: dice_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dice -d dice_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://dice:dice@localhost:5432/dice_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  secrets-and-personal-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan the full history for secrets
+        uses: docker://zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+        env:
+          # The workspace belongs to the runner user, not root: without this git refuses the repository.
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: safe.directory
+          GIT_CONFIG_VALUE_0: /github/workspace
+        with:
+          entrypoint: /bin/bash
+          args: .github/gitleaks-scan.sh
+      - name: Write the personal-data denylist
+        env:
+          PERSONAL_DENYLIST: ${{ secrets.PERSONAL_DENYLIST }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+        run: |
+          if [[ -z "$PERSONAL_DENYLIST" ]]; then
+            if [[ "$IS_FORK" == "true" ]]; then
+              echo "::error::Pull requests from forks get no secrets, so the personal-data check cannot run. A maintainer must re-run this check from a branch in this repository before merging."
+            else
+              echo "::error::The repository secret PERSONAL_DENYLIST is missing or empty. Refusing to pass without the personal-data check."
+            fi
+            exit 1
+          fi
+          printf '%s\n' "$PERSONAL_DENYLIST" > "$RUNNER_TEMP/personal-denylist"
+          echo "PERSONAL_DENYLIST_FILE=$RUNNER_TEMP/personal-denylist" >> "$GITHUB_ENV"
+      - name: Check file names, contents, history, commit messages and authors
+        run: |
+          check=scripts/check-personal-data.sh
+          git ls-files | $check "tracked file names"
+          git ls-files -z | xargs -0 cat -- | $check "tracked file contents"
+          git log --all -p --diff-merges=first-parent --format= | $check "the history of all files"
+          git log --all --format=%B | $check "commit messages"
+          git log --all --format='%an%n%ae%n%cn%n%ce' | $check "commit authors and committers"
+      - if: always()
+        run: rm -f "$RUNNER_TEMP/personal-denylist"
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [lint, typecheck, test, docker, secrets-and-personal-data]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
+            ghcr.io/${{ github.repository }}:latest
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

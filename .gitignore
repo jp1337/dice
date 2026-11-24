@@ -6,3 +6,4 @@ coverage/
 # German planning document, stays local (see docs-tech/spec.md for the English spec)
 wuerfel-tool-konzept.md
 .personal-denylist
+.vitest/

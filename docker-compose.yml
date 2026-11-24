@@ -1,0 +1,47 @@
+name: dice
+
+services:
+  app:
+    # The deploy workflow pins the tested sha-<commit> tag in docker-compose.override.yml.
+    image: ghcr.io/jp1337/dice:latest
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Overrides .env: inside compose the app always talks to the postgres service and listens on 3000.
+      DATABASE_URL: postgres://dice:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/dice
+      PORT: "3000"
+    ports:
+      # Reachable only from the host itself; the reverse proxy forwards to it.
+      - "127.0.0.1:${PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:19-alpine@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dice
+      POSTGRES_DB: dice
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      # PostgreSQL 18+ images keep their data below /var/lib/postgresql/<major>/.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      # TCP, not the socket: the temporary server during first-time init listens on the socket only.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U dice -d dice"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+networks:
+  default:
+    ipam:
+      config:
+        # Fixed, so TRUSTED_PROXIES can name the gateway (172.31.250.1), the address nginx on the host
+        # connects from. Override with DICE_SUBNET in .env if it clashes; then update TRUSTED_PROXIES too.
+        - subnet: ${DICE_SUBNET:-172.31.250.0/24}
+
+volumes:
+  pgdata:
