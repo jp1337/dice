@@ -52,7 +52,7 @@ The gift order so far is visible to everyone throughout.
 
 | No. | Rule | Setting |
 | --- | --- | --- |
-| R1 | A 6 gives the next free gift place and removes the player from rolling. Everyone gets exactly one place | `sixRemovesPlayer: true` |
+| R1 | A 6 gives the next free gift place and removes the player from rolling. Everyone gets exactly one place | fixed (see [decisions](decisions.md)) |
 | R2 | With two dice one 6 suffices; two 6s change nothing; a 6 beats a simultaneous 1 | fixed |
 | | A 1 grants two dice on the player's next turn (core requirement) | fixed |
 | R3 | With two dice, a 1 without a 6 grants the bonus again | `bonusChains: true` |
@@ -141,7 +141,10 @@ The game state is never stored; it is `reduce(events, settings) -> GameState` ov
 
 - `reduce` is pure (no network, no database) and holds all rule logic.
 - Moderation events live in the same log so history has one source; `reduce` ignores them.
-- `undone` excludes the last `rolled` from the computation.
+- `undone` names the roll it takes back (`seq`) and counts only while that roll is the newest one still in
+  effect: two hosts clicking at once undo one roll. Undone rolls leave the computation, stay in the history,
+  and are listed in `GameState.undoneSeqs`.
+- Game commands are checked by the pure `decide(state, command, ctx)`, which returns the events to append.
 - The server keeps state per room in memory and rebuilds it from the events after a restart.
 
 ## Interfaces

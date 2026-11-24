@@ -14,6 +14,11 @@ describe("lobby and start", () => {
     expect(s).toMatchObject({ status: "running", round: 1, turnOrder: [B, A, C], activeUserId: B, activeDiceCount: 1 });
   });
 
+  it("a player listed twice in game_started rolls once and gets one place", () => {
+    const s = run([e.start(A, B, A), e.roll(A, 6), e.cont(), e.remove(B)]);
+    expect(s).toMatchObject({ turnOrder: [], giftOrder: [A], removed: [B], status: "finished" });
+  });
+
   it("ignores game events in the lobby and a second game_started", () => {
     const s = run([e.roll(A, 6), e.pause(), e.skip(A), e.add(A), e.remove(A), e.last(A), e.end(), e.start(A, B), e.start(C)]);
     expect(s).toMatchObject({ status: "running", turnOrder: [A, B], activeUserId: A, pause: null, giftOrder: [] });
@@ -93,37 +98,6 @@ describe("six (R1, R2)", () => {
   it("the last player in the order rolling a 6 wraps to the next round", () => {
     const s = run([e.start(A, B, C), e.roll(A, 2), e.roll(B, 2), e.roll(C, 6)]);
     expect(s).toMatchObject({ activeUserId: A, round: 2, turnOrder: [A, B] });
-  });
-
-  describe("sixRemovesPlayer false", () => {
-    const off = { sixRemovesPlayer: false } as const;
-
-    it("a 6 gives a place, the player keeps rolling", () => {
-      const s = run([e.start(A, B, C), e.roll(A, 6)], off);
-      expect(s).toMatchObject({ giftOrder: [A], turnOrder: [A, B, C], activeUserId: B, pause: "six" });
-    });
-
-    it("a player can win several places; the game ends with one gift per player", () => {
-      const s = run([e.start(A, B), e.roll(A, 6), e.cont(), e.roll(B, 2), e.roll(A, 6)], off);
-      expect(s).toMatchObject({ status: "finished", giftOrder: [A, A], pause: null, activeUserId: null });
-    });
-
-    it("a 6 beats a 1 here too", () => {
-      const s = run([e.start(A, B), e.roll(A, 1), e.roll(B, 2), e.roll(A, 6, 1)], off);
-      expect(s).toMatchObject({ giftOrder: [A], bonusPending: [] });
-    });
-
-    it("the last player rule applies to a last player without a place", () => {
-      const left = [e.start(A, B, C), e.remove(B), e.remove(C)];
-      expect(run(left, off)).toMatchObject({ status: "running", activeUserId: A, giftOrder: [] });
-      expect(run([...left, e.last(A)], off)).toMatchObject({ status: "finished", giftOrder: [A], turnOrder: [A] });
-      expect(run(left, { ...off, lastPlayer: "auto" })).toMatchObject({ status: "finished", giftOrder: [A] });
-    });
-
-    it("removing a place holder keeps the place and lowers the gift count", () => {
-      const s = run([e.start(A, B), e.roll(A, 6), e.cont(), e.remove(A)], off);
-      expect(s).toMatchObject({ status: "finished", giftOrder: [A], removed: [A] });
-    });
   });
 });
 
@@ -248,59 +222,67 @@ describe("pause and continue", () => {
 });
 
 describe("undo", () => {
+  // run() numbers the events from seq 1, so e.undo(n) targets the n-th event.
   it("undoes a normal roll: the player is active again", () => {
-    const s = run([e.start(A, B), e.roll(A, 3), e.undo()]);
-    expect(s).toMatchObject({ activeUserId: A, lastRoll: null, round: 1 });
+    const s = run([e.start(A, B), e.roll(A, 3), e.undo(2)]);
+    expect(s).toMatchObject({ activeUserId: A, lastRoll: null, round: 1, undoneSeqs: [2] });
   });
 
   it("undoes a six with its place and its pause", () => {
-    const s = run([e.start(A, B, C), e.roll(A, 6), e.undo()]);
+    const s = run([e.start(A, B, C), e.roll(A, 6), e.undo(2)]);
     expect(s).toMatchObject({ activeUserId: A, giftOrder: [], turnOrder: [A, B, C], pause: null });
     // continued after the six no longer applies
-    expect(run([e.start(A, B, C), e.roll(A, 6), e.cont(), e.undo()])).toMatchObject({ activeUserId: A, pause: null });
+    expect(run([e.start(A, B, C), e.roll(A, 6), e.cont(), e.undo(2)])).toMatchObject({ activeUserId: A, pause: null });
   });
 
   it("undoes a bonus-granting 1, and a bonus-consuming roll gives the bonus back", () => {
-    expect(run([e.start(A, B), e.roll(A, 1), e.undo()]).bonusPending).toEqual([]);
-    const back = run([e.start(A, B), e.roll(A, 1), e.roll(B, 2), e.roll(A, 3, 4), e.undo()]);
+    expect(run([e.start(A, B), e.roll(A, 1), e.undo(2)]).bonusPending).toEqual([]);
+    const back = run([e.start(A, B), e.roll(A, 1), e.roll(B, 2), e.roll(A, 3, 4), e.undo(4)]);
     expect(back).toMatchObject({ activeUserId: A, activeDiceCount: 2, lastRoll: { userId: B } });
   });
 
-  it("undo twice removes the two latest rolls (a stack, never a redo)", () => {
-    const s = run([e.start(A, B, C), e.roll(A, 1), e.roll(B, 6), e.undo(), e.undo()]);
-    expect(s).toMatchObject({ activeUserId: A, giftOrder: [], bonusPending: [], lastRoll: null });
+  it("undo chains: each undo takes the newest roll still in effect (never a redo)", () => {
+    const s = run([e.start(A, B, C), e.roll(A, 1), e.roll(B, 6), e.undo(3), e.undo(2)]);
+    expect(s).toMatchObject({ activeUserId: A, giftOrder: [], bonusPending: [], lastRoll: null, undoneSeqs: [3, 2] });
   });
 
   it("after undo and a new roll, the next undo takes the new roll", () => {
-    const s = run([e.start(A, B), e.roll(A, 2), e.roll(B, 6), e.undo(), e.roll(B, 3), e.undo()]);
-    expect(s).toMatchObject({ activeUserId: B, giftOrder: [], lastRoll: { userId: A, dice: [2] } });
+    const s = run([e.start(A, B), e.roll(A, 2), e.roll(B, 6), e.undo(3), e.roll(B, 3), e.undo(5)]);
+    expect(s).toMatchObject({ activeUserId: B, giftOrder: [], lastRoll: { userId: A, dice: [2] }, undoneSeqs: [3, 5] });
   });
 
-  it("undo with nothing to undo changes nothing", () => {
-    expect(run([e.start(A, B), e.undo(), e.roll(A, 2)])).toMatchObject({ activeUserId: B, lastRoll: { userId: A } });
+  it("two hosts undoing at once take back exactly one roll", () => {
+    const s = run([e.start(A, B, C), e.roll(A, 2), e.roll(B, 3), e.undo(3), e.undo(3)]);
+    expect(s).toMatchObject({ activeUserId: B, lastRoll: { userId: A }, undoneSeqs: [3] });
   });
 
-  it("history drops undone rolls but keeps the undone entries", () => {
-    const s = run([e.start(A, B), e.roll(A, 2), e.roll(B, 3), e.undo()]);
-    expect(s.history.map((x) => x.type)).toEqual(["game_started", "rolled", "undone"]);
-    expect(s.history[1]).toMatchObject({ seq: 2 });
+  it("ignores an undo whose target is not the newest roll in effect", () => {
+    const s = run([e.start(A, B, C), e.roll(A, 2), e.roll(B, 3), e.undo(2), e.undo(1), e.undo(9)]);
+    expect(s).toMatchObject({ activeUserId: C, lastRoll: { userId: B }, undoneSeqs: [] });
+    expect(run([e.start(A, B), e.undo(1), e.roll(A, 2)])).toMatchObject({ activeUserId: B, lastRoll: { userId: A } });
+  });
+
+  it("history keeps undone rolls and lists them in undoneSeqs", () => {
+    const s = run([e.start(A, B), e.roll(A, 2), e.roll(B, 3), e.undo(3)]);
+    expect(s.history.map((x) => x.type)).toEqual(["game_started", "rolled", "rolled", "undone"]);
+    expect(s.undoneSeqs).toEqual([3]);
   });
 
   it("undo of the finishing six reopens the game; a stale claim is ignored", () => {
-    expect(run([e.start(A, B), e.roll(A, 6), e.undo()], { lastPlayer: "auto" })).toMatchObject({
+    expect(run([e.start(A, B), e.roll(A, 6), e.undo(2)], { lastPlayer: "auto" })).toMatchObject({
       status: "running",
       activeUserId: A,
       giftOrder: [],
     });
-    expect(run([e.start(A, B), e.roll(A, 6), e.last(B), e.undo()])).toMatchObject({ status: "running", giftOrder: [] });
+    expect(run([e.start(A, B), e.roll(A, 6), e.last(B), e.undo(2)])).toMatchObject({ status: "running", giftOrder: [] });
   });
 
   it("a stale skip is ignored after an undo", () => {
-    expect(run([e.start(A, B), e.roll(A, 2), e.skip(B), e.undo()])).toMatchObject({ activeUserId: A });
+    expect(run([e.start(A, B), e.roll(A, 2), e.skip(B), e.undo(2)])).toMatchObject({ activeUserId: A });
   });
 
   it("is ignored after game_ended", () => {
-    expect(run([e.start(A, B), e.roll(A, 6), e.end(), e.undo()]).giftOrder).toEqual([A]);
+    expect(run([e.start(A, B), e.roll(A, 6), e.end(), e.undo(2)])).toMatchObject({ giftOrder: [A], undoneSeqs: [] });
   });
 });
 
@@ -313,7 +295,7 @@ describe("end and reset", () => {
   it("game_reset returns to the lobby and ignores everything before", () => {
     const s = run([e.start(A, B), e.roll(A, 6), e.reset()]);
     expect(s).toEqual({ ...initialGameState(), history: [expect.objectContaining({ type: "game_reset" })] });
-    expect(run([e.start(A, B), e.roll(A, 3), e.reset(), e.undo(), e.start(C, D)])).toMatchObject({
+    expect(run([e.start(A, B), e.roll(A, 3), e.reset(), e.undo(2), e.start(C, D)])).toMatchObject({
       status: "running",
       turnOrder: [C, D],
       lastRoll: null,

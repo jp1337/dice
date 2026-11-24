@@ -6,20 +6,18 @@ import { reduce } from "../../src/shared/game/reduce.js";
 import { Game, HOST, e, log, seeded, settingsWith, users } from "./helpers.js";
 
 const variants: Partial<Settings>[] = [];
-for (const sixRemovesPlayer of [true, false])
-  for (const bonusChains of [true, false])
-    for (const lastPlayer of ["choice", "auto"] as const) variants.push({ sixRemovesPlayer, bonusChains, lastPlayer });
+for (const bonusChains of [true, false])
+  for (const lastPlayer of ["choice", "auto"] as const) variants.push({ bonusChains, lastPlayer });
 
-function checkState(s: GameState, settings: Settings) {
+function checkState(s: GameState) {
   if (s.status === "running") expect(s.turnOrder).toContain(s.activeUserId);
   else expect(s.activeUserId).toBeNull();
   if (s.status !== "running") expect(s.pause).toBeNull();
   expect(new Set(s.turnOrder).size).toBe(s.turnOrder.length);
   expect(s.activeDiceCount).toBe(s.activeUserId && s.bonusPending.includes(s.activeUserId) ? 2 : 1);
-  if (settings.sixRemovesPlayer) {
-    expect(new Set(s.giftOrder).size).toBe(s.giftOrder.length);
-    for (const u of s.giftOrder) expect(s.turnOrder).not.toContain(u);
-  }
+  expect(new Set(s.giftOrder).size).toBe(s.giftOrder.length);
+  for (const u of s.giftOrder) expect([...s.turnOrder, ...s.removed]).not.toContain(u); // a removed player never holds a place
+  for (const seq of s.undoneSeqs) expect(s.history.find((x) => x.seq === seq)?.type).toBe("rolled");
 }
 
 // One random game: mostly rolls, sometimes host tools; returns the game and everyone who ever played.
@@ -41,7 +39,7 @@ function randomGame(seed: number, s: Partial<Settings>, moderate: boolean) {
     else if (pick < 74) cmd = [HOST, { type: "roll_for" }];
     else if (pick < 77) cmd = [HOST, { type: "skip" }];
     else if (pick < 80) cmd = [HOST, { type: "pause" }];
-    else if (pick < 85) cmd = [HOST, { type: "undo" }];
+    else if (pick < 85) cmd = [HOST, pick % 2 ? { type: "undo" } : { type: "undo", seq: rnd(1, g.events.length + 2) }];
     else if (pick < 88) cmd = [HOST, { type: "remove_player", userId: someone }];
     else if (pick < 91) cmd = [HOST, { type: "add_player", userId: someone }];
     else if (pick < 95) cmd = [active, { type: "claim_last_place" }];
@@ -49,26 +47,20 @@ function randomGame(seed: number, s: Partial<Settings>, moderate: boolean) {
     else cmd = [someone, { type: "roll" }]; // mostly refused: not their turn
     const r = g.try(...cmd);
     if (cmd[1].type === "add_player" && "events" in r) everyone.add(cmd[1].userId);
-    checkState(g.state, g.settings);
+    checkState(g.state);
   }
   return { g, everyone };
 }
 
 describe.each(variants)("random games with %o", (s) => {
-  it("end with one place per gift; with sixRemovesPlayer exactly one place per remaining player", () => {
+  it("end with exactly one place per remaining player, places 1..n without gaps", () => {
     for (let seed = 0; seed < 150; seed++) {
       const { g, everyone } = randomGame(seed * 7919, s, seed % 3 !== 0);
       const st = g.state;
       expect(st.status).toBe("finished");
       const remaining = [...everyone].filter((u) => !st.removed.includes(u));
-      if (g.settings.sixRemovesPlayer) {
-        // places 1..n without gaps: the gift order is exactly the remaining players, each once
-        expect([...st.giftOrder].sort()).toEqual(remaining.sort());
-        expect(st.turnOrder).toEqual([]);
-      } else {
-        expect(st.giftOrder.length).toBeGreaterThanOrEqual(remaining.length);
-        for (const u of st.giftOrder) expect(everyone.has(u)).toBe(true);
-      }
+      expect([...st.giftOrder].sort()).toEqual(remaining.sort());
+      expect(st.turnOrder).toEqual([]);
       // reduce is deterministic and depends on the log only
       expect(reduce(JSON.parse(JSON.stringify(g.events)), g.settings)).toEqual(st);
     }
@@ -87,7 +79,8 @@ it("random event logs never put the active player outside the turn order", () =>
     (u) => e.remove(u),
     (u) => e.add(u),
     (u) => e.last(u),
-    () => e.undo(),
+    (_u, r) => e.undo(r(1, 61)),
+    (u) => e.start(u, ...pool, u), // duplicates
     () => e.end(),
     () => e.reset(),
     (u) => e.cohost(u),
@@ -103,7 +96,7 @@ it("random event logs never put the active player outside the turn order", () =>
     for (const v of variants) {
       const settings = settingsWith(v);
       const st = reduce(log(events), settings);
-      checkState(st, settings);
+      checkState(st);
       expect(reduce(log(events), settings)).toEqual(st);
     }
   }

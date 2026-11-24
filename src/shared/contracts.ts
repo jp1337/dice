@@ -11,19 +11,19 @@ const die = z.int().min(1).max(6);
 // Room settings (spec 4.4, 4.11). Defaults are the values the spec calls standard.
 
 export const settingsSchema = z.object({
-  sixRemovesPlayer: z.boolean().default(true), // R1
-  bonusChains: z.boolean().default(true), // R3
-  lastPlayer: z.enum(["choice", "auto"]).default("choice"), // R5
-  sixMessage: z
-    .string()
-    .trim()
-    .min(1)
-    .max(200)
-    .default("{name} hat eine 6 gewürfelt und bekommt Geschenk Nr. {platz}!"), // R6
-  reactions: z.boolean().default(true),
+  bonusChains: z.boolean(), // R3
+  lastPlayer: z.enum(["choice", "auto"]), // R5
+  sixMessage: z.string().trim().min(1).max(200), // R6
+  reactions: z.boolean(),
 });
 export type Settings = z.infer<typeof settingsSchema>;
-export const defaultSettings: Settings = settingsSchema.parse({});
+// R1 (a 6 gives the next place and ends rolling) and R2, R4 are fixed rules, not settings.
+export const defaultSettings: Settings = {
+  bonusChains: true,
+  lastPlayer: "choice",
+  sixMessage: "{name} hat eine 6 gewürfelt und bekommt Geschenk Nr. {platz}!",
+  reactions: true,
+};
 
 // ---------------------------------------------------------------------------------------------
 // Game events (spec 6, "Ereignisprotokoll"). Append-only; the game state is reduce(events).
@@ -42,7 +42,8 @@ export const eventPayloadSchemas = {
   player_removed: z.object({ userId }),
   player_added: z.object({ userId }),
   last_place_taken: z.object({ userId }),
-  undone: z.object({}),
+  // seq of the roll taken back; ignored unless it is the newest roll still in effect.
+  undone: z.object({ seq: z.int().min(1) }),
   game_ended: z.object({}),
   // Back to the lobby; reduce starts from scratch after this event.
   game_reset: z.object({}),
@@ -103,7 +104,8 @@ export interface GameState {
   giftOrder: UserId[]; // index 0 = gift no. 1
   lastRoll: { userId: UserId; dice: number[]; rolledBy?: UserId } | null;
   removed: UserId[];
-  history: GameEvent[]; // events still in effect (undone rolls excluded); filtered per recipient
+  history: GameEvent[]; // events since the last reset, undone rolls included; filtered per recipient
+  undoneSeqs: number[]; // seqs of rolls taken back: shown struck through, left out of the computation
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -137,7 +139,8 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
   msg("remove_player", { userId }),
   msg("add_player", { userId }),
   msg("assign_last_place", {}),
-  msg("undo", {}),
+  // seq: the roll the host saw as the newest; a stale target is refused (two hosts clicking at once).
+  msg("undo", { seq: z.int().min(1).optional() }),
   msg("set_watch_link", { action: z.enum(["enable", "disable", "regenerate"]) }),
   msg("reset_nickname", { userId }),
   msg("end", {}),

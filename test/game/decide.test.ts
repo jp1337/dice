@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { UserId } from "../../src/shared/contracts.js";
 import { decide, gameCommandTypes, shuffle, type GameCommand } from "../../src/shared/game/decide.js";
 import { initialGameState } from "../../src/shared/game/reduce.js";
-import { A, B, C, D, Game, HOST, scripted, seeded, users } from "./helpers.js";
+import { A, B, C, D, Game, HOST, log, scripted, seeded, users } from "./helpers.js";
 
 const errorOf = (r: ReturnType<Game["try"]>) => ("error" in r ? r.error.code : "ok");
 const running = (players = [A, B, C], s = {}) => new Game(s).startFixed(players);
@@ -189,12 +189,41 @@ describe("remove_player and add_player", () => {
 });
 
 describe("undo", () => {
-  it("needs a roll to undo", () => {
+  it("targets the newest roll in effect and needs one", () => {
     expect(errorOf(new Game().try(HOST, { type: "undo" }))).toBe("no_game");
     expect(errorOf(running().try(HOST, { type: "undo" }))).toBe("nothing_to_undo");
     const g = running().roll(2).do(HOST, { type: "undo" });
-    expect(g.state).toMatchObject({ activeUserId: A, lastRoll: null });
+    expect(g.events.at(-1)).toMatchObject({ type: "undone", actorUserId: HOST, payload: { seq: 2 } });
+    expect(g.state).toMatchObject({ activeUserId: A, lastRoll: null, undoneSeqs: [2] });
     expect(errorOf(g.try(HOST, { type: "undo" }))).toBe("nothing_to_undo");
+  });
+
+  it("undo chains walk back roll by roll", () => {
+    const g = running().roll(2).roll(3).do(HOST, { type: "undo" }).do(HOST, { type: "undo" });
+    expect(g.events.slice(-2).map((x) => x.payload)).toEqual([{ seq: 3 }, { seq: 2 }]);
+    expect(g.state).toMatchObject({ activeUserId: A, undoneSeqs: [3, 2] });
+  });
+
+  it("refuses a stale target: a second host clicking undo on the same roll", () => {
+    const g = running().roll(2).roll(3);
+    expect(errorOf(g.try(HOST, { type: "undo", seq: 2 }))).toBe("undo_stale");
+    g.do(HOST, { type: "undo", seq: 3 });
+    expect(g.try(D, { type: "undo", seq: 3 }, { host: true })).toEqual({
+      error: { code: "undo_stale", message: "Dieser Wurf ist schon zurückgenommen oder nicht mehr der letzte." },
+    });
+    g.do(HOST, { type: "undo", seq: 2 });
+    expect(errorOf(g.try(HOST, { type: "undo", seq: 2 }))).toBe("undo_stale");
+    expect(g.state.undoneSeqs).toEqual([3, 2]);
+  });
+
+  it("two undo commands decided against the same state take back one roll", () => {
+    const g = running().roll(2).roll(3);
+    const state = g.state;
+    const ctx = { actorUserId: HOST, actorIsHost: true, players: [], randomInt: seeded(1) };
+    for (const r of [decide(state, { type: "undo" }, ctx), decide(state, { type: "undo" }, ctx)])
+      if ("events" in r) g.events.push(...log([...g.events, ...r.events]).slice(-1));
+    expect(g.events.filter((x) => x.type === "undone")).toHaveLength(2);
+    expect(g.state).toMatchObject({ undoneSeqs: [3], activeUserId: B, lastRoll: { userId: A } });
   });
 
   it("works on a game finished by the rules, not after end", () => {

@@ -71,8 +71,11 @@ export function decide(state: GameState, command: GameCommand, ctx: DecideContex
   if (command.type === "undo") {
     if (state.status === "lobby") return fail("no_game", "Es läuft kein Spiel.");
     if (state.history.some((e) => e.type === "game_ended")) return fail("game_over", "Das Spiel ist beendet.");
-    if (!state.lastRoll) return fail("nothing_to_undo", "Es gibt keinen Wurf zum Zurücknehmen.");
-    return ev("undone", {});
+    const target = state.history.findLast((e) => e.type === "rolled" && !state.undoneSeqs.includes(e.seq));
+    if (command.seq !== undefined && command.seq !== target?.seq)
+      return fail("undo_stale", "Dieser Wurf ist schon zurückgenommen oder nicht mehr der letzte.");
+    if (!target) return fail("nothing_to_undo", "Es gibt keinen Wurf zum Zurücknehmen.");
+    return ev("undone", { seq: target.seq });
   }
 
   // Every other command needs a running game, which always has an active player.

@@ -1,12 +1,10 @@
 // The complete game rules as a pure function (spec 4.4, 6): no network, no database, no clock, no randomness.
 //
 // Decisions where the concept is silent (each also covered by a test):
-// - Undo is a stack: each `undone` excludes the latest roll that is still in effect; a second undo excludes
-//   the roll before that (never a redo). The log is then replayed without the excluded rolls, and events
-//   that no longer apply (a `continued` without pause, a `skipped` for someone not active) are ignored.
-// - sixRemovesPlayer false: a 6 still gives the next gift place, but the player keeps rolling and can win
-//   further places. The game has one gift per player in it (start order + latecomers - removed players)
-//   and ends when all are given.
+// - Undo names its target roll (seq) and applies only while that roll is the newest one still in effect,
+//   so two hosts clicking at once take back one roll. Undo again takes the roll before (never a redo).
+//   The log is replayed without the undone rolls; events that no longer apply (a `continued` without
+//   pause, a `skipped` for someone not active) are ignored. Undone rolls stay in the history.
 // - The last-player rule (R5) applies while exactly one player is still rolling.
 // - During a six pause the next player is already shown as active; nobody can roll until `continued`.
 // - A finished game has no pause. After `game_ended` an undo no longer applies.
@@ -26,6 +24,7 @@ export function initialGameState(): GameState {
     lastRoll: null,
     removed: [],
     history: [],
+    undoneSeqs: [],
   };
 }
 
@@ -39,7 +38,6 @@ interface Work {
   gifts: UserId[];
   lastRoll: GameState["lastRoll"];
   removed: UserId[];
-  total: number; // gifts in this game: one per player in it
 }
 
 const fresh = (): Work => ({
@@ -52,7 +50,6 @@ const fresh = (): Work => ({
   gifts: [],
   lastRoll: null,
   removed: [],
-  total: 0,
 });
 
 export function reduce(events: readonly GameEvent[], settings: Settings): GameState {
@@ -63,19 +60,15 @@ export function reduce(events: readonly GameEvent[], settings: Settings): GameSt
   });
   const game = events.slice(start);
 
-  // Pass 1: which rolls are undone.
-  const excluded = new Set<number>();
+  // Pass 1: which rolls are undone. stack holds the seqs of the rolls still in effect, newest last.
+  const undoneSeqs: number[] = [];
   const stack: number[] = [];
   let ended = false;
-  game.forEach((e, i) => {
+  for (const e of game) {
     if (e.type === "game_ended") ended = true;
-    else if (e.type === "rolled" && !ended) stack.push(i);
-    else if (e.type === "undone" && !ended) {
-      const j = stack.pop();
-      if (j !== undefined) excluded.add(j);
-    }
-  });
-  const history = game.filter((_, i) => !excluded.has(i));
+    else if (e.type === "rolled" && !ended) stack.push(e.seq);
+    else if (e.type === "undone" && !ended && e.payload.seq === stack.at(-1)) undoneSeqs.push(stack.pop() as number);
+  }
 
   // Pass 2: replay.
   let s = fresh();
@@ -95,34 +88,33 @@ export function reduce(events: readonly GameEvent[], settings: Settings): GameSt
       s.round++;
     }
   };
+  // R1: the next free place, and the player stops rolling. Only players still rolling get one, so a
+  // removed player never holds a place.
   const givePlace = (uid: UserId) => {
     s.gifts.push(uid);
-    if (settings.sixRemovesPlayer) removeAt(s.order.indexOf(uid));
+    removeAt(s.order.indexOf(uid));
   };
   // Called after every change to a running game: R5 auto and the end of the game.
   const settle = () => {
     const last = s.order[0];
-    if (settings.lastPlayer === "auto" && s.order.length === 1 && last !== undefined) {
-      if (s.gifts.length < s.total) s.gifts.push(last);
-      if (settings.sixRemovesPlayer) s.order = [];
-    }
-    if (s.order.length === 0 || s.gifts.length >= s.total) {
+    if (settings.lastPlayer === "auto" && s.order.length === 1 && last !== undefined) givePlace(last);
+    if (s.order.length === 0) {
       s.status = "finished";
       s.pause = null;
     }
   };
 
-  for (const e of history) {
+  for (const e of game) {
     const running = s.status === "running";
     switch (e.type) {
       case "game_started":
         if (s.status !== "lobby") break;
-        s = { ...fresh(), status: "running", round: 1, order: [...e.payload.order], total: e.payload.order.length };
+        s = { ...fresh(), status: "running", round: 1, order: [...new Set(e.payload.order)] };
         settle();
         break;
       case "rolled": {
         const uid = e.payload.userId;
-        if (!running || s.pause || uid !== active()) break;
+        if (!running || s.pause || uid !== active() || undoneSeqs.includes(e.seq)) break;
         const dice = e.payload.dice;
         s.bonus.delete(uid); // R4: the bonus lasts exactly one actual roll
         s.lastRoll = { userId: uid, dice: [...dice], ...(e.payload.rolledBy ? { rolledBy: e.payload.rolledBy } : {}) };
@@ -130,7 +122,6 @@ export function reduce(events: readonly GameEvent[], settings: Settings): GameSt
           // R1, R2: one 6 suffices and beats a simultaneous 1
           s.pause = "six";
           givePlace(uid);
-          if (!settings.sixRemovesPlayer) advance();
         } else {
           if (dice.includes(1) && (dice.length === 1 || settings.bonusChains)) s.bonus.add(uid); // core rule 6, R3
           advance();
@@ -153,7 +144,6 @@ export function reduce(events: readonly GameEvent[], settings: Settings): GameSt
         removeAt(j);
         s.bonus.delete(e.payload.userId);
         s.removed.push(e.payload.userId);
-        s.total--;
         settle();
         break;
       }
@@ -162,7 +152,6 @@ export function reduce(events: readonly GameEvent[], settings: Settings): GameSt
         if (!running || s.order.includes(uid) || s.gifts.includes(uid)) break;
         s.order.push(uid); // latecomers go to the end of the turn order
         s.removed = s.removed.filter((r) => r !== uid);
-        s.total++;
         break;
       }
       case "last_place_taken":
@@ -194,6 +183,7 @@ export function reduce(events: readonly GameEvent[], settings: Settings): GameSt
     giftOrder: s.gifts,
     lastRoll: s.lastRoll,
     removed: s.removed,
-    history,
+    history: game,
+    undoneSeqs,
   };
 }
