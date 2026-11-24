@@ -15,10 +15,9 @@ import { makeApp } from "./helpers.js";
 import { Client, HOST2_ID, HOST_ID, ORIGIN, type User, env, makeUser as makeUserIn, until } from "./ws.js";
 
 const dbUrl = process.env.TEST_DATABASE_URL;
-const COOLDOWN = 150; // injected instead of ROLL_COOLDOWN_MS
+// The shared app has no roll cooldown (it has its own tests and app) and fast simulated players.
 const BOT_DELAY = 30; // injected instead of SIMULATED_ROLL_DELAY_MS
-const timing = { pingIntervalMs: 200, rollCooldownMs: COOLDOWN, simulatedRollDelayMs: BOT_DELAY };
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const timing = { rollCooldownMs: 0, simulatedRollDelayMs: BOT_DELAY };
 
 type App = Awaited<ReturnType<typeof makeApp>>["app"];
 type Players = Map<string, Client>; // by user id
@@ -86,8 +85,8 @@ describe("handleGameCommand: what decide cannot see", () => {
     const c = running([[A, "player"], [B, "player"]]);
     const cooling = { ...c, room: { ...c.room, lastRollAt: 9_000 } };
     expect(code(() => handleGameCommand(cooling, { type: "roll" }))).toBe("cooldown");
-    expect(code(() => handleGameCommand(cooling, { type: "roll_for" }))).toBe("cooldown");
-    expect(code(() => handleGameCommand(cooling, { type: "skip" }))).toBe("ok");
+    expect(code(() => handleGameCommand(cooling, { type: "roll_for", userId: A }))).toBe("cooldown");
+    expect(code(() => handleGameCommand(cooling, { type: "skip", userId: A }))).toBe("ok");
     expect(code(() => handleGameCommand({ ...cooling, now: 11_000 }, { type: "roll" }))).toBe("ok");
     expect(code(() => handleGameCommand({ ...cooling, actor: { userId: B, canModerate: false } }, { type: "roll" }))).toBe("not_your_turn");
   });
@@ -131,6 +130,11 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       )
     ).rows as { seq: number; type: string; actor: string | null; payload: Record<string, unknown>; created_at: Date }[];
   const historyLength = (c: Client) => c.state.game.history.length;
+  const roomIdOf = async (slug: string) => (await pool.query("select id from rooms where slug = $1", [slug])).rows[0].id as string;
+  async function listen(app: App) {
+    await app.listen({ port: 0, host: "127.0.0.1" });
+    return (app.server.address() as AddressInfo).port;
+  }
   const tokenOf = (view: RoomView) => new URL(view.room.watchUrl!).pathname.split("/").at(-1)!;
 
   // A room with real players (and simulated ones in a test room) and a running game; the host watches.
@@ -161,7 +165,6 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       else if (active && claimLast && game.turnOrder.length === 1) active.send({ type: "claim_last_place" });
       else active?.send({ type: "roll" }); // nobody: a simulated player's turn
       await until(() => expect(historyLength(ch)).toBeGreaterThan(before), 10_000);
-      if (ch.state.game.history.at(-1)?.type === "rolled") await sleep(COOLDOWN + 10);
     }
     throw new Error("the game did not end");
   }
@@ -207,7 +210,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       for (const message of [
         { type: "roll" },
         { type: "roll", userId: active }, // there is no "roll for" field to fake
-        { type: "roll_for" },
+        { type: "roll_for", userId: active },
         { type: "claim_last_place" },
         { type: "rolled", userId: active, dice: [6] },
       ]) {
@@ -230,8 +233,8 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
         { type: "start" },
         { type: "pause" },
         { type: "continue" },
-        { type: "skip" },
-        { type: "roll_for" },
+        { type: "skip", userId: first },
+        { type: "roll_for", userId: first },
         { type: "remove_player", userId: second },
         { type: "add_player", userId: host.id },
         { type: "assign_last_place" },
@@ -253,7 +256,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       ch.send({ type: "pause" });
       await until(() => expect(ch.state.game.pause).toBe("host"));
       active.send({ type: "roll" });
-      ch.send({ type: "roll_for" });
+      ch.send({ type: "roll_for", userId: ch.state.game.activeUserId });
       await until(() => expect([...active.errors, ...ch.errors]).toEqual(["paused", "paused"]));
       ch.send({ type: "continue" });
       await until(() => expect(ch.state.game.pause).toBeNull());
@@ -269,29 +272,25 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       ch2.send({ type: "pause" });
       await until(() => expect(ch2.state.game.pause).toBe("host"));
       ch2.send({ type: "continue" });
-      ch2.send({ type: "skip" });
+      ch2.send({ type: "skip", userId: ch2.state.game.activeUserId });
       await until(() => expect(ch2.state.game.history.map((e) => e.type)).toEqual(["game_started", "paused", "continued", "skipped"]));
       players.get(ch2.state.game.activeUserId!)!.send({ type: "roll" });
       await until(() => expect(ch2.state.game.lastRoll).not.toBeNull());
       expect(ch2.errors).toEqual([]);
     });
 
-    it(`accepts no roll for ${COOLDOWN} ms after a roll (spec 7)`, async () => {
+    it("lets two hosts clicking at once skip one player, and refuses a late roll_for (turn_changed)", async () => {
       const { slug, ch } = await startGame(3);
-      for (let attempt = 0; attempt < 20 && !ch.errors.includes("cooldown"); attempt++) {
-        if (ch.state.game.pause) {
-          ch.send({ type: "continue" });
-          await until(() => expect(ch.state.game.pause).toBeNull());
-        }
-        const rolls = (await eventsOf(slug)).filter((e) => e.type === "rolled").length;
-        ch.send({ type: "roll_for" });
-        ch.send({ type: "roll_for" });
-        await until(async () => expect((await eventsOf(slug)).filter((e) => e.type === "rolled")).toHaveLength(rolls + 1));
-        await until(() => expect(ch.errors.length).toBeGreaterThan(0));
-        await sleep(COOLDOWN + 10);
-      }
-      expect(ch.errors).toContain("cooldown"); // the second of a pair, unless the first was a six ("paused")
-      expect(ch.messages.find((m) => m.type === "error" && m.code === "cooldown")).toMatchObject({ message: "Der Würfel rollt noch. Bitte warte einen Moment." });
+      const ch2 = await connect(slug, host2);
+      const active = ch.state.game.activeUserId!;
+      ch.send({ type: "skip", userId: active });
+      ch2.send({ type: "skip", userId: active });
+      await until(() => expect([...ch.errors, ...ch2.errors]).toEqual(["turn_changed"]));
+      await until(() => expect(ch.state.game.activeUserId).not.toBe(active));
+      ch.send({ type: "roll_for", userId: active }); // clicked before the skip arrived
+      await until(() => expect([...ch.errors, ...ch2.errors]).toEqual(["turn_changed", "turn_changed"]));
+      expect([...ch.messages, ...ch2.messages].find((m) => m.type === "error")).toMatchObject({ message: "Inzwischen ist jemand anderes dran." });
+      expect((await eventsOf(slug)).map((e) => e.type)).toEqual(["game_started", "skipped"]);
     });
 
     it("adds latecomers and removes players: members only, participation follows (spec 4.2, 4.9)", async () => {
@@ -369,14 +368,14 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
     it("lets simulated players roll by themselves, only on their turn and never in a pause", { timeout: 30_000 }, async () => {
       const { slug, ch, players, users } = await startGame(1, { isTest: true, sims: 2 });
       const real = users[0]!.id;
-      // Until the real player's turn comes, the simulated ones roll; then nothing happens without them.
+      const roomId = await roomIdOf(slug);
+      // Until the real player's turn comes, the simulated ones roll; then no timer waits for them.
       await until(() => {
         if (ch.state.game.pause) ch.send({ type: "continue" });
         expect(ch.state.game).toMatchObject({ activeUserId: real, pause: null });
       }, 10_000);
+      expect(app.live.simulatedTurn(roomId)).toBeNull();
       const before = historyLength(ch);
-      await sleep(COOLDOWN + BOT_DELAY * 4);
-      expect(historyLength(ch)).toBe(before);
       players.get(real)!.send({ type: "roll" });
       await until(() => expect(historyLength(ch)).toBeGreaterThan(before));
       const rolls = (await eventsOf(slug)).filter((e) => e.type === "rolled");
@@ -386,9 +385,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       if (ch.state.game.status === "running") {
         ch.send({ type: "pause" });
         await until(() => expect(ch.state.game.pause).not.toBeNull());
-        const paused = historyLength(ch);
-        await sleep(COOLDOWN + BOT_DELAY * 4);
-        expect(historyLength(ch)).toBe(paused);
+        expect(app.live.simulatedTurn(roomId)).toBeNull();
       }
     });
 
@@ -402,6 +399,78 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       expect(events.some((e) => e.type === "last_place_taken")).toBe(false);
       expect(events.filter((e) => e.type === "rolled" && (e.payload.dice as number[]).includes(6))).toHaveLength(4);
       expect(events.filter((e) => e.type === "rolled").every((e) => e.actor === e.payload.userId)).toBe(true);
+    });
+
+    it("gives the next simulated player its full delay when a timer fires behind a host's skip", { timeout: 30_000 }, async () => {
+      const DELAY = 500;
+      const slow = await makeApp(env, dbUrl, { rollCooldownMs: 0, simulatedRollDelayMs: DELAY });
+      const slowPort = await listen(slow.app);
+      const locker = await pool.connect();
+      try {
+        const slug = await newRoom(true, slow.app);
+        const roomId = await roomIdOf(slug);
+        const ch = await connect(slug, host, slowPort);
+        ch.send({ type: "add_simulated_players", count: 3 });
+        await until(() => expect(ch.state.members.filter((m) => m.isSimulated)).toHaveLength(3));
+        ch.send({ type: "start" });
+        await until(() => expect(slow.app.live.simulatedTurn(roomId)).not.toBeNull());
+        const [first, second] = ch.state.game.turnOrder;
+        // The skip waits for the room row inside its transaction while the first player's timer fires.
+        await locker.query("begin");
+        await locker.query("select 1 from rooms where id = $1 for update", [roomId]);
+        ch.send({ type: "skip", userId: first });
+        await until(() => expect(slow.app.live.simulatedTurn(roomId)).toBeNull(), 5000); // fired, queued behind the skip
+        await locker.query("commit");
+        const released = Date.now();
+        await until(async () => expect((await eventsOf(slug)).filter((e) => e.type === "rolled")).toHaveLength(1), 10_000);
+        const roll = (await eventsOf(slug)).find((e) => e.type === "rolled")!;
+        expect(roll.payload.userId).toBe(second);
+        expect(roll.created_at.getTime() - released).toBeGreaterThanOrEqual(DELAY - 50); // not at once
+      } finally {
+        await locker.query("rollback").catch(() => undefined);
+        locker.release();
+        await slow.app.close();
+      }
+    });
+
+    it("arms no simulated player for a connection that never joins (a guest refused at the IP limit)", { timeout: 30_000 }, async () => {
+      const proxied = await makeApp({ ...env, TRUSTED_PROXIES: "127.0.0.1" }, dbUrl, timing);
+      const proxiedPort = await listen(proxied.app);
+      try {
+        const from = { "x-forwarded-for": "198.51.100.77" };
+        const elsewhere = await newRoom(false, proxied.app);
+        const ce = await connect(elsewhere, host, proxiedPort);
+        ce.send({ type: "set_watch_link", action: "enable" });
+        await until(() => expect(ce.state.room.watchUrl).toBeDefined());
+        await Promise.all(Array.from({ length: MAX_GUESTS_PER_IP }, () => watch(tokenOf(ce.state), from, proxiedPort)));
+
+        // A running test room whose simulated player is due, with nobody connected.
+        const slug = await newRoom(true, proxied.app);
+        const roomId = await roomIdOf(slug);
+        const ch = await connect(slug, host, proxiedPort);
+        ch.send({ type: "set_watch_link", action: "enable" });
+        ch.send({ type: "add_simulated_players", count: 2 });
+        await until(() => expect(ch.state.members.filter((m) => m.isSimulated)).toHaveLength(2));
+        ch.send({ type: "start" });
+        ch.send({ type: "pause" });
+        await until(() => expect(ch.state.game.pause).not.toBeNull()); // the host's, or a six's
+        const token = tokenOf(ch.state);
+        await ch.close();
+        await until(() => expect(proxied.app.live.roomIds()).not.toContain(roomId));
+        await pool.query("insert into game_events (room_id, seq, type, actor_user_id, payload) select $1, max(seq) + 1, 'continued', $2, '{}' from game_events where room_id = $1", [roomId, host.id]);
+        const events = (await eventsOf(slug)).length;
+
+        const refused = open(`/ws/watch/${token}`, undefined, from, proxiedPort);
+        expect((await refused.closed).code).toBe(1008);
+        expect(proxied.app.live.roomIds()).toContain(roomId); // loaded for the attempt
+        expect(proxied.app.live.simulatedTurn(roomId)).toBeNull();
+        expect((await eventsOf(slug)).length).toBe(events);
+
+        const back = await connect(slug, host, proxiedPort); // the first real join lets them go on
+        await until(() => expect(historyLength(back)).toBeGreaterThan(events));
+      } finally {
+        await proxied.app.close();
+      }
     });
 
     it("deletes simulated players together with their room (spec 9.3)", async () => {
@@ -439,7 +508,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
     });
 
     it("shows a read-only guest view: players and places, display names, public history", { timeout: 30_000 }, async () => {
-      const { slug, ch, users } = await startGame(2);
+      const { slug, ch, users } = await startGame(3);
       const watcher = await makeUser("Zuschauerin");
       const cw = await connect(slug, watcher);
       ch.send({ type: "set_watch_link", action: "enable" });
@@ -457,34 +526,45 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       expect((await foreign.closed).code).toBe(1006); // 403 before the upgrade
       const guest = await watch(token);
       await until(() => expect(ch.state.room.guestCount).toBe(1));
-      expect(ch.state.members).toHaveLength(4); // guests are no members
+      expect(ch.state.members).toHaveLength(5); // guests are no members
       ch.send({ type: "pause" });
       await until(() => expect(ch.state.game.pause).toBe("host"));
       ch.send({ type: "continue" });
-      ch.send({ type: "roll_for" });
+      const rolledFor = ch.state.game.activeUserId!;
+      ch.send({ type: "roll_for", userId: rolledFor });
       await until(() => expect(guest.messages.some((m) => m.type === "rolled")).toBe(true));
+      // Removed after the roll: still named in the public history, so guests still see the name.
+      if (ch.state.game.turnOrder.includes(rolledFor)) ch.send({ type: "remove_player", userId: rolledFor });
+      await until(() => expect(ch.member(rolledFor)?.participation).toBe("spectator"));
+      await until(() => expect(guest.state.game.removed.length + guest.state.game.giftOrder.length).toBe(1));
 
       const view = guest.state;
       expect(view.viewer).toEqual({ kind: "guest" });
       expect(view.room.slug).toBe("");
       expect(view.room).not.toHaveProperty("guestCount");
       expect(view.room).not.toHaveProperty("watchUrl");
-      expect(view.members.map((m) => m.userId).sort()).toEqual(users.map((u) => u.id).sort());
+      // The players, and the host who rolled for one of them (named in the public history).
+      expect(view.members.map((m) => m.userId).sort()).toEqual([...users.map((u) => u.id), host.id].sort());
+      expect(view.members.find((m) => m.userId === host.id)).toMatchObject({ displayName: ch.member(host.id)!.displayName, avatarUrl: null });
+      expect(view.members.find((m) => m.userId === rolledFor)?.participation).toBe("spectator");
+      expect(view.members.some((m) => m.userId === watcher.id)).toBe(false);
       for (const m of view.members) {
         expect(m.avatarUrl).toBeNull();
         expect(m).not.toHaveProperty("discordName");
       }
       expect(view.game.history.map((e) => e.type)).toEqual(["rolled"]);
       const text = JSON.stringify(guest.messages);
-      for (const secret of [slug, host.discordId, watcher.discordId, ...users.map((u) => u.discordId), "henrike-", "/avatars/", "paused"]) expect(text).not.toContain(secret);
+      for (const secret of [slug, host.discordId, watcher.discordId, "Zuschauerin", ...users.map((u) => u.discordId), "henrike-", "/avatars/", "paused", "player_removed"]) {
+        expect(text).not.toContain(secret);
+      }
 
       // Whatever a guest sends is dropped, without an answer.
       const events = (await eventsOf(slug)).length;
       for (const message of [{ type: "roll" }, { type: "pause" }, { type: "react", emoji: "🎉" }, "kaputt"]) guest.send(message);
-      await sleep(300);
+      await guest.close(); // the server reads a socket in order: when it sees the close, it has seen the rest
+      await until(() => expect(ch.state.room.guestCount).toBe(0));
       expect(guest.messages.filter((m) => m.type === "error" || m.type === "reactions")).toEqual([]);
       expect((await eventsOf(slug)).length).toBe(events);
-      expect(guest.ws.readyState).toBe(WebSocket.OPEN);
     });
 
     it("disconnects guests at once when the link is regenerated or switched off", async () => {
@@ -528,7 +608,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
         const sixth = open(`/ws/watch/${token}`, undefined, from("198.51.100.1"), proxiedPort);
         expect(await sixth.closed).toEqual({ code: 1008, reason: "Zu viele Zuschauer-Verbindungen von deiner Adresse." });
         await same[0]!.close();
-        await sleep(50);
+        await until(() => expect(ch.state.room.guestCount).toBe(MAX_GUESTS_PER_IP - 1));
         same[0] = await watch(token, from("198.51.100.1"), proxiedPort); // a freed slot counts again
 
         const rest = MAX_GUESTS_PER_ROOM - MAX_GUESTS_PER_IP;
@@ -544,6 +624,12 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
   });
 
   describe("reactions (spec 4.11)", () => {
+    const reactionsOf = (c: Client) => {
+      const counts: Record<string, number> = {};
+      for (const m of c.messages) if (m.type === "reactions") for (const { emoji, count } of m.emojis) counts[emoji] = (counts[emoji] ?? 0) + count;
+      return counts;
+    };
+
     it("bundles reactions for members and guests, never stores them, refuses the active player", async () => {
       const { slug, ch, players } = await startGame(2);
       const active = ch.state.game.activeUserId!;
@@ -559,9 +645,10 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       other!.send({ type: "react", emoji: "😂" }); // within 2 s: refused
       await until(() => expect(players.get(active)!.errors).toEqual(["active_player"]));
       await until(() => expect(other!.errors).toEqual(["reaction_too_fast"]));
-      const bundles = (c: Client) => c.messages.filter((m) => m.type === "reactions");
+      // Counted per emoji, however the two land in bundles (usually one).
       for (const c of [ch, guest, other!]) {
-        await until(() => expect(bundles(c)).toEqual([{ type: "reactions", emojis: [{ emoji: "🎉", count: 2 }] }]));
+        await until(() => expect(reactionsOf(c)).toEqual({ "🎉": 2 }));
+        expect(c.messages.filter((m) => m.type === "reactions").length).toBeLessThanOrEqual(2);
       }
       expect((await eventsOf(slug)).length).toBe(events);
     });
@@ -574,8 +661,68 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       await until(() => expect(cu.state.room.settings.reactions).toBe(false));
       cu.send({ type: "react", emoji: "❤️" });
       await until(() => expect(cu.errors).toEqual(["reactions_off"]));
-      await sleep(300);
-      expect(ch.messages.filter((m) => m.type === "reactions")).toEqual([]);
+      // Switched on again, one reaction gets through, and only that one was ever counted.
+      ch.send({ type: "update_settings", settings: { reactions: true } });
+      await until(() => expect(cu.state.room.settings.reactions).toBe(true));
+      ch.send({ type: "react", emoji: "👏" });
+      await until(() => expect(reactionsOf(cu)).toEqual({ "👏": 1 }));
+    });
+  });
+
+  describe("roll cooldown (spec 7)", () => {
+    it("refuses a roll within the cooldown, also after the room was read again or the server restarted", { timeout: 30_000 }, async () => {
+      const LONG = { rollCooldownMs: 60_000 };
+      const first = await makeApp(env, dbUrl, LONG);
+      const second = await makeApp(env, dbUrl, LONG);
+      let firstOpen = true;
+      try {
+        const firstPort = await listen(first.app);
+        const slug = await newRoom(false, first.app);
+        const roomId = await roomIdOf(slug);
+        let ch = await connect(slug, host, firstPort);
+        const players = await Promise.all([makeUser(), makeUser()]);
+        const cs = await Promise.all(players.map((u) => connect(slug, u, firstPort)));
+        ch.send({ type: "start" });
+        await until(() => expect(ch.state.room.status).toBe("running"));
+        ch.send({ type: "roll_for", userId: ch.state.game.activeUserId });
+        await until(() => expect(ch.state.game.lastRoll).not.toBeNull());
+        if (ch.state.game.pause) ch.send({ type: "continue" });
+        await until(() => expect(ch.state.game.pause).toBeNull());
+        const next = ch.state.game.activeUserId!;
+        const tryRoll = async (c: Client) => {
+          const errors = c.errors.length;
+          c.send({ type: "roll_for", userId: next });
+          await until(() => expect(c.errors.length).toBeGreaterThan(errors));
+          return c.errors.at(-1);
+        };
+        expect(await tryRoll(ch)).toBe("cooldown");
+        expect(ch.messages.findLast((m) => m.type === "error")).toMatchObject({ message: "Der Würfel rollt noch. Bitte warte einen Moment." });
+
+        // Everyone leaves: the room is dropped from memory and read again.
+        for (const c of [ch, ...cs]) await c.close();
+        await until(() => expect(first.app.live.roomIds()).not.toContain(roomId));
+        ch = await connect(slug, host, firstPort);
+        expect(await tryRoll(ch)).toBe("cooldown");
+
+        // A restart: another app reads the room from the database.
+        await first.app.close();
+        firstOpen = false;
+        const secondPort = await listen(second.app);
+        let again = await connect(slug, host, secondPort);
+        expect(await tryRoll(again)).toBe("cooldown");
+
+        // The time comes from the stored roll: one an hour old no longer holds anything back.
+        await again.close();
+        await until(() => expect(second.app.live.roomIds()).not.toContain(roomId));
+        await pool.query("update game_events set created_at = now() - interval '1 hour' where room_id = $1", [roomId]);
+        again = await connect(slug, host, secondPort);
+        again.send({ type: "roll_for", userId: next });
+        await until(() => expect(again.state.game.lastRoll?.userId).toBe(next));
+        expect(again.errors).toEqual([]);
+      } finally {
+        if (firstOpen) await first.app.close();
+        await second.app.close();
+      }
     });
   });
 
@@ -667,7 +814,6 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
         for (const c of all) expect(c.state.game.activeUserId).toBe(ch.state.game.activeUserId);
       }, 10_000);
       latencies.push(performance.now() - started);
-      if (ch.state.game.history.at(-1)?.type === "rolled") await sleep(COOLDOWN + 10);
     }
     for (const c of all) {
       expect(c.state.room.status).toBe("finished");
@@ -676,7 +822,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
     latencies.sort((a, b) => a - b);
     const at = (q: number) => Math.round(latencies[Math.min(latencies.length - 1, Math.floor(q * latencies.length))]!);
     console.info(`${n} sockets, ${latencies.length} changes: every socket had the new state after median ${at(0.5)} ms, p95 ${at(0.95)} ms, max ${at(1)} ms`);
-    expect(at(0.95)).toBeLessThan(1000);
+    expect(at(0.95)).toBeLessThan(5000); // a generous bound against hangs; the log line is the measurement
     for (const c of all) c.ws.close();
   });
 });

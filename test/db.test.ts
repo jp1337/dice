@@ -19,6 +19,25 @@ describe.skipIf(!url)("with PostgreSQL", () => {
     }
   });
 
+  it("migrates a fresh database from several callers at once (test files, two containers)", async () => {
+    const name = `dice_migrate_${process.pid}_${Date.now()}`;
+    const admin = new pg.Client({ connectionString: url });
+    await admin.connect();
+    await admin.query(`create database ${name}`);
+    const fresh = new URL(url!);
+    fresh.pathname = `/${name}`;
+    const pools = Array.from({ length: 5 }, () => new pg.Pool({ connectionString: fresh.href }));
+    try {
+      await Promise.all(pools.map((pool) => runMigrations(pool)));
+      const { rows } = await pools[0]!.query("select count(*)::int as n from information_schema.tables where table_schema = 'public'");
+      expect(rows[0].n).toBe(5);
+    } finally {
+      await Promise.all(pools.map((pool) => pool.end()));
+      await admin.query(`drop database ${name}`);
+      await admin.end();
+    }
+  });
+
   it("/healthz returns 200 ok", async () => {
     const { app } = await makeApp({}, url);
     const res = await app.inject({ url: "/healthz" });

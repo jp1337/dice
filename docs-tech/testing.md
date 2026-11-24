@@ -44,3 +44,6 @@ Tests migrate the database themselves and must survive running twice against the
 - Fictitious values only: the repository is public. `dice.example.org`, IDs like `100000000000000001`.
 - Test the real path: `app.inject` against the built app, real PostgreSQL, the fake Discord over HTTP.
 - A test that can pass while checking nothing gets a guard that it saw something (see `docs.test.ts`).
+- No sleeps to prove that nothing happened: wait for a control event instead (a later message, a closed
+  socket, `app.live.simulatedTurn(roomId)` for simulated players' timers). Timings that matter are
+  injected through `Deps`.

@@ -155,8 +155,9 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
   msg("start", {}),
   msg("pause", {}),
   msg("continue", {}),
-  msg("skip", {}),
-  msg("roll_for", {}),
+  // userId: the player the host saw as active; a stale one is refused (two hosts clicking at once).
+  msg("skip", { userId }),
+  msg("roll_for", { userId }),
   msg("remove_player", { userId }),
   msg("add_player", { userId }),
   msg("assign_last_place", {}),

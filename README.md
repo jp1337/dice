@@ -51,6 +51,7 @@ Before the first login, register the redirect URL in the Discord Developer Porta
 | Every environment variable | [docs/configuration.md](docs/configuration.md) |
 | What is stored, how long, deleting one person by hand, log retention | [docs/data-and-deletion.md](docs/data-and-deletion.md) |
 | nginx with WebSockets | [docs/nginx.example.conf](docs/nginx.example.conf) |
+| Rehearsing alone with simulated players | [docs/rehearsal.md](docs/rehearsal.md) |
 
 ## Built with
 

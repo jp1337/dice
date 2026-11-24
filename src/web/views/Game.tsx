@@ -63,10 +63,10 @@ function HostBar({ view, d, room }: Props) {
             Pause
           </button>
         )}
-        <button type="button" disabled={!can.skip} onClick={() => send({ type: "skip" })}>
+        <button type="button" disabled={!can.skip} onClick={() => view.game.activeUserId && send({ type: "skip", userId: view.game.activeUserId })}>
           {d.activeName} überspringen
         </button>
-        <button type="button" disabled={!can.rollFor} onClick={() => send({ type: "roll_for" })}>
+        <button type="button" disabled={!can.rollFor} onClick={() => view.game.activeUserId && send({ type: "roll_for", userId: view.game.activeUserId })}>
           Für {d.activeName} würfeln
         </button>
       </span>

@@ -52,7 +52,9 @@ const WATCH_TOKEN = /^[A-Za-z0-9_-]{22}$/; // 128 bit, base64url
 
 declare module "fastify" {
   interface FastifyInstance {
-    live: LiveRooms; // for the cleanup (spec 9.3), which must not delete what is in use
+    // For the cleanup (spec 9.3), which must not delete what is in use. simulatedTurn: the turn a
+    // simulated player's timer is armed for, null if none (tests).
+    live: LiveRooms & { simulatedTurn(roomId: string): string | null };
   }
 }
 
@@ -161,14 +163,31 @@ export function checkSettingsChange(status: GameStatus, settings: Partial<Settin
   }
 }
 
+// The user ids an event payload or the last roll names.
+const idsIn = (p: unknown): string[] => {
+  if (!p || typeof p !== "object") return [];
+  const { userId, rolledBy, actor } = p as { userId?: unknown; rolledBy?: unknown; actor?: unknown };
+  return [userId, rolledBy, actor].filter((id): id is string => typeof id === "string");
+};
+
+// The cooldown survives a reload (restart, eviction): the time of the last roll still in effect.
+const lastRollAtOf = (game: GameState) => {
+  const roll = game.history.findLast((e) => e.type === "rolled" && !game.undoneSeqs.includes(e.seq));
+  return roll ? Date.parse(roll.createdAt) : 0;
+};
+
 // The room as one audience may see it (spec 4.5, 4.8, 4.10), without the per-socket `viewer`.
 export function roomView(room: RoomData & Pick<Room, "sockets" | "guests">, audience: Audience, config: Config): Omit<RoomView, "viewer"> {
   const isHostMember = (m: Member) => m.discordId !== null && config.hostDiscordIds.includes(m.discordId);
   const guest = audience === "guest";
   const canModerate = audience === "host" || audience === "moderator";
-  const placed = new Set(room.game.giftOrder);
+  const history = room.game.history.filter((e) => canModerate || eventVisibility[e.type] === "public");
+  // Guests see players, people with a place, and whoever the public history or the last roll names
+  // (a host who rolled for someone, a removed player's rolls): by display name, like everyone.
+  const named = [room.game.lastRoll, ...history.map((e) => ({ ...e.payload, actor: e.actorUserId }))].flatMap(idsIn);
+  const shown = new Set([...room.game.giftOrder, ...named]);
   const members = [...room.members.values()]
-    .filter((m) => !guest || m.participation === "player" || placed.has(m.userId))
+    .filter((m) => !guest || m.participation === "player" || shown.has(m.userId))
     .map(
       (m): MemberView => ({
         userId: m.userId,
@@ -197,7 +216,7 @@ export function roomView(room: RoomData & Pick<Room, "sockets" | "guests">, audi
       }),
     },
     members,
-    game: { ...room.game, history: room.game.history.filter((e) => canModerate || eventVisibility[e.type] === "public") },
+    game: { ...room.game, history },
   };
 }
 
@@ -227,6 +246,7 @@ export function registerRooms(
   app.decorate("live", {
     roomIds: () => [...live.values()].map((room) => room.id),
     userIds: () => [...new Set([...conns.values()].flatMap((conn) => (conn.userId === null ? [] : [conn.userId])))],
+    simulatedTurn: (roomId: string) => [...live.values()].find((room) => room.id === roomId)?.botKey ?? null,
   });
 
   // ---------------------------------------------------------------------------------------------
@@ -273,7 +293,7 @@ export function registerRooms(
             sockets: new Map(),
             guests: new Set(),
             after: [],
-            lastRollAt: 0,
+            lastRollAt: lastRollAtOf(data.game),
             botTimer: null,
             botKey: null,
             reactions: new Map(),
@@ -289,8 +309,7 @@ export function registerRooms(
             dirtySince: 0,
             evicted: false,
           };
-          live.set(slug, loaded);
-          schedule(loaded); // a game that ran before a restart goes on
+          live.set(slug, loaded); // simulated players go on with the first join (schedule)
           return loaded;
         })
         .finally(() => loading.delete(slug));
@@ -447,11 +466,14 @@ export function registerRooms(
   // Simulated players (spec 4.7): the room arms one timer for the active simulated player while the
   // game runs unpaused. It rolls through handleGameCommand and commit exactly like a real roll.
 
+  // The turn a timer is for: any event in between (skip, undo, removal) makes it another turn.
+  const turnOf = (room: Room) => `${room.game.activeUserId}:${room.game.history.length}`;
+
   function schedule(room: Room) {
     const { game } = room;
     const active = game.activeUserId;
     const due = !room.evicted && game.status === "running" && !game.pause && active !== null && room.members.get(active)?.isSimulated === true;
-    const key = due ? `${active}:${game.history.length}` : null;
+    const key = due ? turnOf(room) : null;
     if (key !== null && key === room.botKey) return; // armed for this turn already
     if (room.botTimer) clearTimeout(room.botTimer);
     room.botTimer = null;
@@ -461,14 +483,15 @@ export function registerRooms(
     room.botTimer = setTimeout(() => {
       room.botTimer = null;
       room.botKey = null;
-      run(room, () => simulatedRoll(room)).catch((err) => err instanceof Evicted || app.log.error({ err, roomId: room.id }, "simulated roll failed"));
+      run(room, () => simulatedRoll(room, key)).catch((err) => err instanceof Evicted || app.log.error({ err, roomId: room.id }, "simulated roll failed"));
     }, wait);
   }
 
-  async function simulatedRoll(room: Room) {
+  async function simulatedRoll(room: Room, key: string) {
     const active = room.game.activeUserId;
     try {
-      if (!active || !room.members.get(active)?.isSimulated) return;
+      // Something happened while the timer waited in the queue: the new turn gets its own full delay.
+      if (turnOf(room) !== key || !active) return;
       const ctx = { actor: { userId: active, canModerate: false }, room, rollCooldownMs: timing.rollCooldownMs, now: Date.now() };
       const { events } = handleGameCommand(ctx, { type: "roll" });
       await commit(room, { events }); // actor: the simulated player, as for a real roll
@@ -541,6 +564,7 @@ export function registerRooms(
     }
     if (socket.readyState !== OPEN) return;
     room.sockets.set(userId, (room.sockets.get(userId) ?? new Set()).add(socket));
+    schedule(room); // a game that ran before a restart or an eviction goes on
     changed(room, false); // the others learn about it batched
     sendState(room, socket, conn); // the newcomer at once
   }
@@ -838,6 +862,7 @@ export function registerRooms(
         if (room.watchToken !== request.params.token) return closeSocket(socket, "watch link changed"); // changed while waiting
         if (room.guests.size >= MAX_GUESTS_PER_ROOM) return closeSocket(socket, "too many guests");
         room.guests.add(socket);
+        schedule(room);
         changed(room, false);
         sendState(room, socket, conn);
       }).catch((err) => closeSocket(socket, err instanceof Evicted ? "retry" : "join failed"));

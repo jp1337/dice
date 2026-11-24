@@ -4,6 +4,12 @@ Newest first. A decision changes by a new row, not by editing an old one.
 
 | Date | Decision | Why |
 | --- | --- | --- |
+| 2026-11-24 | `skip` and `roll_for` carry the `userId` the host saw as active; another active player is refused with `turn_changed` | Two hosts skipping at once skipped two players; a late "Für X würfeln" rolled for the next one |
+| 2026-11-24 | A simulated player's timer is bound to its turn (`active:history length`); fired behind any other change it only reschedules, with the full delay | A timer queued behind a skip or undo rolled at once for the next player |
+| 2026-11-24 | Simulated timers are armed on a join (member or guest), never on a load | A connection that never joins (e.g. refused at the guest limit) made a simulated player roll |
+| 2026-11-24 | The roll cooldown is read from the last roll still in effect when a room is loaded; replaces "a restart clears it" below | It held after a restart or an eviction only by luck |
+| 2026-11-24 | Guests also see the members the public history or the last roll names (a host rolling for someone, removed players), with the same guest fields | Otherwise "X würfelt für Y" had no name for X |
+| 2026-11-24 | Migrations run under `pg_advisory_lock` on one dedicated connection | Several test files or two containers on one fresh database raced on `CREATE SCHEMA` |
 | 2026-11-24 | A simulated player's roll names the player as actor, like a real roll; the contract comment "null for server-driven events" is gone | The history reads "Testspieler 1 würfelt" instead of "Der Server würfelt für Testspieler 1"; `actor_user_id` is a valid user row either way |
 | 2026-11-24 | `rolled` is queued and sent by the state flush, right after the state that holds the roll, to members and guests | A client must never animate a roll it cannot find in its state |
 | 2026-11-24 | The roll cooldown lives in memory (`lastRollAt`), set by every committed roll, including simulated ones; a restart clears it | It protects an animation, not data |

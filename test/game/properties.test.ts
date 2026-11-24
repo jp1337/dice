@@ -36,8 +36,8 @@ function randomGame(seed: number, s: Partial<Settings>, moderate: boolean) {
     let cmd: [UserId, GameCommand];
     if (st.pause) cmd = [HOST, { type: "continue" }];
     else if (!moderate || pick < 70) cmd = [active, { type: "roll" }];
-    else if (pick < 74) cmd = [HOST, { type: "roll_for" }];
-    else if (pick < 77) cmd = [HOST, { type: "skip" }];
+    else if (pick < 74) cmd = [HOST, { type: "roll_for", userId: pick % 5 ? active : someone }];
+    else if (pick < 77) cmd = [HOST, { type: "skip", userId: pick % 5 ? active : someone }];
     else if (pick < 80) cmd = [HOST, { type: "pause" }];
     else if (pick < 85) cmd = [HOST, pick % 2 ? { type: "undo" } : { type: "undo", seq: rnd(1, g.events.length + 2) }];
     else if (pick < 88) cmd = [HOST, { type: "remove_player", userId: someone }];

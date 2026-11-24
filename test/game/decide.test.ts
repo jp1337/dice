@@ -12,11 +12,11 @@ const ended = () => running().do(HOST, { type: "end" });
 describe("authorization", () => {
   const hostCommands: GameCommand[] = [
     { type: "start" },
-    { type: "roll_for" },
+    { type: "roll_for", userId: A },
     { type: "assign_last_place" },
     { type: "pause" },
     { type: "continue" },
-    { type: "skip" },
+    { type: "skip", userId: A },
     { type: "remove_player", userId: B },
     { type: "add_player", userId: D },
     { type: "undo" },
@@ -108,7 +108,7 @@ describe("roll_for", () => {
   it("a host rolls for the active player under the same rules", () => {
     const g = running([A, B]).roll(1).roll(3);
     g.randomInt = scripted(6, 1);
-    g.do(HOST, { type: "roll_for" });
+    g.do(HOST, { type: "roll_for", userId: A });
     expect(g.events.at(-1)).toMatchObject({ actorUserId: HOST, payload: { userId: A, dice: [6, 1], rolledBy: HOST } });
     expect(g.state).toMatchObject({ giftOrder: [A], pause: "six" });
   });
@@ -116,12 +116,18 @@ describe("roll_for", () => {
   it("a host who is the active player gets an ordinary roll", () => {
     const g = running([HOST, A]);
     g.randomInt = scripted(3);
-    g.do(HOST, { type: "roll_for" });
+    g.do(HOST, { type: "roll_for", userId: HOST });
     expect(g.events.at(-1)?.payload).toEqual({ userId: HOST, dice: [3] });
   });
 
   it("is refused while paused", () => {
-    expect(errorOf(running().roll(6).try(HOST, { type: "roll_for" }))).toBe("paused");
+    expect(errorOf(running().roll(6).try(HOST, { type: "roll_for", userId: B }))).toBe("paused");
+  });
+
+  it("names the player it rolls for; a late click after the turn moved on is refused", () => {
+    const g = running([A, B]).roll(3); // B is active now
+    expect(g.try(HOST, { type: "roll_for", userId: A })).toEqual({ error: { code: "turn_changed", message: "Inzwischen ist jemand anderes dran." } });
+    expect(g.events).toHaveLength(2);
   });
 });
 
@@ -162,10 +168,16 @@ describe("pause and continue", () => {
 
 describe("skip", () => {
   it("skips the active player", () => {
-    const g = running().do(HOST, { type: "skip" });
+    const g = running().do(HOST, { type: "skip", userId: A });
     expect(g.events.at(-1)).toMatchObject({ type: "skipped", payload: { userId: A } });
     expect(g.state.activeUserId).toBe(B);
-    expect(errorOf(finished().try(HOST, { type: "skip" }))).toBe("game_over");
+    expect(errorOf(finished().try(HOST, { type: "skip", userId: A }))).toBe("game_over");
+  });
+
+  it("two hosts skipping at once skip one player, not two", () => {
+    const g = running([A, B, C]).do(HOST, { type: "skip", userId: A });
+    expect(errorOf(g.try(D, { type: "skip", userId: A }, { host: true }))).toBe("turn_changed");
+    expect(g.state.activeUserId).toBe(B);
   });
 });
 
