@@ -48,7 +48,8 @@ describe("next (target after login)", () => {
 
 describe("without a database", () => {
   let app: App;
-  beforeAll(async () => ({ app } = await makeApp()));
+  // Nothing here may ever reach the real Discord.
+  beforeAll(async () => ({ app } = await makeApp({ DISCORD_API_BASE: "http://127.0.0.1:1" })));
   afterAll(() => app.close());
 
   it("redirects to Discord with state, scopes and redirect URI, and sets a short-lived state cookie", async () => {
@@ -87,6 +88,26 @@ describe("without a database", () => {
     const tampered = await app.inject({ url: `/auth/callback?code=c&state=${state}`, cookies: { [STATE_COOKIE]: forged } });
     expect(tampered.statusCode).toBe(400);
     for (const res of [wrong, tampered]) expect(res.cookies.some((c) => c.name === SESSION_COOKIE)).toBe(false);
+  });
+
+  it("rejects a non-ASCII state of the same UTF-16 length with 400, not 500", async () => {
+    const { cookie } = await startLogin(app);
+    const state = encodeURIComponent("é".repeat(43));
+    const res = await app.inject({ url: `/auth/callback?code=c&state=${state}`, cookies: { [STATE_COOKIE]: cookie.value } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects a validly signed state older than 10 minutes", async () => {
+    const { state } = await startLogin(app);
+    const old = app.signCookie(`${state}:${Date.now() - 601_000}:/`);
+    const res = await app.inject({ url: `/auth/callback?code=c&state=${state}`, cookies: { [STATE_COOKIE]: old } });
+    expect(res.statusCode).toBe(400);
+    const future = app.signCookie(`${state}:${Date.now() + 120_000}:/`);
+    expect((await app.inject({ url: `/auth/callback?code=c&state=${state}`, cookies: { [STATE_COOKIE]: future } })).statusCode).toBe(400);
+  });
+
+  it("uses a __Host- session cookie", () => {
+    expect(SESSION_COOKIE).toBe("__Host-dice_session");
   });
 
   it("handles a declined consent (error=access_denied)", async () => {
@@ -227,6 +248,43 @@ describe.skipIf(!dbUrl)("login against a fake Discord", () => {
     expect(res.statusCode).toBe(502);
     expect(session).toBeUndefined();
     await offline.close();
+  });
+
+  it("shows the error page and logs no personal data when the database fails during login", async () => {
+    const readOnly = new URL(dbUrl!);
+    readOnly.searchParams.set("options", "-c default_transaction_read_only=on");
+    const { app: broken, logs: brokenLogs } = await makeApp({ DISCORD_API_BASE: fake.url, DISCORD_CDN_BASE: fake.url }, readOnly.href);
+    fake.state.user = { ...fake.state.user, username: "uniqueusername7", global_name: "Unique Display Name" };
+    const { res, session } = await login(broken);
+    await broken.close();
+    expect(res.statusCode).toBe(500);
+    expect(res.headers["content-type"]).toMatch(/text\/html/);
+    expect(res.body).toContain("Erneut anmelden");
+    expect(session).toBeUndefined();
+    const text = JSON.stringify(brokenLogs);
+    expect(text).toContain("25006"); // SQLSTATE read_only_sql_transaction
+    for (const value of [discordId, "uniqueusername7", "Unique Display Name", "insert into"]) expect(text).not.toContain(value);
+  });
+
+  it("logs no image bytes or personal data when storing the avatar fails, and still logs in", async () => {
+    await pool.query(`
+      create or replace function dice_test_fail_avatar() returns trigger language plpgsql as $$
+      begin if new.username = 'avatar-store-fails' then raise exception 'forced failure'; end if; return new; end $$;
+      drop trigger if exists dice_test_fail_avatar on users;
+      create trigger dice_test_fail_avatar before update of avatar_image on users for each row execute function dice_test_fail_avatar();`);
+    fake.state.user = { ...fake.state.user, username: "avatar-store-fails", avatar: hash("f") };
+    logs.length = 0;
+    try {
+      const { res, token } = await login(app);
+      expect(res.statusCode).toBe(302);
+      expect(await (await me(app, token)).json().avatarUrl).toBeNull();
+    } finally {
+      await pool.query("drop trigger dice_test_fail_avatar on users; drop function dice_test_fail_avatar();");
+    }
+    const failure = logs.find((l) => l.msg === "avatar could not be stored");
+    expect(failure).toMatchObject({ err: { code: "P0001" } });
+    const text = JSON.stringify(logs);
+    for (const value of [discordId, "avatar-store-fails", "png-body", hash("f"), "update"]) expect(text).not.toContain(value);
   });
 
   it("rejects an expired session", async () => {

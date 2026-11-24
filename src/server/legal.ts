@@ -50,6 +50,7 @@ export type PrivacyServices = { cloudflare: boolean; crowdsec: boolean; retentio
 // Vendor facts checked against (2026-11-24):
 // CrowdSec: https://docs.crowdsec.net/docs/next/central_api/intro (signal meta-data: scenario, timestamp, machine ID, offending IP)
 // Cloudflare: https://www.cloudflare.com/trust-hub/gdpr/ (processor for end-user log data, mainly IP addresses, US and EU data centres)
+// Cloudflare cookies (all "strictly necessary" per Cloudflare): https://developers.cloudflare.com/fundamentals/reference/policies-compliances/cloudflare-cookies/
 function protection(services: PrivacyServices) {
   const crowdsec = services.crowdsec
     ? `
@@ -57,7 +58,7 @@ function protection(services: PrivacyServices) {
     : "";
   const cloudflare = services.cloudflare
     ? `
-<p>Vor dem Server liegt Cloudflare (Cloudflare, Inc., USA) als Reverse Proxy und Content Delivery Network. Alle Anfragen und Antworten laufen über das Netz von Cloudflare. Cloudflare verarbeitet dabei die IP-Adresse und die Daten der Anfrage, auch in Rechenzentren in den USA.</p>`
+<p>Vor dem Server liegt Cloudflare (Cloudflare, Inc., USA) als Reverse Proxy und Content Delivery Network. Alle Anfragen und Antworten laufen über das Netz von Cloudflare. Cloudflare verarbeitet dabei die IP-Adresse und die Daten der Anfrage, auch in Rechenzentren in den USA. Zur Abwehr von Bots kann Cloudflare eigene, technisch notwendige Cookies setzen, etwa <code>__cf_bm</code> oder <code>cf_clearance</code>.</p>`
     : "";
   return `<h2>Hosting und Schutzdienste</h2>
 <p>Die App läuft auf einem Server von Hetzner (Hetzner Online GmbH) in Deutschland.</p>${crowdsec}${cloudflare}`;
@@ -91,7 +92,7 @@ ${legal ? contact(legal) : notConfigured}
 
 <h2>Anmeldung über Discord</h2>
 <p>Die Anmeldung läuft über Discord (Discord Inc., USA). Dafür wird der Browser auf die Webseite von Discord weitergeleitet. Dort gilt die <a href="https://discord.com/privacy">Datenschutzerklärung von Discord</a>.</p>
-<p>Nach der Anmeldung übermittelt Discord der App die Discord-ID, den Benutzernamen, den Anzeigenamen, den Avatar und die Mitgliedschaft auf dem Discord-Server der Veranstaltung. Zugang haben nur Mitglieder dieses Servers. Abgewiesene Anmeldungen werden im Protokoll vermerkt.</p>
+<p>Nach der Anmeldung übermittelt Discord der App Profildaten des Kontos und der Mitgliedschaft auf dem Discord-Server der Veranstaltung. Die App übernimmt davon nur Discord-ID, Benutzernamen, Anzeigenamen und Avatar und prüft, ob das Konto Mitglied dieses Servers ist. Alles andere verwirft sie sofort. Zugang haben nur Mitglieder dieses Servers. Abgewiesene Anmeldungen werden im Protokoll vermerkt, ohne Discord-Daten.</p>
 <p>Avatar-Bilder holt der Server selbst bei Discord ab und liefert sie aus. Der Browser nimmt nur während der Anmeldung Kontakt zu Discord auf.</p>
 
 <h2>Wer was sieht</h2>
@@ -100,19 +101,24 @@ ${legal ? contact(legal) : notConfigured}
 <p>Emoji-Reaktionen erscheinen ohne Namen bei allen im Raum und werden nicht gespeichert.</p>
 
 <h2>Cookies und lokaler Speicher</h2>
-<p>Die App setzt genau ein technisch notwendiges Cookie: das Sitzungs-Cookie. Es hält die Anmeldung aufrecht und läuft nach 7 Tagen ab. Nur während der Anmeldung bei Discord kommt ein kurzlebiges Cookie hinzu, das den Anmeldevorgang absichert.</p>
+<p>Die App selbst setzt nur technisch notwendige Cookies:</p>
+<ul>
+<li><code>__Host-dice_session</code>, das Sitzungs-Cookie: hält die Anmeldung aufrecht und läuft nach 7 Tagen ab</li>
+<li><code>dice_login</code>, nur während der Anmeldung bei Discord: sichert den Anmeldevorgang ab, gilt höchstens 10 Minuten und wird danach gelöscht</li>
+</ul>${services.cloudflare ? "\n<p>Dazu kann Cloudflare eigene Cookies setzen (siehe unten).</p>" : ""}
 <p>Im lokalen Speicher des Browsers (localStorage) merkt sich die App nur Einstellungen: Ton, helles oder dunkles Design und ausgeblendete Reaktionen. Diese Werte bleiben im Browser und werden nicht an den Server gesendet.</p>
 <p>Es gibt kein Tracking, keine Analyse und keine Werbung.</p>
 
 ${protection(services)}
 
 <h2>Speicherdauer</h2>
-<p>Die App löscht einmal täglich automatisch:</p>
+<p>Die App löscht beim Start und danach einmal täglich automatisch:</p>
 <ul>
 <li>Räume samt Teilnahmen, Würfen und Ereignissen ${days} Tage nach der letzten Aktivität im Raum</li>
-<li>Nutzer samt Avatar und Spitzname, wenn sie in keinem Raum mehr Mitglied sind und ihr letzter Login mehr als ${days} Tage zurückliegt</li>
-<li>abgelaufene Sitzungen</li>
+<li>Nutzer samt Avatar, Spitzname und Sitzungen, wenn sie in keinem Raum mehr Mitglied sind und ihr letzter Login mehr als ${days} Tage zurückliegt</li>
+<li>abgelaufene Sitzungen: Sie gelten ab Ablauf nicht mehr und werden beim nächsten täglichen Lauf gelöscht</li>
 </ul>
+<p>Beim Abmelden löscht die App die Sitzung sofort.</p>
 <p>Die Protokolle des Servers liegen außerhalb der App. Ihre Speicherdauer begrenzt der Betreiber auf dem Server.</p>
 
 <h2>Rechte der Betroffenen</h2>

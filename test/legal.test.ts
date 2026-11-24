@@ -31,6 +31,28 @@ describe("Datenschutzhinweis", () => {
     expect(none).toContain("Hetzner");
   });
 
+  it("names exactly the cookies the app sets, and Cloudflare's only when Cloudflare is on", async () => {
+    const { SESSION_COOKIE, STATE_COOKIE } = await import("../src/server/auth.js");
+    const off = datenschutzHtml(legal);
+    expect(off).toContain(`<code>${SESSION_COOKIE}</code>`);
+    expect(off).toContain(`<code>${STATE_COOKIE}</code>`);
+    expect(off).toContain("höchstens 10 Minuten");
+    expect(off).not.toMatch(/genau ein|__cf_bm/);
+    const on = datenschutzHtml(legal, { cloudflare: true, crowdsec: false });
+    expect(on).toContain("Cloudflare eigene Cookies setzen");
+    expect(on).toContain("<code>__cf_bm</code>");
+  });
+
+  it("says Discord sends more than the app keeps", () => {
+    expect(datenschutzHtml(legal)).toContain("Die App übernimmt davon nur Discord-ID, Benutzernamen, Anzeigenamen und Avatar");
+  });
+
+  it("describes the cleanup that actually runs", () => {
+    const html = datenschutzHtml(legal);
+    expect(html).toContain("beim Start und danach einmal täglich");
+    expect(html).toContain("beim nächsten täglichen Lauf gelöscht");
+  });
+
   it("uses the configured retention period", () => {
     expect(datenschutzHtml(legal)).toContain("90 Tage nach der letzten Aktivität");
     expect(datenschutzHtml(legal, { cloudflare: false, crowdsec: true, retentionDays: 30 })).toContain("mehr als 30 Tage zurückliegt");

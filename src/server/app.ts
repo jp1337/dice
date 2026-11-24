@@ -25,6 +25,26 @@ const ROBOTS = "noindex, nofollow, noarchive, nosnippet, noimageindex";
 const HTML = "text/html; charset=utf-8";
 const TEXT = "text/plain; charset=utf-8";
 
+type PgError = Error & { code: string; severity: string; constraint?: string; table?: string };
+const isPgError = (e: unknown): e is PgError =>
+  e instanceof Error && typeof (e as PgError).severity === "string" && typeof (e as PgError).code === "string";
+
+// Database errors carry the SQL, its parameters (names, Discord IDs, avatar bytes) and row details in
+// message, detail and stack. Only their SQLSTATE and the affected constraint and table are logged.
+export function serializeError(err: Error & { query?: unknown; params?: unknown; code?: unknown }): Record<string, unknown> {
+  const db = isPgError(err) ? err : isPgError(err.cause) ? err.cause : null;
+  if (db || "query" in err || "params" in err) {
+    return { type: err.constructor.name, code: db?.code, constraint: db?.constraint, table: db?.table };
+  }
+  return {
+    type: err.constructor.name,
+    message: err.message,
+    stack: err.stack,
+    ...(err.code !== undefined && { code: err.code }),
+    ...(err.cause instanceof Error && { cause: serializeError(err.cause) }),
+  };
+}
+
 function logRequest(request: FastifyRequest, reply: FastifyReply) {
   request.log.info(
     {
@@ -84,6 +104,8 @@ export async function buildApp(config: Config, deps: Deps) {
       level: config.nodeEnv === "test" ? "silent" : "info",
       timestamp: () => `,"time":"${new Date().toISOString()}"`,
       redact: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]'],
+      // Cast: Fastify's type demands message and stack, which database errors deliberately lack.
+      serializers: { err: serializeError as (err: Error) => { type: string; message: string; stack: string } },
       ...(deps.logStream && { stream: deps.logStream }),
     },
   });

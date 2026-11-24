@@ -1,5 +1,5 @@
 // Login, sessions, /api/me and avatars (spec 5, 5.1, 7).
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { and, eq, gt } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -8,7 +8,8 @@ import type { Config } from "./config.js";
 import { sessions, users } from "./db/schema.js";
 import { AUTHORIZE_URL, type DiscordProfile, LoginError, SCOPES, downloadAvatar, exchangeAndCheck } from "./discord.js";
 
-export const SESSION_COOKIE = "dice_session";
+// __Host-: the browser only accepts it with Secure, Path=/ and no Domain, so a sibling subdomain cannot plant one.
+export const SESSION_COOKIE = "__Host-dice_session";
 export const STATE_COOKIE = "dice_login";
 export const SESSION_DAYS = 7;
 export const STATE_MAX_AGE_S = 600;
@@ -65,6 +66,7 @@ const messages: Record<number, [string, string]> = {
     "Kein Zugang",
     "Dein Discord-Konto ist nicht Mitglied des Discord-Servers, für den dieses Würfel-Tool gedacht ist. Melde dich mit dem Konto an, mit dem du auf dem Server bist.",
   ],
+  500: ["Anmeldung fehlgeschlagen", "Bei der Anmeldung ist bei uns ein Fehler aufgetreten. Bitte versuche es in einer Minute noch einmal."],
   502: ["Discord antwortet nicht", "Discord hat gerade nicht richtig geantwortet. Bitte versuche es in einer Minute noch einmal."],
 };
 
@@ -95,7 +97,8 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
   app.get<{ Querystring: { next?: string } }>("/auth/login", { config: loginLimit }, (request, reply) => {
     const state = randomBytes(32).toString("base64url");
     // The target survives the round trip in the signed cookie, never in the URL sent to Discord.
-    reply.setCookie(STATE_COOKIE, `${state}:${safeNext(request.query.next)}`, {
+    // The issue time is signed too: the callback enforces the 10 minutes even if a client keeps the cookie longer.
+    reply.setCookie(STATE_COOKIE, `${state}:${Date.now()}:${safeNext(request.query.next)}`, {
       ...cookieBase,
       path: "/auth",
       maxAge: STATE_MAX_AGE_S,
@@ -112,27 +115,50 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
     return reply.redirect(url.href);
   });
 
+  // Avatar only on change (spec 5.1); a failure keeps the old image and never fails the login.
+  async function updateAvatar(request: FastifyRequest, userId: string, profile: DiscordProfile) {
+    let avatar: Awaited<ReturnType<typeof downloadAvatar>> | null = null;
+    if (profile.avatarHash && profile.avatarPath) {
+      try {
+        avatar = await downloadAvatar(config.discordCdnBase, profile.avatarPath, profile.avatarHash);
+      } catch (err) {
+        request.log.warn({ err }, "avatar download failed");
+        return;
+      }
+    }
+    try {
+      await db
+        .update(users)
+        .set({ avatarHash: avatar ? profile.avatarHash : null, avatarImage: avatar?.image ?? null, avatarContentType: avatar?.contentType ?? null })
+        .where(eq(users.id, userId));
+    } catch (err) {
+      request.log.warn({ err }, "avatar could not be stored");
+    }
+  }
+
   app.get<{ Querystring: Record<string, string | undefined> }>("/auth/callback", { config: loginLimit }, async (request, reply) => {
     const raw = request.cookies[STATE_COOKIE];
     const unsigned = raw ? request.unsignCookie(raw) : null;
-    const stored = unsigned?.valid ? (unsigned.value ?? "") : "";
-    const sep = stored.indexOf(":");
-    const expected = sep > 0 ? stored.slice(0, sep) : "";
-    const next = safeNext(sep > 0 ? stored.slice(sep + 1) : "/");
+    const [, signedState = "", issuedAt = "0", signedNext] = (unsigned?.valid && unsigned.value?.match(/^([\w-]+):(\d+):(.*)$/s)) || [];
+    const age = Date.now() - Number(issuedAt);
+    const expected = age >= -60_000 && age <= STATE_MAX_AGE_S * 1000 ? signedState : ""; // a minute of clock skew at most
+    const next = safeNext(signedNext ?? "/");
     const retry = next === "/" ? "/auth/login" : `/auth/login?next=${encodeURIComponent(next)}`;
     reply.clearCookie(STATE_COOKIE, { ...cookieBase, path: "/auth" });
 
     const fail = (status: number, reason: string) => {
       if (status === 403) request.log.warn({ ip: request.ip }, "login rejected: not a guild member");
       else request.log.warn({ ip: request.ip, reason }, "login failed");
-      const [title, text] = messages[status] ?? messages[502]!;
+      const [title, text] = messages[status] ?? messages[500]!;
       return reply.code(status).type(HTML).send(errorPage(title, text, retry));
     };
 
     const { code, state, error } = request.query;
     if (error) return fail(error === "access_denied" ? 401 : 400, `discord: ${error === "access_denied" ? error : "error"}`);
     if (!expected) return fail(400, "state cookie missing or invalid");
-    if (!state || state.length !== expected.length || !timingSafeEqual(Buffer.from(state), Buffer.from(expected))) {
+    // Digests: equal length whatever the input, so timingSafeEqual never throws (e.g. on non-ASCII).
+    const digest = (value: string) => createHash("sha256").update(value).digest();
+    if (!state || !timingSafeEqual(digest(state), digest(expected))) {
       return fail(400, "state mismatch");
     }
     if (!code) return fail(400, "code missing");
@@ -146,32 +172,24 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
     }
 
     // Only members get here, so a rejected login leaves no row behind.
-    const [user] = await db
-      .insert(users)
-      .values({ discordId: profile.discordId, username: profile.username, displayName: profile.displayName, lastLoginAt: new Date() })
-      .onConflictDoUpdate({
-        target: users.discordId,
-        set: { username: profile.username, displayName: profile.displayName, lastLoginAt: new Date() },
-      })
-      .returning({ id: users.id, avatarHash: users.avatarHash });
-    request.user = { id: user!.id, discordId: profile.discordId };
-
-    // Avatar only on change (spec 5.1); a failed download keeps the old image and never fails the login.
-    if (profile.avatarHash !== user!.avatarHash) {
-      try {
-        const avatar = profile.avatarHash && profile.avatarPath ? await downloadAvatar(config.discordCdnBase, profile.avatarPath, profile.avatarHash) : null;
-        await db
-          .update(users)
-          .set({ avatarHash: avatar ? profile.avatarHash : null, avatarImage: avatar?.image ?? null, avatarContentType: avatar?.contentType ?? null })
-          .where(eq(users.id, user!.id));
-      } catch (err) {
-        request.log.warn({ reason: (err as Error).message }, "avatar download failed");
-      }
+    try {
+      const [user] = await db
+        .insert(users)
+        .values({ discordId: profile.discordId, username: profile.username, displayName: profile.displayName, lastLoginAt: new Date() })
+        .onConflictDoUpdate({
+          target: users.discordId,
+          set: { username: profile.username, displayName: profile.displayName, lastLoginAt: new Date() },
+        })
+        .returning({ id: users.id, avatarHash: users.avatarHash });
+      request.user = { id: user!.id, discordId: profile.discordId };
+      if (profile.avatarHash !== user!.avatarHash) await updateAvatar(request, user!.id, profile);
+      const token = randomBytes(32).toString("base64url");
+      await db.insert(sessions).values({ id: sessionId(token), userId: user!.id, expiresAt: new Date(Date.now() + SESSION_DAYS * 86_400_000) });
+      reply.setCookie(SESSION_COOKIE, token, { ...cookieBase, path: "/", maxAge: SESSION_DAYS * 86_400 });
+    } catch (err) {
+      request.log.error({ err }, "login failed: database");
+      return fail(500, "database");
     }
-
-    const token = randomBytes(32).toString("base64url");
-    await db.insert(sessions).values({ id: sessionId(token), userId: user!.id, expiresAt: new Date(Date.now() + SESSION_DAYS * 86_400_000) });
-    reply.setCookie(SESSION_COOKIE, token, { ...cookieBase, path: "/", maxAge: SESSION_DAYS * 86_400 });
     return reply.redirect(next);
   });
 

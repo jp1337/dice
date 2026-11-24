@@ -1,7 +1,8 @@
-// Entry point: configuration, database, migrations, HTTP server, graceful shutdown.
+// Entry point: configuration, database, migrations, HTTP server, daily cleanup, graceful shutdown.
 import path from "node:path";
 import pg from "pg";
 import { buildApp } from "./app.js";
+import { startCleanup } from "./cleanup.js";
 import { type Config, parseConfig } from "./config.js";
 import { runMigrations } from "./db/migrate.js";
 
@@ -18,10 +19,12 @@ const pool = new pg.Pool({ connectionString: config.databaseUrl, connectionTimeo
 const app = await buildApp(config, { pool, webRoot: path.resolve("dist/web") });
 await runMigrations(pool);
 await app.listen({ port: config.port, host: "0.0.0.0" });
+const stopCleanup = startCleanup(pool, config.retentionDays, app.log);
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.once(signal, async () => {
     app.log.info(`${signal} received, shutting down`);
+    stopCleanup();
     await app.close();
     await pool.end();
     process.exit(0);

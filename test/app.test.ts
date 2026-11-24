@@ -1,6 +1,6 @@
 import { connect, type AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { HEALTHZ_LIMIT_PER_MINUTE } from "../src/server/app.js";
+import { HEALTHZ_LIMIT_PER_MINUTE, serializeError } from "../src/server/app.js";
 import { legalEnv, makeApp } from "./helpers.js";
 
 const ROBOTS = "noindex, nofollow, noarchive, nosnippet, noimageindex";
@@ -189,6 +189,25 @@ describe("rate limiting", () => {
       expect(res.headers["cache-control"]).toBe("no-store");
     } finally {
       await limited.close();
+    }
+  });
+});
+
+describe("error serializer", () => {
+  it("keeps message and stack of ordinary errors", () => {
+    const err = new Error("boom", { cause: Object.assign(new Error("inner"), { code: "ECONNREFUSED" }) });
+    expect(serializeError(err)).toMatchObject({ type: "Error", message: "boom", stack: expect.stringContaining("boom"), cause: { code: "ECONNREFUSED" } });
+  });
+
+  it("reduces database errors to SQLSTATE, constraint and table", () => {
+    const pgError = Object.assign(new Error('duplicate key value violates unique constraint, Key (discord_id)=(100000000000000001)'), {
+      severity: "ERROR", code: "23505", constraint: "users_discord_id_unique", table: "users", detail: "Key (discord_id)=(100000000000000001) already exists.",
+    });
+    const wrapped = Object.assign(new Error("Failed query: insert ... params: 100000000000000001,erika", { cause: pgError }), { query: "insert ...", params: ["100000000000000001", "erika"] });
+    for (const err of [wrapped, pgError]) {
+      const out = serializeError(err);
+      expect(out).toMatchObject({ code: "23505", constraint: "users_discord_id_unique", table: "users" });
+      expect(JSON.stringify(out)).not.toMatch(/100000000000000001|erika|insert|stack/);
     }
   });
 });
