@@ -1,10 +1,12 @@
 // React glue for one room connection: the latest RoomView, the connection status, the roll animation
 // state, floating reactions and the server's error messages. The logic lives in connection.ts and roll.ts.
 import { useCallback, useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
+import { ROLL_COOLDOWN_MS } from "../../shared/constants.js";
 import type { ClientMessage, RoomView } from "../../shared/contracts.js";
 import { useFloatingReactions } from "../components/Reactions.js";
 import { type Connection, type ProbeResult, type Status, createConnection } from "./connection.js";
 import { useSound } from "./hooks.js";
+import { errorText } from "./room.js";
 import { ROLLED_WAIT_MS, initialRoll, rollStep } from "./roll.js";
 
 export type Notice = { id: number; text: string };
@@ -47,7 +49,7 @@ export function useRoom(url: string, probe?: () => Promise<ProbeResult>, goneMes
             floating.add(message.emojis);
             break;
           case "error":
-            say(message.message);
+            say(errorText(message));
             break;
         }
       },
@@ -64,6 +66,24 @@ export function useRoom(url: string, probe?: () => Promise<ProbeResult>, goneMes
     const timer = setTimeout(() => dispatchRoll({ type: "timeout" }), ROLLED_WAIT_MS);
     return () => clearTimeout(timer);
   }, [roll.waiting, roll.seenSeq]);
+
+  // The server refuses the next roll for ROLL_COOLDOWN_MS after one; the buttons wait as long.
+  useEffect(() => {
+    if (!roll.cooling) return;
+    const timer = setTimeout(() => dispatchRoll({ type: "cooled" }), ROLL_COOLDOWN_MS);
+    return () => clearTimeout(timer);
+  }, [roll.cooling, roll.rollKey]);
+
+  // Phones freeze background tabs and drop sockets: back in front, or back online, try at once.
+  useEffect(() => {
+    const retry = () => document.visibilityState === "visible" && connection.current?.retryNow();
+    document.addEventListener("visibilitychange", retry);
+    window.addEventListener("online", retry);
+    return () => {
+      document.removeEventListener("visibilitychange", retry);
+      window.removeEventListener("online", retry);
+    };
+  }, []);
 
   // Server errors fade after a while; the next one replaces them.
   useEffect(() => {

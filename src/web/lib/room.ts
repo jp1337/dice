@@ -2,7 +2,7 @@
 // order, the history in words, the result as text. Pure, tested in test/room-view.test.ts. The server
 // decides every action again (spec 7); these only keep buttons from offering what it would refuse.
 import { NICKNAME_MAX, ROOM_NAME_MAX, SIX_MESSAGE_MAX, isVisibleText } from "../../shared/constants.js";
-import type { GameEvent, MemberView, RoomView, UserId } from "../../shared/contracts.js";
+import type { GameEvent, MemberView, RoomView, ServerMessage, UserId } from "../../shared/contracts.js";
 
 const UNKNOWN = "Unbekannt";
 
@@ -113,6 +113,18 @@ export function sixBannerValues(view: RoomView) {
   return { name: namesOf(view).name(roll.userId), platz: place >= 0 ? place + 1 : view.game.giftOrder.length };
 }
 
+// One line under the dice: who got the newest gift.
+export function lastGiftText(view: RoomView) {
+  const gifts = view.game.giftOrder;
+  const last = gifts.at(-1);
+  return last ? `Zuletzt: ${namesOf(view).name(last)} → Geschenk Nr. ${gifts.length}` : null;
+}
+
+// A person chosen in a list. A choice that left the list is gone, never replaced by someone else.
+export function pickOption<T extends { userId: UserId }>(options: readonly T[], picked: string): T | null {
+  return options.find((o) => o.userId === picked) ?? null;
+}
+
 export function resultText(view: RoomView) {
   const lines = giftList(view).map((gift) => `${gift.place}. ${gift.name}`);
   return [`Geschenk-Reihenfolge: ${view.room.name}`, ...lines].join("\n");
@@ -127,12 +139,19 @@ export function formatTime(iso: string, timeZone?: string) {
   return new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", ...(timeZone && { timeZone }) });
 }
 
-export function describeEvent(event: GameEvent, name: (id: UserId | null) => string, rollOf: (seq: number) => string): string {
+export function describeEvent(
+  event: GameEvent,
+  name: (id: UserId | null) => string,
+  rollOf: (seq: number) => string,
+  known: (id: UserId) => boolean = () => true,
+): string {
   const actor = event.actorUserId === null ? "Der Server" : name(event.actorUserId);
   switch (event.type) {
     case "rolled": {
       const { userId, dice, rolledBy } = event.payload;
-      return rolledBy ? `${name(rolledBy)} würfelt für ${name(userId)}: ${diceText(dice)}` : `${name(userId)} würfelt: ${diceText(dice)}`;
+      // Guests may not know the host (not rolling, no place): still say clearly that someone else rolled.
+      const by = rolledBy && (known(rolledBy) ? name(rolledBy) : "Ein Host");
+      return by ? `${by} würfelt für ${name(userId)}: ${diceText(dice)}` : `${name(userId)} würfelt: ${diceText(dice)}`;
     }
     case "game_started":
       return `${actor} startet das Spiel`;
@@ -176,7 +195,7 @@ export function describeEvent(event: GameEvent, name: (id: UserId | null) => str
 
 // Newest first. withModeration: the hosts' switch; off, only the rolls show.
 export function historyLines(view: RoomView, withModeration: boolean, timeZone?: string): HistoryLine[] {
-  const { name } = namesOf(view);
+  const { name, byId } = namesOf(view);
   const rolls = new Map(view.game.history.flatMap((e) => (e.type === "rolled" ? [[e.seq, name(e.payload.userId)] as const] : [])));
   const rollOf = (seq: number) => rolls.get(seq) ?? UNKNOWN;
   return view.game.history
@@ -184,7 +203,7 @@ export function historyLines(view: RoomView, withModeration: boolean, timeZone?:
     .map((e) => ({
       seq: e.seq,
       time: formatTime(e.createdAt, timeZone),
-      text: describeEvent(e, name, rollOf),
+      text: describeEvent(e, name, rollOf, (id) => byId.has(id)),
       undone: e.type === "rolled" && view.game.undoneSeqs.includes(e.seq),
       moderation: e.type !== "rolled",
     }))
@@ -207,6 +226,12 @@ export const roomNameError = (value: string) => textError(value, ROOM_NAME_MAX, 
 export const sixMessageError = (value: string) => textError(value, SIX_MESSAGE_MAX, "Der Text darf nicht leer sein.");
 // What the server stores; send this, not the raw input.
 export const cleanText = (value: string) => value.normalize("NFC").trim();
+
+// A server error as shown. A stale host click (two hosts, or the turn moved on) changed nothing: say so.
+export function errorText(error: Extract<ServerMessage, { type: "error" }>) {
+  if (error.code === "turn_changed" || error.code === "undo_stale") return `${error.message} Nichts ist passiert: schau, wer jetzt am Zug ist, und entscheide neu.`;
+  return error.message;
+}
 
 // PATCH /api/me answers (spec 4.10).
 export function nicknameResponseMessage(status: number): string | null {

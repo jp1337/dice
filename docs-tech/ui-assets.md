@@ -70,8 +70,8 @@ No router: `main.tsx` picks the page from the path (`lib/routes.ts`); every page
 
 | Module | Holds |
 | --- | --- |
-| `lib/connection.ts` | One socket per tab: backoff 0.5 s doubling to 30 s with jitter, reset by the first `state`; 1012/1013 once at once; 1008, 4xxx stop, 4001 login; a refused upgrade (1006 before open) is asked over HTTP. Error page after 3 failures without a state |
-| `lib/roll.ts` | The server sends the `state` with a new roll before `rolled`: the new seq holds back six banner and result until the dice land (or 1.5 s without `rolled`) |
+| `lib/connection.ts` | One socket per tab: backoff 0.5 s doubling to 30 s with jitter, reset by the first `state`; 1012/1013 once within 1 s (jittered); visible tab or network back: retry now; 1008, 4xxx stop, 4001 login; a refused upgrade (1006 before open) is asked over HTTP. Error page after 3 failures without a state, kept while the next attempt runs |
+| `lib/roll.ts` | The server sends the `state` with a new roll before `rolled`: the new seq holds back six banner and result until the dice land (or 1.5 s without `rolled`); roll buttons wait `ROLL_COOLDOWN_MS`; a reset or reconnect clears it |
 | `lib/room.ts` | Permissions per button, lists, history texts, result text, the `visibleText` checks of `constants.ts` |
 | `lib/useRoom.ts` | React glue: view, status, roll state, reactions, server errors |
 

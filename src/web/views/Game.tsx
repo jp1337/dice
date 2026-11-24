@@ -1,5 +1,6 @@
-// The running game (spec 10): dice in the middle, whose turn, order, gifts so far, history, reactions,
-// and the host bar with every tool of spec 4.6. Guests see the same without anything that sends.
+// The running game (spec 10). Phone first, in the order a host needs it: whose turn and the dice, the
+// four everyday host tools, gifts and turn order, reactions, the rarer host tools folded away, history.
+// Guests see the same without anything that sends.
 import { useId, useState } from "react";
 import type { RoomView } from "../../shared/contracts.js";
 import { Dice } from "../components/Dice.js";
@@ -7,8 +8,8 @@ import { FloatingReactions, ReactionBar } from "../components/Reactions.js";
 import { ReactionsToggle, Switch } from "../components/Toggles.js";
 import { useFlag } from "../lib/hooks.js";
 import { HIDE_REACTIONS_KEY } from "../lib/prefs.js";
-import { type Derived, giftList, historyLines, latecomers, turnList } from "../lib/room.js";
-import { rollBusy, shownDice } from "../lib/roll.js";
+import { type Derived, giftList, historyLines, lastGiftText, latecomers, pickOption, turnList } from "../lib/room.js";
+import { rollLocked, shownDice } from "../lib/roll.js";
 import type { useRoom } from "../lib/useRoom.js";
 import { ConfirmButton } from "./Controls.js";
 import { GuestLink } from "./Lobby.js";
@@ -16,18 +17,23 @@ import { Participants } from "./Participants.js";
 
 type Room = ReturnType<typeof useRoom>;
 type Props = { view: RoomView; d: Derived; room: Room };
+type Option = { userId: string; name: string };
 
-function PickAndAct({ label, options, action, confirm }: { label: string; options: { userId: string; name: string }[]; action: (userId: string) => void; confirm?: (name: string) => string }) {
+export const RESET_QUESTION = "Raum zurück in die Lobby setzen? Die Geschenk-Reihenfolge verschwindet dann für alle.";
+
+// Nothing is preselected, and a person who leaves the list clears the choice (pickOption).
+function PickAndAct({ label, options, action, confirm }: { label: string; options: Option[]; action: (userId: string) => void; confirm?: (name: string) => string }) {
   const [picked, setPicked] = useState("");
   const id = useId();
-  const choice = options.find((o) => o.userId === picked) ?? options[0];
-  if (!choice) return null;
+  const choice = pickOption(options, picked);
+  if (options.length === 0) return null;
   return (
     <span className="row">
       <label htmlFor={id} className="sr-only">
         {label}: Person
       </label>
-      <select id={id} value={choice.userId} onChange={(event) => setPicked(event.target.value)}>
+      <select id={id} value={choice?.userId ?? ""} onChange={(event) => setPicked(event.target.value)}>
+        <option value="">Person wählen …</option>
         {options.map((o) => (
           <option key={o.userId} value={o.userId}>
             {o.name}
@@ -35,9 +41,9 @@ function PickAndAct({ label, options, action, confirm }: { label: string; option
         ))}
       </select>
       {confirm ? (
-        <ConfirmButton label={label} question={confirm(choice.name)} onConfirm={() => action(choice.userId)} />
+        <ConfirmButton key={choice?.userId ?? ""} label={label} question={choice ? confirm(choice.name) : ""} disabled={!choice} onConfirm={() => choice && action(choice.userId)} />
       ) : (
-        <button type="button" onClick={() => action(choice.userId)}>
+        <button type="button" disabled={!choice} onClick={() => choice && action(choice.userId)}>
           {label}
         </button>
       )}
@@ -45,15 +51,16 @@ function PickAndAct({ label, options, action, confirm }: { label: string; option
   );
 }
 
+// The everyday tools, two by two.
 function HostBar({ view, d, room }: Props) {
   const { can } = d;
   const send = room.send;
-  const turn = turnList(view);
-  const late = latecomers(view).map((m) => ({ userId: m.userId, name: m.displayName }));
+  const locked = rollLocked(room.roll);
+  const seq = d.newestRollSeq;
+  const active = view.game.activeUserId;
   return (
-    <section className="card stack host-bar" aria-labelledby="host-bar">
-      <h2 id="host-bar">Host-Werkzeuge</h2>
-      <span className="row">
+    <section className="card stack host-bar" aria-label="Host-Werkzeuge">
+      <div className="grid2">
         {view.game.pause ? (
           <button type="button" className="primary" disabled={!can.continue} onClick={() => send({ type: "continue" })}>
             Weiter
@@ -63,36 +70,49 @@ function HostBar({ view, d, room }: Props) {
             Pause
           </button>
         )}
-        <button type="button" disabled={!can.skip} onClick={() => view.game.activeUserId && send({ type: "skip", userId: view.game.activeUserId })}>
+        {/* The player named on the button: if the turn moved on meanwhile, the server answers turn_changed. */}
+        <button type="button" disabled={!can.skip || !active} onClick={() => active && send({ type: "skip", userId: active })}>
           {d.activeName} überspringen
         </button>
-        <button type="button" disabled={!can.rollFor} onClick={() => view.game.activeUserId && send({ type: "roll_for", userId: view.game.activeUserId })}>
+        <button type="button" disabled={!can.rollFor || locked || !active} onClick={() => active && send({ type: "roll_for", userId: active })}>
           Für {d.activeName} würfeln
         </button>
-      </span>
-      <span className="row">
-        {can.undo && d.newestRollSeq !== null && (
-          <ConfirmButton
-            label={`Letzten Wurf zurücknehmen (${d.newestRollName})`}
-            question={`Wurf von ${d.newestRollName} zurücknehmen?`}
-            onConfirm={() => send({ type: "undo", seq: d.newestRollSeq! })}
-          />
-        )}
-        {can.assignLastPlace && (
-          <ConfirmButton label="Letzten Platz vergeben" question={`Letzten Platz an ${d.name(d.lastPlayer)} vergeben?`} onConfirm={() => send({ type: "assign_last_place" })} />
-        )}
-      </span>
-      {can.removePlayer && turn.length > 0 && (
-        <PickAndAct label="Aus dem Spiel entfernen" options={turn} confirm={(name) => `${name} wirklich entfernen? Er oder sie bekommt keinen Platz.`} action={(userId) => send({ type: "remove_player", userId })} />
+        {/* key: a newer roll closes an open question instead of taking back the wrong one */}
+        <ConfirmButton
+          key={seq ?? 0}
+          label={d.newestRollName ? `Wurf von ${d.newestRollName} zurücknehmen` : "Wurf zurücknehmen"}
+          question={`Wurf von ${d.newestRollName} zurücknehmen?`}
+          disabled={!can.undo || seq === null}
+          onConfirm={() => seq !== null && send({ type: "undo", seq })}
+        />
+      </div>
+      {can.assignLastPlace && (
+        <ConfirmButton key={d.lastPlayer} label="Letzten Platz vergeben" question={`Letzten Platz an ${d.name(d.lastPlayer)} vergeben?`} onConfirm={() => send({ type: "assign_last_place" })} />
       )}
-      {can.addPlayer && late.length > 0 && <PickAndAct label="Als Nachzügler anhängen" options={late} action={(userId) => send({ type: "add_player", userId })} />}
-      <Switch on={view.room.settings.reactions} onChange={(on) => can.toggleReactions && send({ type: "update_settings", settings: { reactions: on } })} label="Reaktionen im Raum erlaubt" />
-      <GuestLink view={view} d={d} send={send} />
-      <span className="row">
-        <ConfirmButton label="Spiel beenden" question="Spiel wirklich beenden?" disabled={!can.end} className="danger" onConfirm={() => send({ type: "end" })} />
-        <ConfirmButton label="Zurück in die Lobby" question="Raum wirklich zurück in die Lobby setzen? Der Spielstand geht verloren." disabled={!can.reset} className="danger" onConfirm={() => send({ type: "reset" })} />
-      </span>
     </section>
+  );
+}
+
+function MoreHostTools({ view, d, room }: Props) {
+  const { can } = d;
+  const send = room.send;
+  const late = latecomers(view).map((m) => ({ userId: m.userId, name: m.displayName }));
+  return (
+    <details className="card">
+      <summary>Weitere Host-Werkzeuge</summary>
+      <div className="stack">
+        {can.removePlayer && (
+          <PickAndAct label="Aus dem Spiel entfernen" options={turnList(view)} confirm={(name) => `${name} wirklich entfernen? Er oder sie bekommt keinen Platz.`} action={(userId) => send({ type: "remove_player", userId })} />
+        )}
+        {can.addPlayer && <PickAndAct label="Als Nachzügler anhängen" options={late} action={(userId) => send({ type: "add_player", userId })} />}
+        <Switch on={view.room.settings.reactions} disabled={!can.toggleReactions} onChange={(on) => send({ type: "update_settings", settings: { reactions: on } })} label="Reaktionen im Raum erlaubt" />
+        <GuestLink view={view} d={d} send={send} />
+        <span className="row">
+          <ConfirmButton label="Spiel beenden" question="Spiel wirklich beenden?" disabled={!can.end} className="danger" onConfirm={() => send({ type: "end" })} />
+          <ConfirmButton label="Zurück in die Lobby" question={RESET_QUESTION} disabled={!can.reset} className="danger" onConfirm={() => send({ type: "reset" })} />
+        </span>
+      </div>
+    </details>
   );
 }
 
@@ -137,12 +157,30 @@ export function GiftOrder({ view }: { view: RoomView }) {
   );
 }
 
+function TurnOrder({ view }: { view: RoomView }) {
+  return (
+    <section className="stack" aria-labelledby="order">
+      <h2 id="order">Zugreihenfolge (Runde {view.game.round})</h2>
+      <ol className="turns">
+        {turnList(view).map((t) => (
+          <li key={t.userId} className={t.active ? "is-active" : ""} aria-current={t.active ? "step" : undefined}>
+            <span>{t.name}</span>
+            {t.twoDice && <span className="badge badge-bonus">2 Würfel</span>}
+            {t.isSimulated && <span className="badge badge-test">Testspieler</span>}
+            <span className={`badge conn-${t.connected ? "ok" : "lost"}`}>{t.connected ? "verbunden" : "getrennt"}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 export function Game({ view, d, room, onSettled }: Props & { onSettled: () => void }) {
   const [hideReactions] = useFlag(HIDE_REACTIONS_KEY);
   const { game } = view;
-  const busy = rollBusy(room.roll);
-  const turn = turnList(view);
+  const locked = rollLocked(room.roll);
   const inTurn = d.myId !== null && game.turnOrder.includes(d.myId);
+  const lastGift = lastGiftText(view);
 
   return (
     <div className="game">
@@ -150,7 +188,9 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
         <p id="turn" className={`turn ${d.isActive ? "is-me" : ""}`} aria-live="polite">
           {d.turnText}
         </p>
-        {game.pause === "host" && <p className="pause">Pausiert. Ein Host macht gleich weiter.</p>}
+        <p className="pause" role="status">
+          {game.pause === "host" ? "Pausiert. Ein Host macht gleich weiter." : ""}
+        </p>
         {d.showModeration && game.activeUserId && !d.activeConnected && (
           <p className="warning" role="status">
             {d.activeName} ist getrennt. Du kannst überspringen oder für {d.activeName} würfeln.
@@ -158,21 +198,29 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
         )}
         <Dice values={shownDice(room.roll, view)} rollKey={room.roll.rollKey} count={game.activeDiceCount} onSettled={onSettled} />
         <FloatingReactions items={room.floating} hidden={hideReactions} />
+        {lastGift && <p className="last-gift">{lastGift}</p>}
         {(inTurn || d.can.claimLastPlace) && (
           <p className="actions">
             {inTurn && (
-              <button type="button" className="primary big" disabled={!d.can.roll || busy} onClick={() => room.send({ type: "roll" })}>
+              <button type="button" className="primary big" disabled={!d.can.roll || locked} onClick={() => room.send({ type: "roll" })}>
                 {d.isActive && game.activeDiceCount === 2 ? "Mit 2 Würfeln würfeln" : "Würfeln"}
               </button>
             )}
             {d.can.claimLastPlace && (
-              <button type="button" disabled={busy} onClick={() => room.send({ type: "claim_last_place" })}>
+              <button type="button" disabled={locked} onClick={() => room.send({ type: "claim_last_place" })}>
                 Letzten Platz nehmen
               </button>
             )}
           </p>
         )}
       </section>
+
+      {d.showModeration && <HostBar view={view} d={d} room={room} />}
+
+      <div className="columns">
+        <GiftOrder view={view} />
+        <TurnOrder view={view} />
+      </div>
 
       {!d.isGuest && (
         <section className="reactions" aria-label="Reaktionen">
@@ -181,25 +229,9 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
         </section>
       )}
 
-      {d.showModeration && <HostBar view={view} d={d} room={room} />}
+      {d.showModeration && <MoreHostTools view={view} d={d} room={room} />}
 
-      <div className="columns">
-        <section className="stack" aria-labelledby="order">
-          <h2 id="order">Zugreihenfolge (Runde {game.round})</h2>
-          <ol className="turns">
-            {turn.map((t) => (
-              <li key={t.userId} className={t.active ? "is-active" : ""} aria-current={t.active ? "step" : undefined}>
-                <span>{t.name}</span>
-                {t.twoDice && <span className="badge badge-bonus">2 Würfel</span>}
-                {t.isSimulated && <span className="badge badge-test">Testspieler</span>}
-                {!d.isGuest && <span className={`badge conn-${t.connected ? "ok" : "lost"}`}>{t.connected ? "verbunden" : "getrennt"}</span>}
-              </li>
-            ))}
-          </ol>
-        </section>
-        <GiftOrder view={view} />
-        <History view={view} d={d} />
-      </div>
+      <History view={view} d={d} />
 
       {!d.isGuest && (
         <details className="card">

@@ -19,7 +19,7 @@ export function backoffDelay(attempt: number, random: () => number = Math.random
 export type CloseAction = "reconnect-now" | "reconnect" | "login" | "stop";
 
 // The server's codes (rooms.ts): 1008 too many tabs or messages, 4004 room gone, 4001 session ended,
-// 1011 join failed, 1012/1013 the room reloads. 1006 is a lost network or a refused upgrade.
+// 1011 join failed, 1012/1013 the room reloads (back within a second, jittered). 1006 is a lost network or a refused upgrade.
 export function classifyClose(code: number): CloseAction {
   if (code === 1012 || code === 1013) return "reconnect-now";
   if (code === 4001) return "login";
@@ -52,10 +52,11 @@ export function statusLabel(status: Status, hasState: boolean): StatusLabel {
   return hasState || status.kind === "retrying" || status.attempt > 0 ? "verbinde neu …" : "verbinde …";
 }
 
-// No state yet and the connection keeps failing: an error page, not an empty one (spec 8.1).
+// No state yet and the connection keeps failing: an error page, not an empty one (spec 8.1). It stays
+// while the next attempt connects, so it does not flicker away every few seconds.
 export function showErrorPage(status: Status, hasState: boolean) {
   if (status.kind === "login" || status.kind === "stopped") return true;
-  return !hasState && status.kind === "retrying" && status.attempt >= ERROR_PAGE_AFTER;
+  return !hasState && status.kind !== "open" && status.attempt >= ERROR_PAGE_AFTER;
 }
 
 const SERVER_TYPES = new Set(["state", "rolled", "reactions", "error"]);
@@ -100,6 +101,7 @@ export function createConnection({ url, makeSocket, onStatus, onMessage, probe, 
   let timer: ReturnType<typeof setTimeout> | undefined;
   let attempt = 0;
   let stopped = false;
+  let probing = false; // retryNow must not start a second socket while the probe decides
 
   const finish = (status: Extract<Status, { kind: "login" | "stopped" }>) => {
     stopped = true;
@@ -137,13 +139,16 @@ export function createConnection({ url, makeSocket, onStatus, onMessage, probe, 
     if (action === "login") return finish({ kind: "login", message: closeMessage(code, reason) });
     if (action === "stop") return finish({ kind: "stopped", message: closeMessage(code, reason) });
     if (!opened && probe) {
+      probing = true;
       const result = await probe().catch((): ProbeResult => "ok"); // offline: keep trying
+      probing = false;
       if (stopped) return;
       if (result === "login") return finish({ kind: "login", message: "Bitte melde dich an, um mitzumachen." });
       if (result === "gone") return finish({ kind: "stopped", message: goneMessage ?? "Diesen Raum gibt es nicht." });
     }
     attempt++;
-    const delayMs = action === "reconnect-now" && attempt === 1 ? 0 : backoffDelay(attempt, random);
+    // After a reload every client comes back within a second, spread out instead of all at once.
+    const delayMs = action === "reconnect-now" && attempt === 1 ? Math.round(random() * 1000) : backoffDelay(attempt, random);
     onStatus({ kind: "retrying", attempt, delayMs });
     timer = setTimeout(connect, delayMs);
   };
@@ -157,9 +162,10 @@ export function createConnection({ url, makeSocket, onStatus, onMessage, probe, 
       socket = null;
       current?.close(1000);
     },
-    // The error page's button: try now instead of waiting for the timer.
+    // The error page's button, the tab becoming visible, the network coming back: try now instead of
+    // waiting for the timer.
     retryNow() {
-      if (stopped || socket) return;
+      if (stopped || socket || probing) return;
       clearTimeout(timer);
       connect();
     },

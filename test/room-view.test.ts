@@ -22,18 +22,21 @@ import {
   cleanText,
   createRoomResponseMessage,
   deriveRoom,
+  errorText,
   giftList,
   historyLines,
+  lastGiftText,
   latecomers,
   nicknameError,
   nicknameResponseMessage,
+  pickOption,
   resultText,
   roomNameError,
   sixBannerValues,
   sixMessageError,
   turnList,
 } from "../src/web/lib/room.js";
-import { initialRoll, rollBusy, rollStep, shownDice } from "../src/web/lib/roll.js";
+import { initialRoll, rollBusy, rollLocked, rollStep, shownDice } from "../src/web/lib/roll.js";
 import { loginHref, parseRoute, socketUrl } from "../src/web/lib/routes.js";
 
 // Fictitious ids and names only.
@@ -113,6 +116,9 @@ describe("reconnect timing", () => {
     expect(showErrorPage(retry(ERROR_PAGE_AFTER), false)).toBe(true);
     expect(showErrorPage(retry(10), true)).toBe(false); // with a state: keep the room, show "verbinde neu"
     expect(showErrorPage({ kind: "stopped", message: "x" }, true)).toBe(true);
+    // Once shown, the error stays while the next attempt connects: no flicker every few seconds.
+    expect(showErrorPage({ kind: "connecting", attempt: ERROR_PAGE_AFTER }, false)).toBe(true);
+    expect(showErrorPage({ kind: "connecting", attempt: ERROR_PAGE_AFTER - 1 }, false)).toBe(false);
   });
 
   it("accepts only the server's message types", () => {
@@ -156,8 +162,8 @@ describe("the room connection", () => {
     return socket;
   }
   const state = JSON.stringify({ type: "state", state: makeView() });
-  const connect = (probe?: () => Promise<ProbeResult>) => {
-    const conn = createConnection({ url: "wss://dice.example.org/ws/rooms/x", makeSocket: fake, onStatus: (s) => statuses.push(s), onMessage: (m) => messages.push(m), probe, random: () => 1 });
+  const connect = (probe?: () => Promise<ProbeResult>, random = () => 1) => {
+    const conn = createConnection({ url: "wss://dice.example.org/ws/rooms/x", makeSocket: fake, onStatus: (s) => statuses.push(s), onMessage: (m) => messages.push(m), probe, random });
     conn.start();
     return conn;
   };
@@ -199,18 +205,30 @@ describe("the room connection", () => {
     expect(statuses.at(-1)).toMatchObject({ kind: "retrying", attempt: 1, delayMs: 500 });
   });
 
-  it("reconnects at once after a server-side reload, but not in a tight loop", async () => {
-    connect();
+  it("reconnects within a second after a server-side reload, spread out, but not in a tight loop", async () => {
+    connect(undefined, () => 0.25);
     last().open();
     last().message(state);
     last().drop(1012);
     await vi.advanceTimersByTimeAsync(0);
-    expect(statuses.at(-2)).toMatchObject({ kind: "retrying", delayMs: 0 });
+    expect(statuses.at(-1)).toMatchObject({ kind: "retrying", delayMs: 250 }); // jitter: every client at once would hammer the restart
+    await vi.advanceTimersByTimeAsync(250);
     expect(sockets).toHaveLength(2);
     last().open();
     last().drop(1013); // no state in between
     await vi.advanceTimersByTimeAsync(0);
-    expect(statuses.at(-1)).toMatchObject({ kind: "retrying", attempt: 2, delayMs: 1000 });
+    expect(statuses.at(-1)).toMatchObject({ kind: "retrying", attempt: 2, delayMs: backoffDelay(2, () => 0.25) });
+  });
+
+  it("ignores retryNow while the HTTP probe is still asking", async () => {
+    let answer: (result: ProbeResult) => void = () => {};
+    const conn = connect(() => new Promise((resolve) => (answer = resolve)));
+    last().drop(1006);
+    conn.retryNow(); // e.g. the tab became visible
+    expect(sockets).toHaveLength(1);
+    answer("ok");
+    await vi.advanceTimersByTimeAsync(500);
+    expect(sockets).toHaveLength(2);
   });
 
   it.each([
@@ -442,5 +460,69 @@ describe("roll animation timing", () => {
     expect(rollBusy(s)).toBe(true);
     s = rollStep(s, { type: "timeout" });
     expect(rollBusy(s)).toBe(false);
+  });
+});
+
+describe("review fixes", () => {
+  const rolledView = (status: "lobby" | "running") => {
+    const e = ev("rolled", { userId: ANNA, dice: [3] }, ANNA);
+    return makeView({ game: status === "lobby" ? { status } : running({ history: [e], lastRoll: { userId: ANNA, dice: [3] } }) });
+  };
+
+  it("a reset during the tumble does not leave the dice busy for good", () => {
+    let s = rollStep(initialRoll, { type: "state", view: makeView({ game: running() }), first: true });
+    s = rollStep(s, { type: "state", view: rolledView("running"), first: false });
+    s = rollStep(s, { type: "rolled", dice: [3] });
+    expect(rollBusy(s)).toBe(true);
+    s = rollStep(s, { type: "state", view: rolledView("lobby"), first: false }); // the Dice unmount, onSettled never comes
+    expect(rollLocked(s)).toBe(false);
+  });
+
+  it("a reconnect during the tumble does not leave the dice busy", () => {
+    let s = rollStep(initialRoll, { type: "rolled", dice: [3] });
+    s = rollStep(s, { type: "state", view: rolledView("running"), first: true });
+    expect(rollLocked(s)).toBe(false);
+  });
+
+  it("the roll buttons stay locked for the server's cooldown, not only the animation", () => {
+    let s = rollStep(initialRoll, { type: "rolled", dice: [3] });
+    s = rollStep(s, { type: "settled" });
+    expect(rollBusy(s)).toBe(false);
+    expect(rollLocked(s)).toBe(true);
+    s = rollStep(s, { type: "cooled" });
+    expect(rollLocked(s)).toBe(false);
+  });
+
+  it("a chosen person never silently becomes someone else", () => {
+    const options = [{ userId: ANNA, name: "Anna" }, { userId: BEN, name: "Ben" }];
+    expect(pickOption(options, "")).toBeNull();
+    expect(pickOption(options, BEN)).toEqual({ userId: BEN, name: "Ben" });
+    expect(pickOption(options.slice(0, 1), BEN)).toBeNull(); // Ben left the list: the choice is cleared
+  });
+
+  it("names the newest gift in one line", () => {
+    expect(lastGiftText(makeView({ game: running() }))).toBeNull();
+    expect(lastGiftText(makeView({ game: running({ giftOrder: [BEN, ANNA] }) }))).toBe("Zuletzt: Anna → Geschenk Nr. 2");
+  });
+
+  it("guests read 'Ein Host würfelt für' when they do not know the host", () => {
+    const forBen = ev("rolled", { userId: BEN, dice: [4], rolledBy: HOST });
+    const view = makeView({ viewer: { kind: "guest" }, members: [member(BEN, "Ben")], game: running({ history: [forBen] }) });
+    expect(historyLines(view, false, "UTC").map((l) => l.text)).toEqual(["Ein Host würfelt für Ben: 4"]);
+  });
+
+  it("the result offers undo while the last six is not ended by a host", () => {
+    const six = ev("rolled", { userId: ANNA, dice: [6] }, ANNA);
+    const done = makeView({ viewer: asHost, game: { status: "finished", history: [six], giftOrder: [BEN, ANNA] } });
+    expect(deriveRoom(done, true).can.undo).toBe(true);
+  });
+});
+
+describe("server errors", () => {
+  it("say what to do after a stale host click", () => {
+    expect(errorText({ type: "error", code: "turn_changed", message: "Inzwischen ist jemand anderes dran." })).toBe(
+      "Inzwischen ist jemand anderes dran. Nichts ist passiert: schau, wer jetzt am Zug ist, und entscheide neu.",
+    );
+    expect(errorText({ type: "error", code: "paused", message: "Das Spiel ist pausiert." })).toBe("Das Spiel ist pausiert.");
   });
 });

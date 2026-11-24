@@ -334,7 +334,7 @@ legend {
 
 @media (min-width: 760px) {
   .columns {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .lobby {
@@ -406,4 +406,35 @@ details > summary {
 
 .result .gifts {
   font-size: 1.2rem;
+}
+
+/* The four everyday host tools, two by two, also on a phone. */
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.grid2 > button {
+  width: 100%;
+}
+
+.last-gift {
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+
+.switch-state {
+  color: var(--muted);
+}
+
+/* An empty live region stays in the tree (so it is announced when it fills) but takes no room. */
+.pause:empty {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.grid2 > .confirm {
+  grid-column: 1 / -1;
 }

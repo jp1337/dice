@@ -4,6 +4,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 
 type ConfirmProps = {
   label: string;
+  ariaLabel?: string; // the label with its context, e.g. the person's name
   question: string; // e.g. "Spiel wirklich beenden?"
   confirmLabel?: string;
   onConfirm: () => void;
@@ -11,7 +12,9 @@ type ConfirmProps = {
   className?: string;
 };
 
-export function ConfirmButton({ label, question, confirmLabel = "Ja", onConfirm, disabled = false, className = "" }: ConfirmProps) {
+// Give it a key that names its target (a roll seq, a user id): when the target changes, the open
+// question closes instead of confirming something else.
+export function ConfirmButton({ label, ariaLabel, question, confirmLabel = "Ja", onConfirm, disabled = false, className = "" }: ConfirmProps) {
   const [asking, setAsking] = useState(false);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const openRef = useRef<HTMLButtonElement>(null);
@@ -26,7 +29,7 @@ export function ConfirmButton({ label, question, confirmLabel = "Ja", onConfirm,
 
   if (!asking) {
     return (
-      <button ref={openRef} type="button" className={className} disabled={disabled} onClick={() => setAsking(true)}>
+      <button ref={openRef} type="button" className={className} aria-label={ariaLabel} disabled={disabled} onClick={() => setAsking(true)}>
         {label}
       </button>
     );
