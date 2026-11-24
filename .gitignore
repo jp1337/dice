@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+.env
+*.log
+# German planning document, stays local (see docs-tech/spec.md for the English spec)
+wuerfel-tool-konzept.md
+.personal-denylist
