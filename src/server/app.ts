@@ -157,7 +157,7 @@ export async function buildApp(config: Config, deps: Deps) {
   // Signs the short-lived login state cookie; key derived from SESSION_SECRET, separate from session ids.
   await app.register(fastifyCookie, { secret: createHmac("sha256", config.sessionSecret).update("cookie-signing").digest() });
   const db = drizzle({ client: deps.pool, casing: "snake_case" });
-  const { requireUser } = await registerAuth(app, config, db);
+  const auth = await registerAuth(app, config, db);
 
   // /healthz is public and touches the database, so it is limited (CodeQL js/missing-rate-limiting).
   // Generous enough for the container healthcheck and the deploy poll, which share one source address.
@@ -200,7 +200,7 @@ export async function buildApp(config: Config, deps: Deps) {
 
   // Larger client messages close the connection (1009) before they are buffered or parsed.
   await app.register(fastifyWebsocket, { options: { maxPayload: MAX_CLIENT_MESSAGE_BYTES } });
-  registerRooms(app, config, db, requireUser, deps.pingIntervalMs ?? PING_INTERVAL_MS);
+  registerRooms(app, config, db, auth, deps.pingIntervalMs ?? PING_INTERVAL_MS);
 
   return app;
 }

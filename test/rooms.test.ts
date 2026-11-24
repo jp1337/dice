@@ -7,7 +7,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { SESSION_COOKIE, sessionIdFor } from "../src/server/auth.js";
 import { parseConfig } from "../src/server/config.js";
 import { runMigrations } from "../src/server/db/migrate.js";
-import { MAX_STRIKES, type Member, type Room, roomView } from "../src/server/rooms.js";
+import { runCleanup } from "../src/server/cleanup.js";
+import { CommandError } from "../src/server/game-commands.js";
+import { MAX_SOCKETS_PER_USER, MAX_STRIKES, MESSAGE_BURST, type Member, NICKNAME_LIMIT_PER_MINUTE, checkSettingsChange, roomView } from "../src/server/rooms.js";
 import { type GameEvent, MAX_CLIENT_MESSAGE_BYTES, NICKNAME_MAX, type RoomView, type ServerMessage, defaultSettings } from "../src/shared/contracts.js";
 import { initialGameState } from "../src/shared/game/reduce.js";
 import { baseEnv, makeApp } from "./helpers.js";
@@ -23,14 +25,20 @@ type User = { id: string; discordId: string; token: string; name: string };
 
 let ip = 0;
 const nextIp = () => `10.2.${(++ip >> 8) & 255}.${ip & 255}`;
+// Presence updates are throttled (PRESENCE_DELAY_MS), so waits are longer than Vitest's default second.
+const until = <T>(check: () => T | Promise<T>) => vi.waitFor(check, { timeout: 4000, interval: 20 });
 const newDiscordId = () => `1${String(randomInt(2 ** 47)).padStart(17, "0")}`;
 
 class Client {
   messages: ServerMessage[] = [];
-  closed: Promise<number>;
+  bytes = 0;
+  closed: Promise<{ code: number; reason: string }>;
   constructor(readonly ws: WebSocket) {
-    ws.addEventListener("message", (e) => this.messages.push(JSON.parse(String(e.data))));
-    this.closed = new Promise((resolve) => ws.addEventListener("close", (e) => resolve(e.code)));
+    ws.addEventListener("message", (e) => {
+      this.bytes += String(e.data).length;
+      this.messages.push(JSON.parse(String(e.data)));
+    });
+    this.closed = new Promise((resolve) => ws.addEventListener("close", (e) => resolve({ code: e.code, reason: e.reason })));
   }
   get state(): RoomView {
     const last = this.messages.findLast((m) => m.type === "state");
@@ -69,7 +77,7 @@ describe("guest view (spec 4.8)", () => {
     const history: GameEvent[] = [
       { seq: 1, type: "participation_changed", actorUserId: "h", payload: { userId: "s", participation: "spectator" }, createdAt: "2026-12-01T18:00:00.000Z" },
     ];
-    const room: Room = {
+    const room: Parameters<typeof roomView>[0] = {
       id: "r",
       slug: "secret-slug",
       name: "Feier",
@@ -84,20 +92,28 @@ describe("guest view (spec 4.8)", () => {
       sockets: new Map(),
       events: history,
       game: { ...initialGameState(), history },
-      queue: Promise.resolve(),
     };
-    const view = roomView(room, null, config);
-    expect(view.viewer).toEqual({ kind: "guest" });
+    const view = roomView(room, "guest", config);
     expect(view.room.slug).toBe("");
     expect(view.room).not.toHaveProperty("watchUrl");
     expect(view.members.map((m) => m.userId)).toEqual(["p"]);
     expect(view.members[0]).toMatchObject({ avatarUrl: null, displayName: "Name p" });
     expect(view.members[0]).not.toHaveProperty("discordName");
     expect(view.game.history).toEqual([]);
-    const host = roomView(room, room.members.get("h")!, config);
+    const host = roomView(room, "host", config);
     expect(host.room.watchUrl).toBe(`${ORIGIN}/z/w`);
     expect(host.members).toHaveLength(3);
     expect(host.game.history).toHaveLength(1);
+  });
+});
+
+describe("settings during a game (spec 4.6, 4.11)", () => {
+  it("allows only switching reactions outside the lobby", () => {
+    expect(() => checkSettingsChange("running", { reactions: false })).not.toThrow();
+    expect(() => checkSettingsChange("finished", { reactions: true })).not.toThrow();
+    expect(() => checkSettingsChange("running", { reactions: false, bonusChains: false })).toThrow(CommandError);
+    expect(() => checkSettingsChange("running", { sixMessage: "x" })).toThrow(CommandError);
+    expect(() => checkSettingsChange("lobby", { sixMessage: "x", bonusChains: false, lastPlayer: "auto" })).not.toThrow();
   });
 });
 
@@ -108,16 +124,17 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
   let port: number;
   const clients: Client[] = [];
 
-  async function makeUser(discordId = newDiscordId(), name = "Erika"): Promise<User> {
+  async function makeUser(discordId = newDiscordId(), name = "Erika", sessionLifetime = "1 day"): Promise<User> {
     const { rows } = await pool.query(
       `insert into users (discord_id, username, display_name, avatar_hash) values ($1, $2, $3, $4)
        on conflict (discord_id) do update set nickname = null returning id`,
       [discordId, `${name.toLowerCase()}-${discordId.slice(-4)}`, name, "b".repeat(32)],
     );
     const token = randomBytes(32).toString("base64url");
-    await pool.query("insert into sessions (id, user_id, expires_at) values ($1, $2, now() + interval '1 day')", [
+    await pool.query("insert into sessions (id, user_id, expires_at) values ($1, $2, now() + $3::interval)", [
       sessionIdFor(baseEnv.SESSION_SECRET, token),
       rows[0].id,
+      sessionLifetime,
     ]);
     return { id: rows[0].id, discordId, token, name };
   }
@@ -134,14 +151,21 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
     return res.json().slug as string;
   }
 
-  async function connect(slug: string, user: User, targetPort = port) {
+  function open(slug: string, user: User, targetPort = port) {
     // Node's WebSocket client takes extra headers; the DOM type does not know them.
     const init = { headers: { cookie: `${SESSION_COOKIE}=${user.token}`, origin: ORIGIN } };
     const client = new Client(new WebSocket(`ws://127.0.0.1:${targetPort}/ws/rooms/${slug}`, init as unknown as string[]));
     clients.push(client);
-    await vi.waitFor(() => client.state);
     return client;
   }
+
+  async function connect(slug: string, user: User, targetPort = port) {
+    const client = open(slug, user, targetPort);
+    await until(() => client.state);
+    return client;
+  }
+
+  const roomIdOf = async (slug: string) => (await pool.query("select id from rooms where slug = $1", [slug])).rows[0]?.id as string | undefined;
 
   // The status of an upgrade request that is refused before the upgrade (101 if it was accepted).
   function upgrade(path: string, headers: Record<string, string>) {
@@ -234,8 +258,8 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
     it("validates and resets nicknames (spec 4.10)", async () => {
       const user = await makeUser(undefined, "Max");
       const patch = (nickname: unknown, origin = ORIGIN) =>
-        app.inject({ method: "PATCH", url: "/api/me", cookies: cookies(user), headers: { origin }, payload: { nickname } });
-      for (const bad of ["", "   ", "x".repeat(NICKNAME_MAX + 1), "a\u0000b", "a\nb", "‮evil", "a​b", 5]) {
+        app.inject({ method: "PATCH", url: "/api/me", cookies: cookies(user), headers: { origin }, payload: { nickname }, remoteAddress: nextIp() });
+      for (const bad of ["", "   ", "x".repeat(NICKNAME_MAX + 1), "a\u0000b", "a\nb", "\u202Eevil", "a\u200Bb", "\u3164", 5]) {
         expect((await patch(bad)).statusCode, JSON.stringify(bad)).toBe(400);
       }
       expect((await patch("Kapitän", "https://evil.example")).statusCode).toBe(403);
@@ -272,7 +296,7 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       const ca = await connect(slug, a);
       const cb = await connect(slug, b);
       const cc = await connect(slug, c);
-      for (const client of [ca, cb, cc]) await vi.waitFor(() => expect(client.state.members.filter((m) => m.connected)).toHaveLength(3));
+      for (const client of [ca, cb, cc]) await until(() => expect(client.state.members.filter((m) => m.connected)).toHaveLength(3));
       const strip = (view: RoomView) => ({ ...view, viewer: null });
       expect(strip(ca.state)).toEqual(strip(cb.state));
       expect(strip(cb.state)).toEqual(strip(cc.state));
@@ -296,13 +320,13 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       const user = await makeUser();
       const tab1 = await connect(slug, user);
       const tab2 = await connect(slug, user);
-      await vi.waitFor(() => expect(watcher.member(user.id)?.connected).toBe(true));
+      await until(() => expect(watcher.member(user.id)?.connected).toBe(true));
       await tab1.close();
       await new Promise((resolve) => setTimeout(resolve, 100));
       expect(watcher.member(user.id)?.connected).toBe(true);
       expect(tab2.member(user.id)?.connected).toBe(true);
       await tab2.close();
-      await vi.waitFor(() => expect(watcher.member(user.id)?.connected).toBe(false));
+      await until(() => expect(watcher.member(user.id)?.connected).toBe(false));
       expect(watcher.state.members.filter((m) => m.userId === user.id)).toHaveLength(1);
     });
 
@@ -313,9 +337,9 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       let cu = await connect(slug, user);
       ch.send({ type: "set_cohost", userId: user.id, isCohost: true });
       cu.send({ type: "set_participation", userId: user.id, participation: "spectator" });
-      await vi.waitFor(() => expect(cu.member(user.id)).toMatchObject({ isCohost: true, participation: "spectator" }));
+      await until(() => expect(cu.member(user.id)).toMatchObject({ isCohost: true, participation: "spectator" }));
       await cu.close();
-      await vi.waitFor(() => expect(ch.member(user.id)?.connected).toBe(false));
+      await until(() => expect(ch.member(user.id)?.connected).toBe(false));
       cu = await connect(slug, user);
       expect(cu.member(user.id)).toMatchObject({ isCohost: true, participation: "spectator", connected: true });
       expect(cu.state.viewer).toEqual({ kind: "member", userId: user.id, isHost: false, canModerate: true });
@@ -332,15 +356,15 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       const c2 = await connect(slug, u2);
 
       c1.send({ type: "set_participation", userId: u1.id, participation: "spectator" });
-      await vi.waitFor(() => expect(c2.member(u1.id)?.participation).toBe("spectator"));
+      await until(() => expect(c2.member(u1.id)?.participation).toBe("spectator"));
       c1.send({ type: "set_participation", userId: u2.id, participation: "spectator" });
-      await vi.waitFor(() => expect(c1.errors).toEqual(["forbidden"]));
+      await until(() => expect(c1.errors).toEqual(["forbidden"]));
       expect(c2.member(u2.id)?.participation).toBe("player");
 
       ch.send({ type: "set_participation", userId: u2.id, participation: "spectator" });
-      await vi.waitFor(() => expect(c2.member(u2.id)?.participation).toBe("spectator"));
+      await until(() => expect(c2.member(u2.id)?.participation).toBe("spectator"));
       ch.send({ type: "set_participation", userId: crypto.randomUUID(), participation: "player" });
-      await vi.waitFor(() => expect(ch.errors).toEqual(["unknown_member"]));
+      await until(() => expect(ch.errors).toEqual(["unknown_member"]));
 
       expect(await eventsOf(slug)).toEqual([
         { seq: 1, type: "participation_changed", payload: { userId: u1.id, participation: "spectator" } },
@@ -364,21 +388,21 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       ]) {
         cother.send(message);
       }
-      await vi.waitFor(() => expect(cother.errors).toEqual(["forbidden", "forbidden", "forbidden"]));
+      await until(() => expect(cother.errors).toEqual(["forbidden", "forbidden", "forbidden"]));
 
       ch.send({ type: "set_cohost", userId: co.id, isCohost: true });
-      await vi.waitFor(() => expect(cco.state.viewer).toMatchObject({ canModerate: true, isHost: false }));
+      await until(() => expect(cco.state.viewer).toMatchObject({ canModerate: true, isHost: false }));
       cco.send({ type: "set_cohost", userId: other.id, isCohost: true });
-      await vi.waitFor(() => expect(cco.errors).toEqual(["forbidden"]));
+      await until(() => expect(cco.errors).toEqual(["forbidden"]));
       ch.send({ type: "set_cohost", userId: host.id, isCohost: true });
-      await vi.waitFor(() => expect(ch.errors).toEqual(["invalid_target"]));
+      await until(() => expect(ch.errors).toEqual(["invalid_target"]));
 
       cco.send({ type: "update_settings", settings: { reactions: false, sixMessage: "  {name} hat Platz {platz}!  " } });
-      await vi.waitFor(() => expect(cother.state.room.settings).toEqual({ ...defaultSettings, reactions: false, sixMessage: "{name} hat Platz {platz}!" }));
+      await until(() => expect(cother.state.room.settings).toEqual({ ...defaultSettings, reactions: false, sixMessage: "{name} hat Platz {platz}!" }));
       cco.send({ type: "set_participation", userId: other.id, participation: "spectator" });
-      await vi.waitFor(() => expect(cother.member(other.id)?.participation).toBe("spectator"));
+      await until(() => expect(cother.member(other.id)?.participation).toBe("spectator"));
       cco.send({ type: "update_settings", settings: { sixMessage: "" } });
-      await vi.waitFor(() => expect(cco.errors).toEqual(["forbidden", "invalid_message"]));
+      await until(() => expect(cco.errors).toEqual(["forbidden", "invalid_message"]));
 
       const { rows } = await pool.query("select settings from rooms where slug = $1", [slug]);
       expect(rows[0].settings.reactions).toBe(false);
@@ -393,8 +417,8 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       const cplain = await connect(slug, plain);
       ch.send({ type: "set_cohost", userId: co.id, isCohost: true });
       cplain.send({ type: "set_participation", userId: plain.id, participation: "spectator" });
-      await vi.waitFor(() => expect(cplain.member(plain.id)?.participation).toBe("spectator"));
-      await vi.waitFor(() => expect(cco.state.game.history.map((e) => e.type)).toEqual(["cohost_changed", "participation_changed"]));
+      await until(() => expect(cplain.member(plain.id)?.participation).toBe("spectator"));
+      await until(() => expect(cco.state.game.history.map((e) => e.type)).toEqual(["cohost_changed", "participation_changed"]));
       expect(ch.state.game.history).toEqual(cco.state.game.history);
       for (const message of cplain.messages) if (message.type === "state") expect(message.state.game.history).toEqual([]);
 
@@ -411,12 +435,12 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       const elsewhere = await connect(otherSlug, user);
       const patched = await app.inject({ method: "PATCH", url: "/api/me", cookies: cookies(user), headers: { origin: ORIGIN }, payload: { nickname: "Kapitän" } });
       expect(patched.statusCode).toBe(204);
-      await vi.waitFor(() => expect(ch.member(user.id)?.displayName).toBe("Kapitän"));
-      await vi.waitFor(() => expect(elsewhere.member(user.id)?.displayName).toBe("Kapitän"));
+      await until(() => expect(ch.member(user.id)?.displayName).toBe("Kapitän"));
+      await until(() => expect(elsewhere.member(user.id)?.displayName).toBe("Kapitän"));
 
       ch.send({ type: "reset_nickname", userId: user.id });
-      await vi.waitFor(() => expect(cu.member(user.id)?.displayName).toBe("Max"));
-      await vi.waitFor(() => expect(elsewhere.member(user.id)?.displayName).toBe("Max"));
+      await until(() => expect(cu.member(user.id)?.displayName).toBe("Max"));
+      await until(() => expect(elsewhere.member(user.id)?.displayName).toBe("Max"));
       expect((await pool.query("select nickname from users where id = $1", [user.id])).rows[0].nickname).toBeNull();
       expect(ch.state.game.history.map((e) => e.type)).toEqual(["nickname_reset"]);
       expect(cu.state.game.history).toEqual([]);
@@ -426,7 +450,7 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       const slug = await newRoom(host);
       const ch = await connect(slug, host);
       ch.send({ type: "start" });
-      await vi.waitFor(() => expect(ch.messages.at(-1)).toEqual({ type: "error", code: "not_implemented", message: "Diese Aktion gibt es noch nicht." }));
+      await until(() => expect(ch.messages.at(-1)).toEqual({ type: "error", code: "not_implemented", message: "Diese Aktion gibt es noch nicht." }));
     });
   });
 
@@ -440,14 +464,14 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
         client.send(bad);
       }
       client.ws.send(new Uint8Array([1, 2, 3]));
-      await vi.waitFor(() => expect(client.errors).toHaveLength(7));
+      await until(() => expect(client.errors).toHaveLength(7));
       expect(new Set(client.errors)).toEqual(new Set(["invalid_message"]));
       const error = client.messages.at(-1);
       expect(error).toMatchObject({ type: "error", message: "Diese Nachricht versteht der Server nicht." });
 
       client.send({ type: "set_participation", userId: user.id, participation: "spectator", padding: "x".repeat(MAX_CLIENT_MESSAGE_BYTES) });
-      expect(await client.closed).toBe(1009);
-      await vi.waitFor(() => expect(watcher.member(user.id)?.connected).toBe(false));
+      expect((await client.closed).code).toBe(1009);
+      await until(() => expect(watcher.member(user.id)?.connected).toBe(false));
       expect(watcher.member(user.id)?.participation).toBe("player");
       expect((await app.inject({ url: "/healthz" })).statusCode).toBe(200);
     });
@@ -456,12 +480,13 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       const slug = await newRoom(host);
       const client = await connect(slug, await makeUser());
       for (let i = 0; i < 25; i++) client.send("{}");
-      await vi.waitFor(() => expect(client.errors).toHaveLength(25));
-      expect(client.errors.filter((e) => e === "rate_limited")).toHaveLength(5);
-      expect(client.errors.filter((e) => e === "invalid_message")).toHaveLength(20);
+      await until(() => expect(client.errors).toHaveLength(25));
+      // The connect took one message from the budget.
+      expect(client.errors.filter((e) => e === "invalid_message")).toHaveLength(MESSAGE_BURST - 1);
+      expect(client.errors.filter((e) => e === "rate_limited")).toHaveLength(26 - MESSAGE_BURST);
       for (let i = 0; i < MAX_STRIKES + 5; i++) client.send("{}");
-      expect(await client.closed).toBe(1008);
-      await vi.waitFor(() => expect(logs.some((l) => l.msg === "ws closed" && l.reason === "rate limit")).toBe(true));
+      expect((await client.closed).code).toBe(1008);
+      await until(() => expect(logs.some((l) => l.msg === "ws closed" && l.reason === "rate limit")).toBe(true));
     });
 
     it("serializes concurrent messages: 50 changes, seq without gaps", async () => {
@@ -471,10 +496,10 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       cs.forEach((c, i) => {
         for (let n = 0; n < 10; n++) c.send({ type: "set_participation", userId: users[i]!.id, participation: n % 2 === 0 ? "spectator" : "player" });
       });
-      await vi.waitFor(async () => expect(await eventsOf(slug)).toHaveLength(50), { timeout: 5000 });
+      await until(async () => expect(await eventsOf(slug)).toHaveLength(50));
       const events = await eventsOf(slug);
       expect(events.map((e) => e.seq)).toEqual(Array.from({ length: 50 }, (_, i) => i + 1));
-      await vi.waitFor(() => expect(cs[0]!.state.members.filter((m) => m.participation === "player")).toHaveLength(5));
+      await until(() => expect(cs[0]!.state.members.filter((m) => m.participation === "player")).toHaveLength(5));
       for (const c of cs) expect(c.errors).toEqual([]);
     });
 
@@ -486,9 +511,11 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       const { status, socket } = await upgrade(`/ws/rooms/${slug}`, { cookie: `${SESSION_COOKIE}=${user.token}`, origin: ORIGIN });
       expect(status).toBe(101);
       socket!.resume(); // read the pings, so the server's close is noticed
-      await vi.waitFor(() => expect(watcher.member(user.id)?.connected).toBe(true));
-      await new Promise((resolve) => socket!.on("close", resolve));
-      await vi.waitFor(() => expect(watcher.member(user.id)?.connected).toBe(false));
+      const closed = new Promise((resolve) => socket!.on("close", resolve));
+      // It joined (presence is batched, so a socket this short-lived may never show as connected).
+      await until(() => expect(watcher.member(user.id)).toBeDefined());
+      await closed;
+      await until(() => expect(watcher.member(user.id)?.connected).toBe(false));
       expect(watcher.ws.readyState).toBe(WebSocket.OPEN); // Node's client answers pings
       expect(logs.some((l) => l.msg === "ws closed" && l.reason === "ping timeout" && l.userId === user.id)).toBe(true);
     });
@@ -499,13 +526,188 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       logs.length = 0;
       const client = await connect(slug, user);
       client.send({ type: "set_participation", userId: user.id, participation: "spectator" });
-      await vi.waitFor(() => expect(client.member(user.id)?.participation).toBe("spectator"));
+      await until(() => expect(client.member(user.id)?.participation).toBe("spectator"));
       await client.close();
-      await vi.waitFor(() => expect(logs.some((l) => l.msg === "ws closed")).toBe(true));
+      await until(() => expect(logs.some((l) => l.msg === "ws closed")).toBe(true));
       expect(logs.find((l) => l.msg === "ws connected")).toMatchObject({ userId: user.id });
       const text = JSON.stringify(logs);
       for (const value of ["Geheimname", user.discordId, user.token, "set_participation", slug]) expect(text).not.toContain(value);
     });
+  });
+
+  describe("abuse limits", () => {
+    it("shares one message budget among all sockets of a person in a room", async () => {
+      const slug = await newRoom(host);
+      const user = await makeUser();
+      const tabs = [await connect(slug, user), await connect(slug, user), await connect(slug, user)];
+      for (const tab of tabs) for (let i = 0; i < 8; i++) tab.send("{}");
+      await until(() => expect(tabs.flatMap((t) => t.errors)).toHaveLength(24));
+      expect(tabs.flatMap((t) => t.errors).filter((e) => e === "rate_limited").length).toBeGreaterThanOrEqual(4);
+    });
+
+    it(`allows ${MAX_SOCKETS_PER_USER} sockets per person and room and closes the next one`, async () => {
+      const slug = await newRoom(host);
+      const user = await makeUser();
+      for (let i = 0; i < MAX_SOCKETS_PER_USER; i++) await connect(slug, user);
+      const extra = open(slug, user);
+      expect(await extra.closed).toEqual({ code: 1008, reason: "Zu viele offene Tabs in diesem Raum." });
+      expect(extra.messages).toEqual([]);
+      const other = await connect(slug, await makeUser()); // others are not affected
+      expect(other.state.room.slug).toBe(slug);
+    });
+
+    it("limits nickname changes per IP", async () => {
+      const user = await makeUser();
+      const patch = () =>
+        app.inject({ method: "PATCH", url: "/api/me", cookies: cookies(user), headers: { origin: ORIGIN }, payload: { nickname: "Max" }, remoteAddress: "192.0.2.9" });
+      for (let i = 0; i < NICKNAME_LIMIT_PER_MINUTE; i++) expect((await patch()).statusCode).toBe(204);
+      expect((await patch()).statusCode).toBe(429);
+    });
+  });
+
+  describe("memory and database stay in step", () => {
+    it("reloads a room whose memory fell behind the database instead of wedging it", async () => {
+      const slug = await newRoom(host);
+      const ch = await connect(slug, host);
+      const user = await makeUser();
+      const cu = await connect(slug, user);
+      // A write the server did not see, as if a COMMIT succeeded but its reply was lost.
+      await pool.query(
+        "insert into game_events (room_id, seq, type, actor_user_id, payload) select id, 1, 'participation_changed', $2, $3 from rooms where slug = $1",
+        [slug, host.id, { userId: host.id, participation: "player" }],
+      );
+      const toSpectator = { type: "set_participation", userId: user.id, participation: "spectator" };
+      cu.send(toSpectator);
+      await until(() => expect(cu.errors).toEqual(["internal"]));
+      cu.send(toSpectator);
+      await until(() => expect(cu.member(user.id)?.participation).toBe("spectator"));
+      expect((await eventsOf(slug)).map((e) => e.seq)).toEqual([1, 2]);
+      await until(() => expect(ch.state.game.history.map((e) => e.seq)).toEqual([1, 2]));
+    });
+
+    it("closes the room's sockets with 1012 when it cannot be reloaded", async () => {
+      const timeout = new URL(dbUrl!);
+      timeout.searchParams.set("options", "-c statement_timeout=300");
+      const { app: slow } = await makeApp(env, timeout.href);
+      await slow.listen({ port: 0, host: "127.0.0.1" });
+      const admin = new pg.Client({ connectionString: dbUrl });
+      await admin.connect();
+      try {
+        const slug = await newRoom(host, slow);
+        const user = await makeUser();
+        const client = await connect(slug, user, (slow.server.address() as AddressInfo).port);
+        await admin.query("begin");
+        await admin.query("lock table game_events in access exclusive mode");
+        client.send({ type: "set_participation", userId: user.id, participation: "spectator" });
+        expect(await client.closed).toEqual({ code: 1012, reason: "Der Raum wird neu geladen. Bitte verbinde dich neu." });
+      } finally {
+        await admin.query("rollback");
+        await admin.end();
+        await slow.close();
+      }
+    });
+
+    it("closes the sockets of a room that was deleted underneath", async () => {
+      const slug = await newRoom(host);
+      const roomId = await roomIdOf(slug);
+      const user = await makeUser();
+      const client = await connect(slug, user);
+      await pool.query("delete from rooms where id = $1", [roomId]);
+      client.send({ type: "set_participation", userId: user.id, participation: "spectator" });
+      expect(await client.closed).toEqual({ code: 4004, reason: "Raum existiert nicht mehr." });
+      expect(app.live.roomIds()).not.toContain(roomId);
+      expect((await upgrade(`/ws/rooms/${slug}`, { cookie: `${SESSION_COOKIE}=${user.token}`, origin: ORIGIN })).status).toBe(404);
+    });
+
+    it("forgets a room when its last socket closes and reads it again on the next join", async () => {
+      const slug = await newRoom(host);
+      const roomId = await roomIdOf(slug);
+      const user = await makeUser();
+      const first = await connect(slug, user);
+      expect(app.live.roomIds()).toContain(roomId);
+      expect(app.live.userIds()).toContain(user.id);
+      await first.close();
+      await until(() => expect(app.live.roomIds()).not.toContain(roomId));
+      expect(app.live.userIds()).not.toContain(user.id);
+      await pool.query("update rooms set name = 'Umbenannt' where id = $1", [roomId]);
+      const again = await connect(slug, user);
+      expect(again.state.room.name).toBe("Umbenannt");
+    });
+
+    it("cleanup spares rooms with connections and the people connected", async () => {
+      const slug = await newRoom(host);
+      const roomId = await roomIdOf(slug);
+      const user = await makeUser();
+      const client = await connect(slug, user);
+      await pool.query("update rooms set last_activity_at = now() - interval '400 days' where id = $1", [roomId]);
+      await pool.query("update users set last_login_at = now() - interval '400 days' where id = $1", [user.id]);
+      await runCleanup(pool, 90, app.live);
+      expect(await roomIdOf(slug)).toBe(roomId);
+      await client.close();
+      await until(() => expect(app.live.roomIds()).not.toContain(roomId));
+      await runCleanup(pool, 90, app.live);
+      expect(await roomIdOf(slug)).toBeUndefined();
+      expect((await pool.query("select 1 from users where id = $1", [user.id])).rows).toEqual([]);
+    });
+  });
+
+  describe("sessions end their sockets", () => {
+    it("closes the sockets of a session on logout, and only those", async () => {
+      const slug = await newRoom(host);
+      const user = await makeUser();
+      const mine = await connect(slug, user);
+      const other = await connect(slug, await makeUser());
+      const res = await app.inject({ method: "POST", url: "/auth/logout", cookies: cookies(user), headers: { origin: ORIGIN } });
+      expect(res.statusCode).toBe(204);
+      expect(await mine.closed).toEqual({ code: 4001, reason: "Abgemeldet." });
+      expect(other.ws.readyState).toBe(WebSocket.OPEN);
+    });
+
+    it("closes a socket when its session expires", async () => {
+      const slug = await newRoom(host);
+      const client = await connect(slug, await makeUser(undefined, "Erika", "1 second"));
+      expect(await client.closed).toEqual({ code: 4001, reason: "Sitzung abgelaufen. Bitte melde dich neu an." });
+    });
+  });
+
+  it("joins 100 sockets into a room with a long history without a broadcast storm", { timeout: 60_000 }, async () => {
+    const n = 100;
+    const slug = await newRoom(host);
+    const roomId = await roomIdOf(slug);
+    const users = await Promise.all(Array.from({ length: n }, () => makeUser()));
+    // Co-hosts see the moderation history, so every state carries all 600 events.
+    await pool.query("insert into room_members (room_id, user_id, participation, is_cohost) select $1, unnest($2::uuid[]), 'player', true", [roomId, users.map((u) => u.id)]);
+    await pool.query(
+      `insert into game_events (room_id, seq, type, actor_user_id, payload)
+       select $1, g, 'participation_changed', $2::uuid, jsonb_build_object('userId', $2::text, 'participation', 'spectator') from generate_series(1, 600) g`,
+      [roomId, host.id],
+    );
+    const stringify = vi.spyOn(JSON, "stringify");
+    const renders = () => stringify.mock.calls.filter(([v]) => typeof v === "object" && v !== null && ("members" in v || "state" in v)).length;
+    try {
+      const started = performance.now();
+      const cs = users.map((u) => open(slug, u));
+      await until(() => {
+        for (const c of cs) expect(c.messages.findLast((m) => m.type === "state")?.state.members.filter((m) => m.connected)).toHaveLength(n);
+      });
+      const ms = Math.round(performance.now() - started);
+      const states = cs.reduce((sum, c) => sum + c.messages.filter((m) => m.type === "state").length, 0);
+      const megabytes = (cs.reduce((sum, c) => sum + c.bytes, 0) / 1e6).toFixed(1);
+      console.info(`${n} joins: ${states} state messages, ${megabytes} MB, ${ms} ms, ${renders()} renders`);
+      expect(states).toBeLessThanOrEqual(2 * n);
+      expect(ms).toBeLessThan(15_000);
+
+      // One change: one rendering per audience (all are co-hosts here), shared by all sockets.
+      stringify.mockClear();
+      cs[0]!.send({ type: "set_participation", userId: users[0]!.id, participation: "spectator" });
+      await until(() => {
+        for (const c of cs) expect(c.state.members.find((m) => m.userId === users[0]!.id)?.participation).toBe("spectator");
+      });
+      expect(renders()).toBe(1);
+      for (const c of cs) c.ws.close();
+    } finally {
+      stringify.mockRestore();
+    }
   });
 
   it("rebuilds the same state after a restart", async () => {
@@ -520,11 +722,11 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
     ch.send({ type: "set_cohost", userId: co.id, isCohost: true });
     cu.send({ type: "set_participation", userId: user.id, participation: "spectator" });
     cco.send({ type: "update_settings", settings: { bonusChains: false } });
-    await vi.waitFor(() => expect(ch.state.room.settings.bonusChains).toBe(false));
-    await vi.waitFor(() => expect(ch.state.game.history).toHaveLength(2));
+    await until(() => expect(ch.state.room.settings.bonusChains).toBe(false));
+    await until(() => expect(ch.state.game.history).toHaveLength(2));
     await cco.close();
     await cu.close();
-    await vi.waitFor(() => expect(ch.state.members.filter((m) => m.connected)).toHaveLength(1));
+    await until(() => expect(ch.state.members.filter((m) => m.connected)).toHaveLength(1));
     const before = ch.state;
     await ch.close();
     await first.app.close();

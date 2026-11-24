@@ -11,6 +11,22 @@ export type UserId = z.infer<typeof userId>;
 
 const die = z.int().min(1).max(6);
 
+// Free text other people see (nicknames, room names, the six banner), so nobody can look blank or like
+// someone else: NFC, trimmed; no control, format, surrogate, private-use or unassigned characters, no
+// space but U+0020, no blank fillers, at most two combining marks on a character, something visible.
+const invisible = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\u115F\u1160\u2800\u3164\uFFA0]|(?! )\p{Z}|\p{M}{3}/u;
+const visibleText = (max: number) =>
+  z
+    .string()
+    .transform((text) => text.normalize("NFC").trim())
+    .pipe(
+      z
+        .string()
+        .min(1)
+        .max(max)
+        .refine((text) => !invisible.test(text) && /[\p{L}\p{N}\p{S}\p{P}]/u.test(text)),
+    );
+
 // ---------------------------------------------------------------------------------------------
 // Room settings (spec 4.4, 4.11). Defaults are the values the spec calls standard.
 
@@ -19,7 +35,7 @@ const die = z.int().min(1).max(6);
 export const settingsSchema = z.object({
   bonusChains: z.boolean(), // R3
   lastPlayer: z.enum(["choice", "auto"]), // R5
-  sixMessage: z.string().trim().min(1).max(200), // R6
+  sixMessage: visibleText(200), // R6
   reactions: z.boolean(),
 });
 export type Settings = z.infer<typeof settingsSchema>;
@@ -208,7 +224,7 @@ export interface MeResponse {
 // HTTP: rooms and profile (spec 7)
 
 export const createRoomRequestSchema = z
-  .object({ name: z.string().trim().min(1).max(ROOM_NAME_MAX), isTest: z.boolean() })
+  .object({ name: visibleText(ROOM_NAME_MAX), isTest: z.boolean() })
   .strict();
 export type CreateRoomRequest = z.infer<typeof createRoomRequestSchema>;
 export interface CreateRoomResponse {
@@ -226,14 +242,7 @@ export interface RoomSummary {
 // PATCH /api/me (spec 4.10). null resets to the Discord name.
 export const patchMeRequestSchema = z
   .object({
-    nickname: z
-      .string()
-      .trim()
-      .min(1)
-      .max(NICKNAME_MAX)
-      // No control or format characters (bidi overrides, zero-width), so names cannot spoof others.
-      .regex(/^[^\p{Cc}\p{Cf}]+$/u)
-      .nullable(),
+    nickname: visibleText(NICKNAME_MAX).nullable(),
   })
   .strict();
 export type PatchMeRequest = z.infer<typeof patchMeRequestSchema>;

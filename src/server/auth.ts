@@ -18,6 +18,7 @@ export const LOGIN_LIMIT_PER_MINUTE = 10;
 declare module "fastify" {
   interface FastifyRequest {
     user: { id: string; discordId: string } | null;
+    session: { id: string; expiresAt: Date } | null; // set by requireUser
   }
 }
 
@@ -83,17 +84,24 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
   const loginLimit = { rateLimit: { max: LOGIN_LIMIT_PER_MINUTE, timeWindow: "1 minute" } };
 
   app.decorateRequest("user", null);
+  app.decorateRequest("session", null);
+  // Told about every session that ends early (logout), so its WebSockets can be closed.
+  const sessionEndListeners: ((sessionId: string) => void)[] = [];
 
   // preHandler for routes that need a user: resolves the session cookie, 401 without one.
   async function requireUser(request: FastifyRequest, reply: FastifyReply) {
     const token = request.cookies[SESSION_COOKIE];
     if (token) {
+      const id = sessionId(token);
       const [row] = await db
-        .select({ id: users.id, discordId: users.discordId })
+        .select({ id: users.id, discordId: users.discordId, expiresAt: sessions.expiresAt })
         .from(sessions)
         .innerJoin(users, eq(users.id, sessions.userId))
-        .where(and(eq(sessions.id, sessionId(token)), gt(sessions.expiresAt, new Date())));
-      if (row?.discordId) request.user = { id: row.id, discordId: row.discordId };
+        .where(and(eq(sessions.id, id), gt(sessions.expiresAt, new Date())));
+      if (row?.discordId) {
+        request.user = { id: row.id, discordId: row.discordId };
+        request.session = { id, expiresAt: row.expiresAt };
+      }
     }
     if (!request.user) return reply.code(401).send({ error: "unauthorized" });
   }
@@ -201,7 +209,10 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
     // CSRF: only the app itself may log someone out. Browsers send Origin on every POST.
     if (request.headers.origin !== config.baseUrl.origin) return reply.code(403).send({ error: "forbidden" });
     const token = request.cookies[SESSION_COOKIE];
-    if (token) await db.delete(sessions).where(eq(sessions.id, sessionId(token)));
+    if (token) {
+      await db.delete(sessions).where(eq(sessions.id, sessionId(token)));
+      for (const listener of sessionEndListeners) listener(sessionId(token));
+    }
     reply.clearCookie(SESSION_COOKIE, { ...cookieBase, path: "/" });
     return reply.code(204).send();
   });
@@ -231,5 +242,5 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
     return reply.type(row.type).send(row.image);
   });
 
-  return { requireUser };
+  return { requireUser, onSessionEnd: (listener: (sessionId: string) => void) => sessionEndListeners.push(listener) };
 }
