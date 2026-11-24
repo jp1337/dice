@@ -104,7 +104,7 @@ export type GameEvent = {
   [T in EventType]: {
     seq: number;
     type: T;
-    actorUserId: UserId | null; // null for server-driven events (simulated players)
+    actorUserId: UserId | null; // null once the acting user is deleted; a simulated player's roll names the player
     payload: EventPayload<T>;
     createdAt: string; // ISO 8601
   };
@@ -178,6 +178,7 @@ export interface MemberView {
   userId: UserId;
   displayName: string; // nickname > server nickname > global name (spec 4.10)
   discordName?: string; // hosts only
+  hasNickname?: boolean; // hosts and co-hosts only: an own nickname is set, so it can be reset
   avatarUrl: string | null; // null = initials placeholder; always null for guests
   participation: Participation;
   isHost: boolean;
@@ -216,6 +217,7 @@ export type ServerMessage =
 export interface MeResponse {
   userId: UserId;
   displayName: string; // nickname > server nickname > global name (spec 4.10)
+  nickname: string | null; // the own nickname, null = the Discord name is shown
   avatarUrl: string | null; // /avatars/:userId/:hash, null = initials placeholder
   isHost: boolean; // listed in HOST_DISCORD_IDS; only hosts may create rooms
 }

@@ -48,7 +48,7 @@ function Row({ m, d, send }: { m: MemberView; d: Derived; send: Props["send"] })
               Co-Host
             </button>
           )}
-          {d.can.resetNickname && !m.isSimulated && (
+          {d.can.resetNickname && m.hasNickname && (
             <ConfirmButton
               label="Spitzname zurücksetzen"
               question={`Spitznamen von ${m.displayName} zurücksetzen?`}

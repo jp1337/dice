@@ -216,12 +216,16 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       expect((await patch("Kapitän", "https://evil.example")).statusCode).toBe(403);
       expect((await app.inject({ method: "PATCH", url: "/api/me", headers: { origin: ORIGIN }, payload: { nickname: "x" } })).statusCode).toBe(401);
       const me = async () => (await app.inject({ url: "/api/me", cookies: cookies(user) })).json().displayName;
+      const own = async () => (await app.inject({ url: "/api/me", cookies: cookies(user) })).json().nickname;
+      expect(await own()).toBeNull();
       expect((await patch(`  ${"k".repeat(NICKNAME_MAX)}  `)).statusCode).toBe(204);
       expect(await me()).toBe("k".repeat(NICKNAME_MAX));
       expect((await patch("Kapitän 🎉")).statusCode).toBe(204);
       expect(await me()).toBe("Kapitän 🎉");
+      expect(await own()).toBe("Kapitän 🎉");
       expect((await patch(null)).statusCode).toBe(204);
       expect(await me()).toBe("Max");
+      expect(await own()).toBeNull();
     });
   });
 
@@ -410,10 +414,14 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       expect(patched.statusCode).toBe(204);
       await until(() => expect(ch.member(user.id)?.displayName).toBe("Kapitän"));
       await until(() => expect(elsewhere.member(user.id)?.displayName).toBe("Kapitän"));
+      expect(ch.member(user.id)?.hasNickname).toBe(true); // hosts see whether there is one to reset
+      expect(ch.member(host.id)?.hasNickname).toBe(false);
+      expect(cu.member(user.id)).not.toHaveProperty("hasNickname");
 
       ch.send({ type: "reset_nickname", userId: user.id });
       await until(() => expect(cu.member(user.id)?.displayName).toBe("Max"));
       await until(() => expect(elsewhere.member(user.id)?.displayName).toBe("Max"));
+      await until(() => expect(ch.member(user.id)?.hasNickname).toBe(false));
       expect((await pool.query("select nickname from users where id = $1", [user.id])).rows[0].nickname).toBeNull();
       expect(ch.state.game.history.map((e) => e.type)).toEqual(["nickname_reset"]);
       expect(cu.state.game.history).toEqual([]);

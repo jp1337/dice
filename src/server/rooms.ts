@@ -174,6 +174,7 @@ export function roomView(room: RoomData & Pick<Room, "sockets" | "guests">, audi
         userId: m.userId,
         displayName: m.nickname ?? m.displayName,
         ...(audience === "host" && { discordName: m.username }),
+        ...(canModerate && { hasNickname: m.nickname !== null }),
         avatarUrl: !guest && m.avatarHash ? `/avatars/${m.userId}/${m.avatarHash}` : null,
         participation: m.participation,
         isHost: isHostMember(m),
@@ -444,7 +445,7 @@ export function registerRooms(
 
   // ---------------------------------------------------------------------------------------------
   // Simulated players (spec 4.7): the room arms one timer for the active simulated player while the
-  // game runs unpaused. It rolls through handleGameCommand and commit like a real roll, actor null.
+  // game runs unpaused. It rolls through handleGameCommand and commit exactly like a real roll.
 
   function schedule(room: Room) {
     const { game } = room;
@@ -470,7 +471,7 @@ export function registerRooms(
       if (!active || !room.members.get(active)?.isSimulated) return;
       const ctx = { actor: { userId: active, canModerate: false }, room, rollCooldownMs: timing.rollCooldownMs, now: Date.now() };
       const { events } = handleGameCommand(ctx, { type: "roll" });
-      await commit(room, { events: events.map((e) => ({ ...e, actorUserId: null })) });
+      await commit(room, { events }); // actor: the simulated player, as for a real roll
     } catch (err) {
       if (!(err instanceof CommandError)) throw err; // paused or cooling down: schedule decides
     } finally {

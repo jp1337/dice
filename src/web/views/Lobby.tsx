@@ -2,7 +2,7 @@
 // simulated players (test rooms) and "Start".
 import { type FormEvent, useEffect, useId, useState } from "react";
 import { NICKNAME_MAX, SIX_MESSAGE_MAX } from "../../shared/constants.js";
-import type { ClientMessage, PatchMeRequest, RoomView } from "../../shared/contracts.js";
+import type { ClientMessage, MeResponse, PatchMeRequest, RoomView } from "../../shared/contracts.js";
 import { Switch } from "../components/Toggles.js";
 import { type Derived, cleanText, nicknameError, nicknameResponseMessage, sixMessageError } from "../lib/room.js";
 import { ConfirmButton, CopyButton } from "./Controls.js";
@@ -11,7 +11,19 @@ import { Participants } from "./Participants.js";
 type Props = { view: RoomView; d: Derived; send: (message: ClientMessage) => void };
 
 function Nickname({ d }: { d: Derived }) {
-  const [value, setValue] = useState(d.me?.displayName ?? "");
+  const [value, setValue] = useState(""); // the own nickname, empty while it is the Discord name
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/me")
+      .then(async (res) => {
+        const { nickname } = (await res.json()) as MeResponse;
+        if (alive && res.ok) setValue((typed) => typed || (nickname ?? ""));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const id = useId();
@@ -27,6 +39,7 @@ function Nickname({ d }: { d: Derived }) {
       const res = await fetch("/api/me", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const error = nicknameResponseMessage(res.status);
       setMessage(error ? { ok: false, text: error } : { ok: true, text: nickname === null ? "Zurückgesetzt auf deinen Discord-Namen." : "Gespeichert." });
+      if (!error && nickname === null) setValue("");
     } catch {
       setMessage({ ok: false, text: "Der Server ist gerade nicht erreichbar." });
     }

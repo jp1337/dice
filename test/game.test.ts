@@ -380,8 +380,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       players.get(real)!.send({ type: "roll" });
       await until(() => expect(historyLength(ch)).toBeGreaterThan(before));
       const rolls = (await eventsOf(slug)).filter((e) => e.type === "rolled");
-      const sims = new Set(ch.state.members.filter((m) => m.isSimulated).map((m) => m.userId));
-      for (const e of rolls) expect(e.actor).toBe(sims.has(e.payload.userId as string) ? null : real);
+      for (const e of rolls) expect(e.actor).toBe(e.payload.userId); // simulated or real: the roller is the actor
 
       // A host pause stops them.
       if (ch.state.game.status === "running") {
@@ -402,7 +401,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       const events = await eventsOf(slug);
       expect(events.some((e) => e.type === "last_place_taken")).toBe(false);
       expect(events.filter((e) => e.type === "rolled" && (e.payload.dice as number[]).includes(6))).toHaveLength(4);
-      expect(events.filter((e) => e.type === "rolled").every((e) => e.actor === null)).toBe(true);
+      expect(events.filter((e) => e.type === "rolled").every((e) => e.actor === e.payload.userId)).toBe(true);
     });
 
     it("deletes simulated players together with their room (spec 9.3)", async () => {
@@ -431,8 +430,10 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       expect(ch.state.room).toMatchObject({ watchLinkActive: false, guestCount: 0 });
       expect(ch.state.room).not.toHaveProperty("watchUrl");
       const token = randomBytes(16).toString("base64url");
-      expect((await app.inject({ url: `/z/${token}`, remoteAddress: nextIp() })).statusCode).toBe(404);
-      expect((await app.inject({ url: "/z/short", remoteAddress: nextIp() })).statusCode).toBe(404);
+      for (const method of ["GET", "HEAD"] as const) {
+        expect((await app.inject({ method, url: `/z/${token}`, remoteAddress: nextIp() })).statusCode).toBe(404);
+        expect((await app.inject({ method, url: "/z/short", remoteAddress: nextIp() })).statusCode).toBe(404);
+      }
       const refused = open(`/ws/watch/${token}`);
       expect((await refused.closed).code).toBe(1006); // the upgrade was answered with 404
     });
@@ -449,6 +450,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       expect(ch.state.room.watchUrl).toBe(`${ORIGIN}/z/${token}`);
       const page = await app.inject({ url: `/z/${token}`, remoteAddress: nextIp() });
       expect(page.statusCode).toBe(200);
+      expect((await app.inject({ method: "HEAD", url: `/z/${token}`, remoteAddress: nextIp() })).statusCode).toBe(200); // the client probes with HEAD
       expect(page.body).toBe((await app.inject({ url: "/" })).body);
 
       const foreign = open(`/ws/watch/${token}`, undefined, { origin: "https://evil.example" });
@@ -506,6 +508,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       expect((await again.closed).code).toBe(4004);
       await until(() => expect(ch.state.room.watchLinkActive).toBe(false));
       expect((await app.inject({ url: `/z/${fresh}`, remoteAddress: nextIp() })).statusCode).toBe(404);
+      expect((await app.inject({ method: "HEAD", url: `/z/${fresh}`, remoteAddress: nextIp() })).statusCode).toBe(404);
       expect(ch.state.game.history.map((e) => e.type)).toEqual(["watch_link_changed", "watch_link_changed", "watch_link_changed"]);
     });
 
@@ -612,6 +615,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
         const slowPort = (slow.app.server.address() as AddressInfo).port;
         const again = await connect(slug, host, slowPort);
         const back = await connect(slug, user, slowPort);
+        const sims = new Set(again.state.members.filter((m) => m.isSimulated).map((m) => m.userId));
         expect(again.state.game).toEqual(expected);
         expect(back.state.game.giftOrder).toEqual(expected.giftOrder);
         if (again.state.game.status === "finished") return;
@@ -619,8 +623,8 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
         await until(async () => {
           const game = again.state.game;
           if (game.activeUserId === user.id && !game.pause) back.send({ type: "roll" });
-          expect(game.history.filter((e) => e.type === "rolled" && e.actorUserId === null).length).toBeGreaterThan(
-            expected.history.filter((e) => e.type === "rolled" && e.actorUserId === null).length,
+          expect(game.history.filter((e) => e.type === "rolled" && sims.has(e.actorUserId!)).length).toBeGreaterThan(
+            expected.history.filter((e) => e.type === "rolled" && sims.has(e.actorUserId!)).length,
           );
         }, 20_000);
       } finally {
