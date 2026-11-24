@@ -205,3 +205,39 @@ export interface MeResponse {
   avatarUrl: string | null; // /avatars/:userId/:hash, null = initials placeholder
   isHost: boolean; // listed in HOST_DISCORD_IDS; only hosts may create rooms
 }
+
+// ---------------------------------------------------------------------------------------------
+// HTTP: rooms and profile (spec 7)
+
+export const ROOM_NAME_MAX = 60;
+
+export const createRoomRequestSchema = z
+  .object({ name: z.string().trim().min(1).max(ROOM_NAME_MAX), isTest: z.boolean() })
+  .strict();
+export type CreateRoomRequest = z.infer<typeof createRoomRequestSchema>;
+export interface CreateRoomResponse {
+  slug: string; // the room link is /r/:slug
+}
+
+// GET /api/rooms/:slug: enough to render the page shell; live state comes over the WebSocket.
+export interface RoomSummary {
+  slug: string;
+  name: string;
+  isTest: boolean;
+  status: GameStatus;
+}
+
+// PATCH /api/me (spec 4.10). null resets to the Discord name.
+export const patchMeRequestSchema = z
+  .object({
+    nickname: z
+      .string()
+      .trim()
+      .min(1)
+      .max(NICKNAME_MAX)
+      // No control or format characters (bidi overrides, zero-width), so names cannot spoof others.
+      .regex(/^[^\p{Cc}\p{Cf}]+$/u)
+      .nullable(),
+  })
+  .strict();
+export type PatchMeRequest = z.infer<typeof patchMeRequestSchema>;
