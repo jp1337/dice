@@ -1,0 +1,78 @@
+<h1 align="center">dice</h1>
+
+<p align="center"><em>Roll dice together during a Discord voice event to decide who gets their gift first.</em></p>
+
+<!-- One badge service, so the set shares a shape. Both read from the repository, so neither can drift. -->
+<p align="center">
+  <a href="https://github.com/jp1337/dice/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/jp1337/dice/ci.yml?branch=main&label=ci&logo=github&logoColor=white" alt="CI"></a>
+  <a href="https://github.com/jp1337/dice/pkgs/container/dice"><img src="https://img.shields.io/badge/image-ghcr.io-2496ED?logo=docker&logoColor=white" alt="Container image on GHCR"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/jp1337/dice?logo=opensourceinitiative&logoColor=white&label=license&color=blue" alt="MIT"></a>
+</p>
+
+A small web app for one Discord community: members log in with Discord, a host starts a room, and
+**the server rolls every die, enforces the turn order and pauses the game on every 6**, so the
+moderator can talk instead of keeping score.
+
+<!-- Screenshot of the game view (light and dark, <picture>) goes here once the interface exists (step 6). -->
+
+## Status
+
+Step 2 of 6. Not usable for a game yet.
+
+| Step | | State |
+| --- | --- | --- |
+| 1 | Skeleton: container, database, migrations, `/healthz`, CI, image | done |
+| 2 | Discord login, sessions, hosts, imprint and privacy notice | in review |
+| 3 | Rooms and lobby over WebSocket | open |
+| 4 | Game rules: turns, bonus die, 6 pauses the game | open |
+| 5 | Host tools, co-hosts, test rooms, automatic data cleanup | open |
+| 6 | Animation, sound, reactions, guest link, link preview | open |
+
+Works today: the container starts, migrates the database, answers `/healthz`, `/robots.txt`,
+`/impressum` and `/datenschutz`, and sends the no-index and security headers on every response.
+
+## Quick start
+
+```bash
+git clone https://github.com/jp1337/dice.git && cd dice
+cp .env.example .env          # fill in every value: docs/configuration.md
+docker compose up -d
+curl http://127.0.0.1:3000/healthz   # ok
+```
+
+Before the first login, register the redirect URL in the Discord Developer Portal:
+[docs/deployment.md](docs/deployment.md#1-discord-application).
+
+## Documentation
+
+| For | Page |
+| --- | --- |
+| Discord application, start, reverse proxy, updates, backups | [docs/deployment.md](docs/deployment.md) |
+| Every environment variable | [docs/configuration.md](docs/configuration.md) |
+| What is stored, how long, deleting one person by hand, log retention | [docs/data-and-deletion.md](docs/data-and-deletion.md) |
+| nginx with WebSockets | [docs/nginx.example.conf](docs/nginx.example.conf) |
+
+## Built with
+
+| | |
+| --- | --- |
+| Server | Node.js 26, TypeScript, Fastify, `@fastify/websocket` |
+| Web | React, Vite; every file served from the app's own domain |
+| Database | PostgreSQL 19, Drizzle ORM; migrations run at start |
+| Login | Discord OAuth2 only; members of one Discord server only |
+| Image | `ghcr.io/jp1337/dice`, built and published by CI, runs as non-root |
+
+## Maintaining
+
+Architecture, the full specification, tests, CI and the repository settings that must be set by
+hand (fork workflows need approval): [docs-tech/](docs-tech/README.md).
+A vulnerability: **not** a public issue, use a
+[security advisory](https://github.com/jp1337/dice/security/advisories/new).
+
+## Credits
+
+Sound files: none yet.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
