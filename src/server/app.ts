@@ -1,6 +1,8 @@
 // HTTP application: security headers, logging, public pages and static files (spec 7, 8).
 import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { STATUS_CODES } from "node:http";
+import path from "node:path";
 import type { Writable } from "node:stream";
 import fastifyCookie from "@fastify/cookie";
 import fastifyRateLimit from "@fastify/rate-limit";
@@ -10,7 +12,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import type { Pool } from "pg";
 import { registerAuth } from "./auth.js";
 import type { Config } from "./config.js";
-import { datenschutzHtml, impressumHtml } from "./legal.js";
+import { datenschutzHtml, escapeHtml, impressumHtml } from "./legal.js";
 import { robotsTxt } from "./robots.js";
 
 export const HEALTHZ_LIMIT_PER_MINUTE = 120;
@@ -20,6 +22,11 @@ export type Deps = {
   webRoot: string; // directory with the Vite build output
   logStream?: Writable; // defaults to stdout
 };
+
+// Paths that answer with the SPA's index.html. Every one gets the same HTML, so the link preview
+// (spec 10.2) never depends on the room.
+// Room slugs are base64url, 16 to 64 characters; anything else under /r/ is a 404.
+export const SPA_ROUTES = ["/", "/r/:slug(^[A-Za-z0-9_-]{16,64}$)"];
 
 const ROBOTS = "noindex, nofollow, noarchive, nosnippet, noimageindex";
 const HTML = "text/html; charset=utf-8";
@@ -163,8 +170,28 @@ export async function buildApp(config: Config, deps: Deps) {
   app.get("/impressum", (_request, reply) => reply.type(HTML).send(impressumHtml(config.legal)));
   app.get("/datenschutz", (_request, reply) => reply.type(HTML).send(datenschutzHtml(config.legal, { ...config.privacyServices, retentionDays: config.retentionDays })));
 
-  // Serves index.html for "/" and the hashed files under /assets/.
-  await app.register(fastifyStatic, { root: deps.webRoot, cacheControl: false, dotfiles: "ignore" });
+  // The built index.html is a template: Open Graph needs absolute URLs, so __BASE_URL__ is filled in
+  // here, once. config.ts already allows only a plain origin; escaping is the second line of defence.
+  // Without a build (server-only development) the SPA routes answer 404.
+  let spaHtml: string | null = null;
+  try {
+    spaHtml = readFileSync(path.join(deps.webRoot, "index.html"), "utf8").replaceAll("__BASE_URL__", escapeHtml(config.baseUrl.origin));
+  } catch (err) {
+    app.log.warn({ err }, "no index.html in the web root, the app pages are unavailable");
+  }
+  for (const url of SPA_ROUTES) {
+    app.get(url, (_request, reply) => (spaHtml === null ? reply.callNotFound() : reply.type(HTML).send(spaHtml)));
+  }
+
+  // The hashed files under /assets/ and the files of src/web/public. index.html only through the
+  // routes above, never as the raw template.
+  await app.register(fastifyStatic, {
+    root: deps.webRoot,
+    cacheControl: false,
+    dotfiles: "ignore",
+    index: false,
+    allowedPath: (pathName) => pathName !== "/index.html",
+  });
 
   return app;
 }

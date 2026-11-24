@@ -1,17 +1,69 @@
+/* Design tokens. A winter evening with a wrapped gift: ink and frost, a gold ribbon, cranberry for the
+   six. Light by default; dark from the system preference unless the toggle fixed light, or from the
+   toggle (data-theme on <html>, set before the first paint by theme-init.js). The dark values stand
+   twice, identically (test/web.test.ts): the CSS light-dark function would say it once but needs Safari 17.5. */
 :root {
-  color-scheme: light dark;
-  --bg: #ffffff;
-  --fg: #1a1a1a;
-  --muted: #5a5a5a;
-  font-family: system-ui, sans-serif;
+  color-scheme: light;
+  --bg: #eef2f4;
+  --surface: #ffffff;
+  --fg: #182631;
+  --muted: #4b5d69;
+  --line: #c9d3d9;
+  --accent: #7a5200; /* gold, readable as text on --bg in both themes */
+  --on-accent: #ffffff;
+  --focus: #1d5fc4;
+  --shadow: rgb(24 38 49 / 0.22);
+  --avatar-bg: 88% 0.06; /* oklch lightness and chroma; Avatar.css adds the hue */
+  --avatar-fg: 32% 0.09;
+
+  /* Physical things look the same in both themes: the dice, the ribbon, the six banner. */
+  --die-face: #fbf6ea;
+  --die-edge: #d8cdb5;
+  --pip: #1b2a36;
+  --pip-six: #b3263e;
+  --gold: #e2b85a;
+  --six-bg: #7d1830;
+  --six-fg: #fbf6ea;
+
+  /* Kept equal to ROLL_ANIMATION_MS, REACTION_INTERVAL_MS and FLOAT_MS (test/web.test.ts). */
+  --roll-duration: 1300ms;
+  --reaction-interval: 2000ms;
+  --float-duration: 2400ms;
+
+  font-family: ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+  line-height: 1.5;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #16161a;
-    --fg: #ececec;
-    --muted: #a0a0a8;
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f1d27;
+    --surface: #172a36;
+    --fg: #e9eef1;
+    --muted: #a3b5bf;
+    --line: #2c4352;
+    --accent: #e2b85a;
+    --on-accent: #0f1d27;
+    --focus: #8ab8ff;
+    --shadow: rgb(0 0 0 / 0.45);
+    --avatar-bg: 40% 0.09;
+    --avatar-fg: 95% 0.03;
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1d27;
+  --surface: #172a36;
+  --fg: #e9eef1;
+  --muted: #a3b5bf;
+  --line: #2c4352;
+  --accent: #e2b85a;
+  --on-accent: #0f1d27;
+  --focus: #8ab8ff;
+  --shadow: rgb(0 0 0 / 0.45);
+  --avatar-bg: 40% 0.09;
+  --avatar-fg: 95% 0.03;
 }
 
 body {
@@ -32,12 +84,32 @@ main {
 }
 
 footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 16px 0;
   color: var(--muted);
 }
 
 a {
   color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .login,
@@ -63,19 +135,4 @@ button {
 button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
-}
-
-.avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-}
-
-.placeholder {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--muted);
-  color: var(--bg);
-  font-weight: bold;
 }

@@ -9,6 +9,7 @@ instance.
 | Path | Holds |
 | --- | --- |
 | `src/shared/contracts.ts` | zod schemas and types shared by server and web: settings, events and their visibility, `GameState`, WebSocket messages, limits |
+| `src/shared/constants.ts` | The zod-free values (reaction emojis, limits); `contracts.ts` re-exports them. `src/web` imports values only from here, types from `contracts.ts` only with `import type`, so zod stays out of the browser bundle (enforced by the build, `test/bundle.test.ts`) |
 | `src/server/main.ts` | Start: parse config, pool, build app, migrate, listen; graceful shutdown |
 | `src/server/app.ts` | Fastify: headers on every response, one JSON log line per request, rate limits, `/healthz`, legal pages, static files |
 | `src/server/config.ts` | `parseConfig(env)`, pure, every variable validated |
@@ -16,7 +17,7 @@ instance.
 | `src/server/legal.ts`, `robots.ts` | Imprint and privacy notice HTML; `robots.txt` from a sourced crawler list |
 | `src/server/db/schema.ts`, `migrate.ts` | Drizzle schema; migrations applied at start |
 | `drizzle/` | Generated SQL migrations and their snapshots |
-| `src/web/` | React SPA, Vite root; built to `dist/web` and served by the app |
+| `src/web/` | React SPA, Vite root; built to `dist/web` and served by the app. `components/` render, `lib/` holds their logic, `public/` is copied as is ([ui-assets.md](ui-assets.md)) |
 | `test/` | Vitest; see [testing.md](testing.md) |
 
 ## Rules for changing things

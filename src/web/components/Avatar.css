@@ -1,0 +1,29 @@
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatar-sm { width: 32px; height: 32px; font-size: 0.8rem; }
+.avatar-md { width: 48px; height: 48px; font-size: 1.1rem; }
+.avatar-lg { width: 72px; height: 72px; font-size: 1.6rem; }
+
+/* Same lightness for every hue, so each tone keeps about 7:1 text contrast in either theme. */
+.avatar-initials {
+  background: oklch(var(--avatar-bg) var(--hue));
+  color: oklch(var(--avatar-fg) var(--hue));
+  font-weight: 700;
+  user-select: none;
+}
+
+.tone-0 { --hue: 25; }
+.tone-1 { --hue: 60; }
+.tone-2 { --hue: 95; }
+.tone-3 { --hue: 145; }
+.tone-4 { --hue: 185; }
+.tone-5 { --hue: 235; }
+.tone-6 { --hue: 285; }
+.tone-7 { --hue: 330; }

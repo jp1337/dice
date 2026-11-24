@@ -9,7 +9,7 @@ Login, `SESSION_SECRET`, `DISCORD_CLIENT_*` and `PRIVACY_*` take effect with ste
 | Variable | Required | Default | Meaning |
 | --- | --- | --- | --- |
 | `NODE_ENV` | no | `development` | `production` makes `LEGAL_*` required. `.env.example` sets it |
-| `BASE_URL` | yes | | Public address, e.g. `https://dice.example.org`, no trailing slash. Builds the login redirect, the CSP and the WebSocket origin check |
+| `BASE_URL` | yes | | Public address, e.g. `https://dice.example.org`: https (http only outside production), no path, query or credentials. Builds the login redirect, the CSP and the WebSocket origin check |
 | `PORT` | no | `3000` | Port on `127.0.0.1` that compose publishes. Inside the container always 3000 |
 
 ## Database

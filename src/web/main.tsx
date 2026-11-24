@@ -1,20 +1,13 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { MeResponse } from "../shared/contracts.js";
+import { Avatar } from "./components/Avatar.js";
+import { SoundToggle, ThemeToggle } from "./components/Toggles.js";
 
 // After the login Discord sends the user back to the page they came from.
 function loginHref() {
   const here = location.pathname + location.search;
   return here === "/" ? "/auth/login" : `/auth/login?next=${encodeURIComponent(here)}`;
-}
-
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0]!.toUpperCase())
-    .join("");
 }
 
 async function logout() {
@@ -58,13 +51,7 @@ function Start() {
   return (
     <>
       <p className="me">
-        {me.avatarUrl ? (
-          <img className="avatar" src={me.avatarUrl} alt="" width={48} height={48} />
-        ) : (
-          <span className="avatar placeholder" aria-hidden="true">
-            {initials(me.displayName)}
-          </span>
-        )}
+        <Avatar userId={me.userId} name={me.displayName} avatarUrl={me.avatarUrl} />
         <span>Angemeldet als {me.displayName}</span>
         <button type="button" onClick={logout}>
           Abmelden
@@ -89,8 +76,14 @@ function App() {
         <Start />
       </main>
       <footer>
-        <a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a> ·{" "}
-        <a href="https://github.com/jp1337/dice">GitHub</a>
+        <span>
+          <a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a> ·{" "}
+          <a href="https://github.com/jp1337/dice">GitHub</a>
+        </span>
+        <div className="me">
+          <SoundToggle />
+          <ThemeToggle />
+        </div>
       </footer>
     </>
   );
