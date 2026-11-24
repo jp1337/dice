@@ -1,9 +1,9 @@
-// Rooms, lobby and the room WebSocket (spec 4.2, 4.3, 4.9, 4.10, 7, 8.1).
-// A room with connections lives in memory, read from room_members and game_events (reduce) on the first
-// join and dropped when its last socket closes. Every change runs in that room's queue: database first,
-// then memory, then one coalesced `state` per audience.
-import { randomBytes } from "node:crypto";
-import { type SQL, and, asc, eq } from "drizzle-orm";
+// Rooms, lobby, the game and the room and guest WebSockets (spec 4.2 to 4.11, 7, 8.1).
+// A room with connections (members or guests) lives in memory, read from room_members and game_events
+// (reduce) on the first join and dropped when its last socket closes. Every change runs in that room's
+// queue: database first, then memory, then one coalesced `state` per audience, then `rolled`.
+import { randomBytes, randomUUID } from "node:crypto";
+import { type SQL, and, asc, eq, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
@@ -16,7 +16,9 @@ import {
   type Participation,
   type RoomSummary,
   type RoomView,
+  type ServerMessage,
   type Settings,
+  REACTION_INTERVAL_MS,
   clientMessageSchema,
   createRoomRequestSchema,
   defaultSettings,
@@ -27,7 +29,7 @@ import { reduce } from "../shared/game/reduce.js";
 import type { LiveRooms } from "./cleanup.js";
 import type { Config } from "./config.js";
 import { gameEvents, roomMembers, rooms, users } from "./db/schema.js";
-import { CommandError, type GameCommandContext, type NewEvent, handleGameCommand } from "./game-commands.js";
+import { CommandError, type NewEvent, handleGameCommand } from "./game-commands.js";
 
 export const CREATE_ROOM_LIMIT_PER_MINUTE = 10;
 export const NICKNAME_LIMIT_PER_MINUTE = 10;
@@ -40,6 +42,13 @@ export const MAX_SOCKETS_PER_USER = 5; // per room
 export const PRESENCE_DELAY_MS = 300;
 export const PRESENCE_MAX_WAIT_MS = 2000;
 const BUSY_DELAY_MS = 100; // the longest a change waits for a busy queue
+export const SIMULATED_ROLL_DELAY_MS = 3000; // spec 4.7: "etwa 3 Sekunden nachdem sie dran sind"
+export const MAX_SIMULATED_PLAYERS = 30; // per room (spec 4.7)
+export const MAX_GUESTS_PER_ROOM = 200; // spec 4.8
+export const MAX_GUESTS_PER_IP = 5; // guest connections per IP, over all rooms (spec 4.8)
+export const GUEST_CONNECTS_PER_MINUTE = 60; // per IP; the token lookup touches the database
+export const REACTION_BUNDLE_MS = 250; // reactions reach everyone bundled, at most this often (spec 4.11)
+const WATCH_TOKEN = /^[A-Za-z0-9_-]{22}$/; // 128 bit, base64url
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -70,6 +79,9 @@ const CLOSE = {
   "join failed": [1011, "Beitritt fehlgeschlagen."],
   "logged out": [4001, "Abgemeldet."],
   "session expired": [4001, "Sitzung abgelaufen. Bitte melde dich neu an."],
+  "watch link changed": [4004, "Dieser Zuschauer-Link gilt nicht mehr."],
+  "too many guests": [1008, "Zu viele Zuschauer in diesem Raum."],
+  "too many guest connections": [1008, "Zu viele Zuschauer-Verbindungen von deiner Adresse."],
 } as const;
 type CloseReason = keyof typeof CLOSE;
 
@@ -111,6 +123,14 @@ export type Audience = "host" | "moderator" | "member" | "guest";
 
 export type Room = RoomData & {
   sockets: Map<string, Set<Socket>>; // joined sockets per user; several tabs are several sockets
+  guests: Set<Socket>; // anonymous guests (spec 4.8): no members, no presence
+  after: string[]; // sent to every socket right after the next state flush (`rolled`)
+  lastRollAt: number; // for the roll cooldown (spec 7); 0 after a load
+  botTimer: NodeJS.Timeout | null; // the next roll of the active simulated player (spec 4.7)
+  botKey: string | null; // the turn botTimer was armed for
+  reactions: Map<string, number>; // emoji counts waiting for the next bundle (spec 4.11)
+  reactionTimer: NodeJS.Timeout | null;
+  lastReaction: Map<string, number>; // by user id
   queue: Promise<unknown>;
   tasks: number; // queued or running
   version: number; // raised by every change a view shows
@@ -122,8 +142,8 @@ export type Room = RoomData & {
   evicted: boolean; // dropped from memory; its tasks refuse to run
 };
 
-// One open socket.
-type Conn = { userId: string; sessionId: string; expiresAt: number; alive: boolean; reason?: string; version: number };
+// One open socket. userId null: a guest; ip is set once it counts against MAX_GUESTS_PER_IP.
+type Conn = { userId: string | null; sessionId: string; expiresAt: number; alive: boolean; reason?: string; version: number; ip?: string };
 type Bucket = { tokens: number; at: number; strikes: number };
 
 type Db = NodePgDatabase;
@@ -142,7 +162,7 @@ export function checkSettingsChange(status: GameStatus, settings: Partial<Settin
 }
 
 // The room as one audience may see it (spec 4.5, 4.8, 4.10), without the per-socket `viewer`.
-export function roomView(room: RoomData & Pick<Room, "sockets">, audience: Audience, config: Config): Omit<RoomView, "viewer"> {
+export function roomView(room: RoomData & Pick<Room, "sockets" | "guests">, audience: Audience, config: Config): Omit<RoomView, "viewer"> {
   const isHostMember = (m: Member) => m.discordId !== null && config.hostDiscordIds.includes(m.discordId);
   const guest = audience === "guest";
   const canModerate = audience === "host" || audience === "moderator";
@@ -172,7 +192,7 @@ export function roomView(room: RoomData & Pick<Room, "sockets">, audience: Audie
       watchLinkActive: room.watchToken !== null,
       ...(canModerate && {
         ...(room.watchToken && { watchUrl: new URL(`/z/${room.watchToken}`, config.baseUrl).href }),
-        guestCount: 0, // shortcut: guests (4.8) are not connected yet; count them when /ws/watch exists
+        guestCount: room.guests.size,
       }),
     },
     members,
@@ -188,7 +208,7 @@ export function registerRooms(
     requireUser: (request: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
     onSessionEnd: (listener: (sessionId: string) => void) => void;
   },
-  pingIntervalMs: number,
+  timing: { pingIntervalMs: number; rollCooldownMs: number; simulatedRollDelayMs: number },
 ) {
   const isHostId = (discordId: string | null) => discordId !== null && config.hostDiscordIds.includes(discordId);
   const audienceOf = (m: Member): Audience => (isHostId(m.discordId) ? "host" : m.isCohost ? "moderator" : "member");
@@ -201,10 +221,11 @@ export function registerRooms(
   const loading = new Map<string, Promise<Room | null>>();
   const conns = new Map<Socket, Conn>();
   const buckets = new Map<string, Bucket>(); // by room id and user id
+  const guestsPerIp = new Map<string, number>();
 
   app.decorate("live", {
     roomIds: () => [...live.values()].map((room) => room.id),
-    userIds: () => [...new Set([...conns.values()].map((conn) => conn.userId))],
+    userIds: () => [...new Set([...conns.values()].flatMap((conn) => (conn.userId === null ? [] : [conn.userId])))],
   });
 
   // ---------------------------------------------------------------------------------------------
@@ -249,6 +270,14 @@ export function registerRooms(
           const loaded: Room = {
             ...data,
             sockets: new Map(),
+            guests: new Set(),
+            after: [],
+            lastRollAt: 0,
+            botTimer: null,
+            botKey: null,
+            reactions: new Map(),
+            reactionTimer: null,
+            lastReaction: new Map(),
             queue: Promise.resolve(),
             tasks: 0,
             version: 0,
@@ -260,6 +289,7 @@ export function registerRooms(
             evicted: false,
           };
           live.set(slug, loaded);
+          schedule(loaded); // a game that ran before a restart goes on
           return loaded;
         })
         .finally(() => loading.delete(slug));
@@ -275,13 +305,24 @@ export function registerRooms(
     socket.close(code, text);
   }
 
+  function* socketsOf(room: Room) {
+    for (const sockets of room.sockets.values()) yield* sockets;
+    yield* room.guests;
+  }
+  const idle = (room: Room) => room.tasks === 0 && room.sockets.size === 0 && room.guests.size === 0;
+
+  function stopTimers(room: Room) {
+    for (const timer of [room.timer, room.botTimer, room.reactionTimer]) if (timer) clearTimeout(timer);
+    room.timer = room.botTimer = room.reactionTimer = null;
+  }
+
   // Drops the room from memory; the next join reads it again. Its sockets reconnect, if any are left.
   function dispose(room: Room, reason: CloseReason = "retry") {
     if (room.evicted) return;
     room.evicted = true;
     if (live.get(room.slug) === room) live.delete(room.slug);
-    if (room.timer) clearTimeout(room.timer);
-    for (const sockets of room.sockets.values()) for (const socket of sockets) closeSocket(socket, reason);
+    stopTimers(room);
+    for (const socket of socketsOf(room)) closeSocket(socket, reason);
   }
 
   // After an unexpected failure memory may differ from the database (e.g. a COMMIT whose reply was lost):
@@ -294,6 +335,7 @@ export function registerRooms(
       if ([...room.sockets.keys()].some((userId) => !data.members.has(userId))) throw new Error("a connected member is missing");
       Object.assign(room, data);
       changed(room, true);
+      schedule(room);
     } catch (err) {
       app.log.error({ err, roomId: room.id }, "reading the room again failed");
       dispose(room, "reload failed");
@@ -313,7 +355,7 @@ export function registerRooms(
       } finally {
         room.tasks--;
         if (!room.evicted && room.tasks === 0) {
-          if (room.sockets.size === 0) dispose(room);
+          if (idle(room)) dispose(room);
           else if (room.urgent) flush(room);
         }
       }
@@ -328,29 +370,32 @@ export function registerRooms(
   const send = (socket: Socket, text: string) => socket.readyState === OPEN && socket.send(text);
 
   function sendState(room: Room, socket: Socket, conn: Conn) {
-    const member = room.members.get(conn.userId)!;
-    const audience = audienceOf(member);
+    const member = conn.userId === null ? null : room.members.get(conn.userId)!;
+    const audience = member ? audienceOf(member) : "guest";
     let rendered = room.rendered.get(audience);
     if (rendered?.version !== room.version) {
       rendered = { version: room.version, body: JSON.stringify(roomView(room, audience, config)).slice(1) };
       room.rendered.set(audience, rendered);
     }
-    const viewer: RoomView["viewer"] = { kind: "member", userId: member.userId, isHost: audience === "host", canModerate: audience !== "member" };
+    const viewer: RoomView["viewer"] = member
+      ? { kind: "member", userId: member.userId, isHost: audience === "host", canModerate: audience !== "member" }
+      : { kind: "guest" };
     send(socket, `{"type":"state","state":{"viewer":${JSON.stringify(viewer)},${rendered.body}}`);
     conn.version = room.version;
   }
 
+  // Every socket gets the newest state first, then what waited for it: no client sees `rolled` before
+  // the state that holds the roll.
   function flush(room: Room) {
     if (room.timer) clearTimeout(room.timer);
     room.timer = null;
     room.urgent = false;
     if (room.evicted) return;
-    for (const sockets of room.sockets.values()) {
-      for (const socket of sockets) {
-        const conn = conns.get(socket);
-        if (conn && conn.version !== room.version) sendState(room, socket, conn);
-      }
+    for (const socket of socketsOf(room)) {
+      const conn = conns.get(socket);
+      if (conn && conn.version !== room.version) sendState(room, socket, conn);
     }
+    for (const text of room.after.splice(0)) for (const socket of socketsOf(room)) send(socket, text);
   }
 
   // urgent: sent as soon as the queue is idle, at most BUSY_DELAY_MS late. Else (presence) debounced:
@@ -386,7 +431,63 @@ export function registerRooms(
     });
     change.apply?.();
     Object.assign(room, { events, game, settings });
+    for (const e of added) {
+      if (e.type !== "rolled") continue;
+      room.lastRollAt = Date.now();
+      const { userId, dice, rolledBy } = e.payload;
+      const rolled: ServerMessage = { type: "rolled", userId, dice, ...(rolledBy && { rolledBy }) };
+      room.after.push(JSON.stringify(rolled));
+    }
     changed(room, true);
+    schedule(room);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Simulated players (spec 4.7): the room arms one timer for the active simulated player while the
+  // game runs unpaused. It rolls through handleGameCommand and commit like a real roll, actor null.
+
+  function schedule(room: Room) {
+    const { game } = room;
+    const active = game.activeUserId;
+    const due = !room.evicted && game.status === "running" && !game.pause && active !== null && room.members.get(active)?.isSimulated === true;
+    const key = due ? `${active}:${game.history.length}` : null;
+    if (key !== null && key === room.botKey) return; // armed for this turn already
+    if (room.botTimer) clearTimeout(room.botTimer);
+    room.botTimer = null;
+    room.botKey = key;
+    if (key === null) return;
+    const wait = Math.max(timing.simulatedRollDelayMs, room.lastRollAt + timing.rollCooldownMs - Date.now());
+    room.botTimer = setTimeout(() => {
+      room.botTimer = null;
+      room.botKey = null;
+      run(room, () => simulatedRoll(room)).catch((err) => err instanceof Evicted || app.log.error({ err, roomId: room.id }, "simulated roll failed"));
+    }, wait);
+  }
+
+  async function simulatedRoll(room: Room) {
+    const active = room.game.activeUserId;
+    try {
+      if (!active || !room.members.get(active)?.isSimulated) return;
+      const ctx = { actor: { userId: active, canModerate: false }, room, rollCooldownMs: timing.rollCooldownMs, now: Date.now() };
+      const { events } = handleGameCommand(ctx, { type: "roll" });
+      await commit(room, { events: events.map((e) => ({ ...e, actorUserId: null })) });
+    } catch (err) {
+      if (!(err instanceof CommandError)) throw err; // paused or cooling down: schedule decides
+    } finally {
+      schedule(room);
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Reactions (spec 4.11): never stored; counted per emoji, sent bundled to members and guests.
+
+  type Reactions = Extract<ServerMessage, { type: "reactions" }>;
+  function sendReactions(room: Room) {
+    room.reactionTimer = null;
+    const message: Reactions = { type: "reactions", emojis: [...room.reactions].map(([emoji, count]) => ({ emoji, count })) as Reactions["emojis"] };
+    room.reactions.clear();
+    const text = JSON.stringify(message);
+    for (const socket of socketsOf(room)) send(socket, text);
   }
 
   // A changed nickname shows in every room in memory the user belongs to.
@@ -418,7 +519,7 @@ export function registerRooms(
   // ---------------------------------------------------------------------------------------------
   // Join and leave (spec 4.2, 4.9)
 
-  async function join(room: Room, socket: Socket, conn: Conn) {
+  async function join(room: Room, socket: Socket, conn: Conn & { userId: string }) {
     if (socket.readyState !== OPEN) return; // closed while waiting in the queue
     const { userId } = conn;
     if ((room.sockets.get(userId)?.size ?? 0) >= MAX_SOCKETS_PER_USER) return closeSocket(socket, "too many tabs");
@@ -467,6 +568,9 @@ export function registerRooms(
     const lobbyOnly = () => {
       if (room.game.status !== "lobby") throw fail("not_in_lobby", "Das geht nur in der Lobby.");
     };
+    const testRoomOnly = () => {
+      if (!room.isTest) throw fail("not_test_room", "Simulierte Mitspieler gibt es nur in Testräumen.");
+    };
     const memberRow = (userId: string) => and(eq(roomMembers.roomId, room.id), eq(roomMembers.userId, userId));
 
     switch (message.type) {
@@ -511,17 +615,78 @@ export function registerRooms(
         });
         return refreshUser(member.userId, room);
       }
-      default: {
-        const ctx: GameCommandContext = {
-          actor: { userId: actorId, isHost, canModerate },
-          room,
-          append: (events) => commit(room, { events }),
-          broadcast: (out) => {
-            const text = JSON.stringify(out);
-            for (const sockets of room.sockets.values()) for (const socket of sockets) send(socket, text);
+      case "react": {
+        if (!room.settings.reactions) throw fail("reactions_off", "Reaktionen sind in diesem Raum abgeschaltet.");
+        if (room.game.activeUserId === actorId) throw fail("active_player", "Wer dran ist, kann nicht reagieren.");
+        const now = Date.now();
+        if (now < (room.lastReaction.get(actorId) ?? -Infinity) + REACTION_INTERVAL_MS) throw fail("reaction_too_fast", "Höchstens eine Reaktion alle 2 Sekunden.");
+        room.lastReaction.set(actorId, now);
+        room.reactions.set(message.emoji, (room.reactions.get(message.emoji) ?? 0) + 1);
+        room.reactionTimer ??= setTimeout(() => sendReactions(room), REACTION_BUNDLE_MS);
+        return;
+      }
+      case "add_simulated_players": {
+        if (!canModerate) throw forbidden();
+        testRoomOnly();
+        lobbyOnly();
+        const taken = new Set([...room.members.values()].filter((m) => m.isSimulated).map((m) => m.username));
+        if (taken.size + message.count > MAX_SIMULATED_PLAYERS)
+          throw fail("too_many_simulated", `Höchstens ${MAX_SIMULATED_PLAYERS} simulierte Mitspieler pro Raum.`);
+        const added: Member[] = [];
+        for (let n = 1; added.length < message.count; n++) {
+          const name = `Testspieler ${n}`; // unique within the room (spec 4.7)
+          if (taken.has(name)) continue;
+          added.push({ userId: randomUUID(), discordId: null, username: name, displayName: name, nickname: null, avatarHash: null, isSimulated: true, participation: "player", isCohost: false });
+        }
+        return commit(room, {
+          events: [{ type: "simulated_players_changed", actorUserId: actorId, payload: { added: added.map((m) => m.userId), removed: [] } }],
+          write: async (tx) => {
+            await tx.insert(users).values(added.map((m) => ({ id: m.userId, username: m.username, displayName: m.displayName, isSimulated: true })));
+            // joined_at a microsecond apart: a reload lists them in the same order as memory.
+            await tx.insert(roomMembers).values(
+              added.map((m, i) => ({ roomId: room.id, userId: m.userId, participation: "player" as const, joinedAt: sql`now() + ${i} * interval '1 microsecond'` })),
+            );
           },
-        };
-        return handleGameCommand(ctx, message);
+          apply: () => added.forEach((m) => room.members.set(m.userId, m)),
+        });
+      }
+      case "remove_simulated_player": {
+        if (!canModerate) throw forbidden();
+        testRoomOnly();
+        lobbyOnly();
+        const member = target(message.userId);
+        if (!member.isSimulated) throw fail("invalid_target", "Das ist kein simulierter Mitspieler.");
+        return commit(room, {
+          events: [{ type: "simulated_players_changed", actorUserId: actorId, payload: { added: [], removed: [member.userId] } }],
+          write: (tx) => tx.delete(users).where(and(eq(users.id, member.userId), eq(users.isSimulated, true))), // membership cascades
+          apply: () => room.members.delete(member.userId),
+        });
+      }
+      case "set_watch_link": {
+        if (!canModerate) throw forbidden();
+        const { action } = message;
+        if ((action === "enable" && room.watchToken) || (action === "disable" && !room.watchToken)) return;
+        const token = action === "disable" ? null : randomBytes(16).toString("base64url"); // 128 bit (spec 4.8)
+        return commit(room, {
+          events: [{ type: "watch_link_changed", actorUserId: actorId, payload: { enabled: token !== null } }],
+          write: (tx) => tx.update(rooms).set({ watchToken: token }).where(eq(rooms.id, room.id)),
+          apply: () => {
+            room.watchToken = token;
+            // Off or new: every guest of the old link goes at once.
+            for (const socket of room.guests) closeSocket(socket, "watch link changed");
+            room.guests.clear();
+          },
+        });
+      }
+      default: {
+        const { events, participation: change } = handleGameCommand({ actor: { userId: actorId, canModerate }, room, rollCooldownMs: timing.rollCooldownMs, now: Date.now() }, message);
+        if (!change) return commit(room, { events });
+        const member = room.members.get(change.userId)!;
+        return commit(room, {
+          events,
+          write: (tx) => tx.update(roomMembers).set({ participation: change.participation }).where(memberRow(change.userId)),
+          apply: () => (member.participation = change.participation),
+        });
       }
     }
   }
@@ -546,12 +711,12 @@ export function registerRooms(
     for (const [key, bucket] of buckets) {
       if (bucket.tokens + ((now - bucket.at) / 1000) * MESSAGES_PER_SECOND >= MESSAGE_BURST) buckets.delete(key);
     }
-    for (const room of live.values()) if (room.tasks === 0 && room.sockets.size === 0) dispose(room);
-  }, pingIntervalMs);
+    for (const room of live.values()) if (idle(room)) dispose(room);
+  }, timing.pingIntervalMs);
   tick.unref();
   app.addHook("onClose", async () => {
     clearInterval(tick);
-    for (const room of live.values()) if (room.timer) clearTimeout(room.timer);
+    for (const room of live.values()) stopTimers(room);
   });
 
   // Sockets do not outlive their session.
@@ -576,7 +741,7 @@ export function registerRooms(
       const room = roomOf.get(request)!;
       const userId = request.user!.id;
       const session = request.session!;
-      const conn: Conn = { userId, sessionId: session.id, expiresAt: session.expiresAt.getTime(), alive: true, version: -1 };
+      const conn: Conn & { userId: string } = { userId, sessionId: session.id, expiresAt: session.expiresAt.getTime(), alive: true, version: -1 };
       conns.set(socket, conn);
       const log = request.log;
       log.info({ userId, roomId: room.id }, "ws connected");
@@ -623,6 +788,58 @@ export function registerRooms(
         log.error({ err, userId, roomId: room.id }, "ws join failed");
         closeSocket(socket, "join failed");
       });
+    },
+  );
+
+  // Anonymous guests (spec 4.8): no session, read-only, the guest view of the state.
+  const findWatchRoom = async (request: FastifyRequest<{ Params: { token: string } }>, reply: FastifyReply) => {
+    const { token } = request.params;
+    let room = WATCH_TOKEN.test(token) ? [...live.values()].find((r) => r.watchToken === token) : undefined;
+    if (!room && WATCH_TOKEN.test(token)) {
+      const [row] = await db.select({ slug: rooms.slug }).from(rooms).where(eq(rooms.watchToken, token));
+      if (row) room = (await getRoom(row.slug)) ?? undefined;
+    }
+    if (room?.watchToken !== token) return reply.code(404).send({ error: "not_found" });
+    roomOf.set(request, room);
+  };
+
+  app.get<{ Params: { token: string } }>(
+    "/ws/watch/:token",
+    { websocket: true, config: { rateLimit: { max: GUEST_CONNECTS_PER_MINUTE, timeWindow: "1 minute" } }, preHandler: [sameOrigin, findWatchRoom] },
+    (socket: Socket, request) => {
+      const room = roomOf.get(request)!;
+      const conn: Conn = { userId: null, sessionId: "", expiresAt: Infinity, alive: true, version: -1 };
+      conns.set(socket, conn);
+      const log = request.log;
+      log.info({ roomId: room.id, ip: request.ip }, "guest connected");
+
+      socket.on("pong", () => (conn.alive = true));
+      socket.on("message", () => undefined); // read-only: whatever a guest sends is dropped
+      socket.on("close", (code) => {
+        conns.delete(socket);
+        if (conn.ip !== undefined) {
+          const left = guestsPerIp.get(conn.ip)! - 1;
+          if (left > 0) guestsPerIp.set(conn.ip, left);
+          else guestsPerIp.delete(conn.ip);
+        }
+        log.info({ roomId: room.id, code, reason: conn.reason ?? "client" }, "guest closed");
+        run(room, async () => {
+          if (room.guests.delete(socket)) changed(room, false); // hosts see the guest count
+        }).catch((err) => err instanceof Evicted || log.error({ err, roomId: room.id }, "guest leave failed"));
+      });
+
+      const fromIp = guestsPerIp.get(request.ip) ?? 0;
+      if (fromIp >= MAX_GUESTS_PER_IP) return closeSocket(socket, "too many guest connections");
+      guestsPerIp.set(request.ip, fromIp + 1);
+      conn.ip = request.ip;
+      run(room, async () => {
+        if (socket.readyState !== OPEN) return;
+        if (room.watchToken !== request.params.token) return closeSocket(socket, "watch link changed"); // changed while waiting
+        if (room.guests.size >= MAX_GUESTS_PER_ROOM) return closeSocket(socket, "too many guests");
+        room.guests.add(socket);
+        changed(room, false);
+        sendState(room, socket, conn);
+      }).catch((err) => closeSocket(socket, err instanceof Evicted ? "retry" : "join failed"));
     },
   );
 

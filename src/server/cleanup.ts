@@ -9,18 +9,21 @@ const DAY_MS = 86_400_000;
 export type LiveRooms = { roomIds(): string[]; userIds(): string[] };
 const nothingLive: LiveRooms = { roomIds: () => [], userIds: () => [] };
 
-// In this order: deleting a room first frees its members for the user rule. $1 = retention cutoff,
-// $2 = ids in use. Step 5 adds simulated players here.
+// In this order: deleting a room first frees its members for the user rules. $1 = retention cutoff,
+// $2 = ids in use.
 const statements = {
   sessions: "delete from sessions where expires_at <= now()",
   rooms: "delete from rooms where last_activity_at < $1 and id <> all($2::uuid[])", // members and events cascade
+  // A simulated player belongs to exactly one test room and is created with its membership in one
+  // transaction, so one without a room is one whose room is gone (spec 9.3).
+  simulated: "delete from users u where u.is_simulated and not exists (select 1 from room_members m where m.user_id = u.id)",
   users: `delete from users u where not u.is_simulated and u.last_login_at < $1 and u.id <> all($2::uuid[])
     and not exists (select 1 from room_members m where m.user_id = u.id)`, // sessions cascade
 };
 
 export async function runCleanup(pool: Pool, retentionDays: number, live: LiveRooms = nothingLive) {
   const cutoff = new Date(Date.now() - retentionDays * DAY_MS);
-  const params = { sessions: [], rooms: [cutoff, live.roomIds()], users: [cutoff, live.userIds()] };
+  const params = { sessions: [], rooms: [cutoff, live.roomIds()], simulated: [], users: [cutoff, live.userIds()] };
   const counts: Record<string, number> = {};
   for (const [name, sql] of Object.entries(statements)) {
     counts[name] = (await pool.query(sql, params[name as keyof typeof statements])).rowCount ?? 0;

@@ -1,7 +1,7 @@
 // Everything the room views compute from a RoomView: names, permissions for each button, turn order, gift
 // order, the history in words, the result as text. Pure, tested in test/room-view.test.ts. The server
 // decides every action again (spec 7); these only keep buttons from offering what it would refuse.
-import { INVISIBLE_TEXT, NICKNAME_MAX, ROOM_NAME_MAX, SIX_MESSAGE_MAX, VISIBLE_CHAR } from "../../shared/constants.js";
+import { NICKNAME_MAX, ROOM_NAME_MAX, SIX_MESSAGE_MAX, isVisibleText } from "../../shared/constants.js";
 import type { GameEvent, MemberView, RoomView, UserId } from "../../shared/contracts.js";
 
 const UNKNOWN = "Unbekannt";
@@ -198,7 +198,7 @@ function textError(value: string, max: number, empty: string): string | null {
   const text = value.normalize("NFC").trim();
   if (text.length === 0) return empty;
   if (text.length > max) return `Höchstens ${max} Zeichen.`;
-  if (INVISIBLE_TEXT.test(text) || !VISIBLE_CHAR.test(text)) return "Bitte nur sichtbare Zeichen: keine Steuerzeichen, Sonderleerzeichen oder unsichtbaren Zeichen.";
+  if (!isVisibleText(text)) return "Bitte nur sichtbare Zeichen: keine Steuerzeichen, Sonderleerzeichen oder unsichtbaren Zeichen.";
   return null;
 }
 

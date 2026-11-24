@@ -9,13 +9,15 @@ import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import Fastify, { type FastifyError, type FastifyReply, type FastifyRequest, LogController } from "fastify";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { Pool } from "pg";
 import { registerAuth } from "./auth.js";
 import type { Config } from "./config.js";
 import { datenschutzHtml, escapeHtml, impressumHtml } from "./legal.js";
-import { MAX_CLIENT_MESSAGE_BYTES, PING_INTERVAL_MS } from "../shared/contracts.js";
-import { registerRooms } from "./rooms.js";
+import { MAX_CLIENT_MESSAGE_BYTES, PING_INTERVAL_MS, ROLL_COOLDOWN_MS } from "../shared/contracts.js";
+import { rooms } from "./db/schema.js";
+import { GUEST_CONNECTS_PER_MINUTE, SIMULATED_ROLL_DELAY_MS, registerRooms } from "./rooms.js";
 import { robotsTxt } from "./robots.js";
 
 export const HEALTHZ_LIMIT_PER_MINUTE = 120;
@@ -25,12 +27,16 @@ export type Deps = {
   webRoot: string; // directory with the Vite build output
   logStream?: Writable; // defaults to stdout
   pingIntervalMs?: number; // WebSocket ping; defaults to PING_INTERVAL_MS, tests shorten it
+  rollCooldownMs?: number; // defaults to ROLL_COOLDOWN_MS, tests shorten it
+  simulatedRollDelayMs?: number; // defaults to SIMULATED_ROLL_DELAY_MS, tests shorten it
 };
 
 // Paths that answer with the SPA's index.html. Every one gets the same HTML, so the link preview
 // (spec 10.2) never depends on the room.
 // Room slugs are base64url, 16 to 64 characters; anything else under /r/ is a 404.
-export const SPA_ROUTES = ["/", "/r/:slug(^[A-Za-z0-9_-]{16,64}$)"];
+// Guest links (spec 4.8): a 128-bit token, and a 404 unless it is the room's active one.
+const WATCH_ROUTE = "/z/:token(^[A-Za-z0-9_-]{22}$)";
+export const SPA_ROUTES = ["/", "/r/:slug(^[A-Za-z0-9_-]{16,64}$)", WATCH_ROUTE];
 
 const ROBOTS = "noindex, nofollow, noarchive, nosnippet, noimageindex";
 const HTML = "text/html; charset=utf-8";
@@ -184,8 +190,15 @@ export async function buildApp(config: Config, deps: Deps) {
   } catch (err) {
     app.log.warn({ err }, "no index.html in the web root, the app pages are unavailable");
   }
+  const watchLinkActive = async (token: string) => (await db.select({ id: rooms.id }).from(rooms).where(eq(rooms.watchToken, token))).length > 0;
   for (const url of SPA_ROUTES) {
-    app.get(url, (_request, reply) => (spaHtml === null ? reply.callNotFound() : reply.type(HTML).send(spaHtml)));
+    const watch = url === WATCH_ROUTE;
+    // The guest page is public and touches the database, so it is limited like the guest socket.
+    const options = watch ? { config: { rateLimit: { max: GUEST_CONNECTS_PER_MINUTE, timeWindow: "1 minute" } } } : {};
+    app.get<{ Params: { token: string } }>(url, options, async (request, reply) => {
+      if (spaHtml === null || (watch && !(await watchLinkActive(request.params.token)))) return reply.callNotFound();
+      return reply.type(HTML).send(spaHtml);
+    });
   }
 
   // The hashed files under /assets/ and the files of src/web/public. index.html only through the
@@ -200,7 +213,11 @@ export async function buildApp(config: Config, deps: Deps) {
 
   // Larger client messages close the connection (1009) before they are buffered or parsed.
   await app.register(fastifyWebsocket, { options: { maxPayload: MAX_CLIENT_MESSAGE_BYTES } });
-  registerRooms(app, config, db, auth, deps.pingIntervalMs ?? PING_INTERVAL_MS);
+  registerRooms(app, config, db, auth, {
+    pingIntervalMs: deps.pingIntervalMs ?? PING_INTERVAL_MS,
+    rollCooldownMs: deps.rollCooldownMs ?? ROLL_COOLDOWN_MS,
+    simulatedRollDelayMs: deps.simulatedRollDelayMs ?? SIMULATED_ROLL_DELAY_MS,
+  });
 
   return app;
 }

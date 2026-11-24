@@ -27,6 +27,11 @@ describe.each(Object.entries(fields))("%s", (_name, parse) => {
     ["bidi override", "\u202Eevil"],
     ["zero-width space", "a\u200Bb"],
     ["control character", "a\u0007b"],
+    ["zero width joiner between letters", "a\u200Db"],
+    ["zero width joiner after an emoji, before a letter", "\u{1F468}\u200Db"],
+    ["zero width joiner at the end", "\u{1F468}\u200D"],
+    ["two zero width joiners", "\u{1F468}\u200D\u200D\u{1F469}"],
+    ["zero width non-joiner between emoji", "\u{1F468}\u200C\u{1F469}"],
     ["only marks", "\u0301"],
     ["only spaces", "   "],
     ["empty", ""],
@@ -42,6 +47,9 @@ describe.each(Object.entries(fields))("%s", (_name, parse) => {
     ["\u2764\uFE0F Max", "\u2764\uFE0F Max"],
     ["e\u0301", "\u00E9"], // NFC
     ["!", "!"],
+    ["\u{1F468}\u200D\u{1F469}\u200D\u{1F467}", "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}"], // family
+    ["\u{1F3F3}\uFE0F\u200D\u{1F308}", "\u{1F3F3}\uFE0F\u200D\u{1F308}"], // rainbow flag
+    ["\u{1F469}\u{1F3FD}\u200D\u{1F4BB} Ada", "\u{1F469}\u{1F3FD}\u200D\u{1F4BB} Ada"], // skin tone
   ])("accepts %j", (text, expected) => {
     const result = parse(text);
     expect(result.success).toBe(true);

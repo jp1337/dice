@@ -1,64 +1,26 @@
 // Rooms, lobby and the room WebSocket (spec 4.2, 4.9, 4.10, 7, 13) against a real PostgreSQL and a listening server.
-import { randomBytes, randomInt } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { request as httpRequest } from "node:http";
 import type { AddressInfo, Socket as NetSocket } from "node:net";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { SESSION_COOKIE, sessionIdFor } from "../src/server/auth.js";
+import { SESSION_COOKIE } from "../src/server/auth.js";
 import { parseConfig } from "../src/server/config.js";
 import { runMigrations } from "../src/server/db/migrate.js";
 import { runCleanup } from "../src/server/cleanup.js";
 import { CommandError } from "../src/server/game-commands.js";
 import { MAX_SOCKETS_PER_USER, MAX_STRIKES, MESSAGE_BURST, type Member, NICKNAME_LIMIT_PER_MINUTE, checkSettingsChange, roomView } from "../src/server/rooms.js";
-import { type GameEvent, MAX_CLIENT_MESSAGE_BYTES, NICKNAME_MAX, type RoomView, type ServerMessage, defaultSettings } from "../src/shared/contracts.js";
+import { type GameEvent, MAX_CLIENT_MESSAGE_BYTES, NICKNAME_MAX, type RoomView, defaultSettings } from "../src/shared/contracts.js";
 import { initialGameState } from "../src/shared/game/reduce.js";
 import { baseEnv, makeApp } from "./helpers.js";
+import { Client, HOST_ID, ORIGIN, type User, env, makeUser as makeUserIn, newDiscordId, until } from "./ws.js";
 
 const dbUrl = process.env.TEST_DATABASE_URL;
-const ORIGIN = "https://dice.example.org";
-const HOST_ID = "100000000000000002";
-const HOST2_ID = "100000000000000003";
-const env = { HOST_DISCORD_IDS: `${HOST_ID},${HOST2_ID}` };
 
 type App = Awaited<ReturnType<typeof makeApp>>["app"];
-type User = { id: string; discordId: string; token: string; name: string };
 
 let ip = 0;
 const nextIp = () => `10.2.${(++ip >> 8) & 255}.${ip & 255}`;
-// Presence updates are throttled (PRESENCE_DELAY_MS), so waits are longer than Vitest's default second.
-const until = <T>(check: () => T | Promise<T>) => vi.waitFor(check, { timeout: 4000, interval: 20 });
-const newDiscordId = () => `1${String(randomInt(2 ** 47)).padStart(17, "0")}`;
-
-class Client {
-  messages: ServerMessage[] = [];
-  bytes = 0;
-  closed: Promise<{ code: number; reason: string }>;
-  constructor(readonly ws: WebSocket) {
-    ws.addEventListener("message", (e) => {
-      this.bytes += String(e.data).length;
-      this.messages.push(JSON.parse(String(e.data)));
-    });
-    this.closed = new Promise((resolve) => ws.addEventListener("close", (e) => resolve({ code: e.code, reason: e.reason })));
-  }
-  get state(): RoomView {
-    const last = this.messages.findLast((m) => m.type === "state");
-    if (!last) throw new Error("no state yet");
-    return last.state;
-  }
-  get errors() {
-    return this.messages.flatMap((m) => (m.type === "error" ? [m.code] : []));
-  }
-  member(userId: string) {
-    return this.state.members.find((m) => m.userId === userId);
-  }
-  send(message: unknown) {
-    this.ws.send(typeof message === "string" ? message : JSON.stringify(message));
-  }
-  async close() {
-    this.ws.close();
-    await this.closed;
-  }
-}
 
 describe("guest view (spec 4.8)", () => {
   it("shows only players and placed people, no avatars, Discord names or moderation", () => {
@@ -90,6 +52,7 @@ describe("guest view (spec 4.8)", () => {
         ["s", member("s", "spectator", newDiscordId())],
       ]),
       sockets: new Map(),
+      guests: new Set([{}, {}] as never[]),
       events: history,
       game: { ...initialGameState(), history },
     };
@@ -100,10 +63,12 @@ describe("guest view (spec 4.8)", () => {
     expect(view.members[0]).toMatchObject({ avatarUrl: null, displayName: "Name p" });
     expect(view.members[0]).not.toHaveProperty("discordName");
     expect(view.game.history).toEqual([]);
+    expect(view.room).not.toHaveProperty("guestCount");
     const host = roomView(room, "host", config);
     expect(host.room.watchUrl).toBe(`${ORIGIN}/z/w`);
     expect(host.members).toHaveLength(3);
     expect(host.game.history).toHaveLength(1);
+    expect(host.room.guestCount).toBe(2);
   });
 });
 
@@ -124,20 +89,7 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
   let port: number;
   const clients: Client[] = [];
 
-  async function makeUser(discordId = newDiscordId(), name = "Erika", sessionLifetime = "1 day"): Promise<User> {
-    const { rows } = await pool.query(
-      `insert into users (discord_id, username, display_name, avatar_hash) values ($1, $2, $3, $4)
-       on conflict (discord_id) do update set nickname = null returning id`,
-      [discordId, `${name.toLowerCase()}-${discordId.slice(-4)}`, name, "b".repeat(32)],
-    );
-    const token = randomBytes(32).toString("base64url");
-    await pool.query("insert into sessions (id, user_id, expires_at) values ($1, $2, now() + $3::interval)", [
-      sessionIdFor(baseEnv.SESSION_SECRET, token),
-      rows[0].id,
-      sessionLifetime,
-    ]);
-    return { id: rows[0].id, discordId, token, name };
-  }
+  const makeUser = (discordId?: string, name?: string, sessionLifetime?: string) => makeUserIn(pool, discordId, name, sessionLifetime);
 
   const cookies = (user: User) => ({ [SESSION_COOKIE]: user.token });
 
@@ -152,9 +104,7 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
   }
 
   function open(slug: string, user: User, targetPort = port) {
-    // Node's WebSocket client takes extra headers; the DOM type does not know them.
-    const init = { headers: { cookie: `${SESSION_COOKIE}=${user.token}`, origin: ORIGIN } };
-    const client = new Client(new WebSocket(`ws://127.0.0.1:${targetPort}/ws/rooms/${slug}`, init as unknown as string[]));
+    const client = Client.open(targetPort, `/ws/rooms/${slug}`, user);
     clients.push(client);
     return client;
   }
@@ -346,7 +296,6 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       expect(cu.state.viewer).toEqual({ kind: "member", userId: user.id, isHost: false, canModerate: true });
     });
 
-    // reduce is a stub until step 4 and throws on game_started, so a running room cannot be loaded yet.
     it("makes a latecomer to a running game a spectator and allows only reactions to change outside the lobby", async () => {
       const slug = await newRoom(host);
       const player = await makeUser();
@@ -468,13 +417,6 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       expect((await pool.query("select nickname from users where id = $1", [user.id])).rows[0].nickname).toBeNull();
       expect(ch.state.game.history.map((e) => e.type)).toEqual(["nickname_reset"]);
       expect(cu.state.game.history).toEqual([]);
-    });
-
-    it("answers game commands with not_implemented until step 4", async () => {
-      const slug = await newRoom(host);
-      const ch = await connect(slug, host);
-      ch.send({ type: "start" });
-      await until(() => expect(ch.messages.at(-1)).toEqual({ type: "error", code: "not_implemented", message: "Diese Aktion gibt es noch nicht." }));
     });
   });
 
