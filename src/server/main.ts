@@ -19,7 +19,7 @@ const pool = new pg.Pool({ connectionString: config.databaseUrl, connectionTimeo
 const app = await buildApp(config, { pool, webRoot: path.resolve("dist/web") });
 await runMigrations(pool);
 await app.listen({ port: config.port, host: "0.0.0.0" });
-const stopCleanup = startCleanup(pool, config.retentionDays, app.log);
+const stopCleanup = startCleanup(pool, config.retentionDays, app.log, app.live);
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.once(signal, async () => {

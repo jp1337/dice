@@ -14,6 +14,8 @@ instance.
 | `src/server/app.ts` | Fastify: headers on every response, one JSON log line per request, rate limits, `/healthz`, legal pages, static files |
 | `src/server/config.ts` | `parseConfig(env)`, pure, every variable validated |
 | `src/server/auth.ts`, `discord.ts` | Step 2: OAuth flow, sessions, `/api/me`, avatars |
+| `src/server/rooms.ts` | Step 3: `POST /api/rooms`, `GET /api/rooms/:slug`, `PATCH /api/me`, WebSocket `/ws/rooms/:slug`; rooms with connections in memory, one queue per room (database, then memory, then broadcast), `state` rendered once per audience (`roomView`) |
+| `src/server/game-commands.ts` | The seam for step 4: `handleGameCommand(ctx, command)` gets every game message, already validated and serialized; `ctx.append(events)` persists and broadcasts |
 | `src/server/legal.ts`, `robots.ts` | Imprint and privacy notice HTML; `robots.txt` from a sourced crawler list |
 | `src/server/db/schema.ts`, `migrate.ts` | Drizzle schema; migrations applied at start |
 | `drizzle/` | Generated SQL migrations and their snapshots |

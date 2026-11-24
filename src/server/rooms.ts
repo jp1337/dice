@@ -1,0 +1,672 @@
+// Rooms, lobby and the room WebSocket (spec 4.2, 4.3, 4.9, 4.10, 7, 8.1).
+// A room with connections lives in memory, read from room_members and game_events (reduce) on the first
+// join and dropped when its last socket closes. Every change runs in that room's queue: database first,
+// then memory, then one coalesced `state` per audience.
+import { randomBytes } from "node:crypto";
+import { type SQL, and, asc, eq } from "drizzle-orm";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import {
+  type ClientMessage,
+  type CreateRoomResponse,
+  type GameEvent,
+  type GameState,
+  type GameStatus,
+  type MemberView,
+  type Participation,
+  type RoomSummary,
+  type RoomView,
+  type Settings,
+  clientMessageSchema,
+  createRoomRequestSchema,
+  defaultSettings,
+  eventVisibility,
+  patchMeRequestSchema,
+} from "../shared/contracts.js";
+import { reduce } from "../shared/game/reduce.js";
+import type { LiveRooms } from "./cleanup.js";
+import type { Config } from "./config.js";
+import { gameEvents, roomMembers, rooms, users } from "./db/schema.js";
+import { CommandError, type GameCommandContext, type NewEvent, handleGameCommand } from "./game-commands.js";
+
+export const CREATE_ROOM_LIMIT_PER_MINUTE = 10;
+export const NICKNAME_LIMIT_PER_MINUTE = 10;
+// One budget per person and room, shared by all their sockets; a connect costs one message.
+export const MESSAGES_PER_SECOND = 10;
+export const MESSAGE_BURST = 20;
+export const MAX_STRIKES = 10; // rate-limited messages in a row before the socket is closed
+export const MAX_SOCKETS_PER_USER = 5; // per room
+// Joins and leaves reach the others batched (see changed()); other changes go out when the queue is idle.
+export const PRESENCE_DELAY_MS = 300;
+export const PRESENCE_MAX_WAIT_MS = 2000;
+const BUSY_DELAY_MS = 100; // the longest a change waits for a busy queue
+
+declare module "fastify" {
+  interface FastifyInstance {
+    live: LiveRooms; // for the cleanup (spec 9.3), which must not delete what is in use
+  }
+}
+
+// The part of a `ws` WebSocket used here (@fastify/websocket hands one to the route).
+export type Socket = {
+  readyState: number;
+  send(data: string): void;
+  close(code?: number, reason?: string): void;
+  terminate(): void;
+  ping(): void;
+  on(event: "message", listener: (data: Buffer, isBinary: boolean) => void): void;
+  on(event: "pong", listener: () => void): void;
+  on(event: "close", listener: (code: number) => void): void;
+};
+const OPEN = 1;
+
+// Close codes and the German reason the client may show; the key is what the log says.
+const CLOSE = {
+  "too many tabs": [1008, "Zu viele offene Tabs in diesem Raum."],
+  "rate limit": [1008, "Zu viele Nachrichten."],
+  "room gone": [4004, "Raum existiert nicht mehr."],
+  "reload failed": [1012, "Der Raum wird neu geladen. Bitte verbinde dich neu."],
+  retry: [1013, "Bitte verbinde dich neu."],
+  "join failed": [1011, "Beitritt fehlgeschlagen."],
+  "logged out": [4001, "Abgemeldet."],
+  "session expired": [4001, "Sitzung abgelaufen. Bitte melde dich neu an."],
+} as const;
+type CloseReason = keyof typeof CLOSE;
+
+const userColumns = {
+  userId: users.id,
+  discordId: users.discordId,
+  username: users.username,
+  displayName: users.displayName,
+  nickname: users.nickname,
+  avatarHash: users.avatarHash,
+  isSimulated: users.isSimulated,
+};
+export type Member = {
+  userId: string;
+  discordId: string | null;
+  username: string;
+  displayName: string; // from Discord: server nickname, else global name (spec 4.10)
+  nickname: string | null; // own nickname, wins over displayName
+  avatarHash: string | null;
+  isSimulated: boolean;
+  participation: Participation;
+  isCohost: boolean;
+};
+
+// What the database holds about a room, as reduce sees it.
+type RoomData = {
+  id: string;
+  slug: string;
+  name: string;
+  isTest: boolean;
+  settings: Settings;
+  watchToken: string | null;
+  members: Map<string, Member>; // insertion order = join order
+  events: GameEvent[];
+  game: GameState;
+};
+
+export type Audience = "host" | "moderator" | "member" | "guest";
+
+export type Room = RoomData & {
+  sockets: Map<string, Set<Socket>>; // joined sockets per user; several tabs are several sockets
+  queue: Promise<unknown>;
+  tasks: number; // queued or running
+  version: number; // raised by every change a view shows
+  rendered: Map<Audience, { version: number; body: string }>;
+  urgent: boolean; // a change waits to be sent
+  timer: NodeJS.Timeout | null; // the latest send of a waiting change
+  flushBy: number;
+  dirtySince: number; // when the waiting batch started
+  evicted: boolean; // dropped from memory; its tasks refuse to run
+};
+
+// One open socket.
+type Conn = { userId: string; sessionId: string; expiresAt: number; alive: boolean; reason?: string; version: number };
+type Bucket = { tokens: number; at: number; strikes: number };
+
+type Db = NodePgDatabase;
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+const fail = (code: string, german: string) => new CommandError(code, german);
+const forbidden = () => fail("forbidden", "Dazu fehlt dir die Berechtigung.");
+class Evicted extends Error {}
+class RoomGone extends Error {}
+
+// Spec 4.6, 4.11: switching reactions off is a host tool during the game too; the rules are fixed at the start.
+export function checkSettingsChange(status: GameStatus, settings: Partial<Settings>) {
+  if (status !== "lobby" && Object.keys(settings).some((key) => key !== "reactions")) {
+    throw fail("not_in_lobby", "Während des Spiels lassen sich nur die Reaktionen umschalten.");
+  }
+}
+
+// The room as one audience may see it (spec 4.5, 4.8, 4.10), without the per-socket `viewer`.
+export function roomView(room: RoomData & Pick<Room, "sockets">, audience: Audience, config: Config): Omit<RoomView, "viewer"> {
+  const isHostMember = (m: Member) => m.discordId !== null && config.hostDiscordIds.includes(m.discordId);
+  const guest = audience === "guest";
+  const canModerate = audience === "host" || audience === "moderator";
+  const placed = new Set(room.game.giftOrder);
+  const members = [...room.members.values()]
+    .filter((m) => !guest || m.participation === "player" || placed.has(m.userId))
+    .map(
+      (m): MemberView => ({
+        userId: m.userId,
+        displayName: m.nickname ?? m.displayName,
+        ...(audience === "host" && { discordName: m.username }),
+        avatarUrl: !guest && m.avatarHash ? `/avatars/${m.userId}/${m.avatarHash}` : null,
+        participation: m.participation,
+        isHost: isHostMember(m),
+        isCohost: m.isCohost,
+        isSimulated: m.isSimulated,
+        connected: m.isSimulated || (room.sockets.get(m.userId)?.size ?? 0) > 0, // simulated players are run by the server
+      }),
+    );
+  return {
+    room: {
+      slug: guest ? "" : room.slug, // the room link is for server members only
+      name: room.name,
+      isTest: room.isTest,
+      status: room.game.status,
+      settings: room.settings,
+      watchLinkActive: room.watchToken !== null,
+      ...(canModerate && {
+        ...(room.watchToken && { watchUrl: new URL(`/z/${room.watchToken}`, config.baseUrl).href }),
+        guestCount: 0, // shortcut: guests (4.8) are not connected yet; count them when /ws/watch exists
+      }),
+    },
+    members,
+    game: { ...room.game, history: room.game.history.filter((e) => canModerate || eventVisibility[e.type] === "public") },
+  };
+}
+
+export function registerRooms(
+  app: FastifyInstance,
+  config: Config,
+  db: Db,
+  auth: {
+    requireUser: (request: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
+    onSessionEnd: (listener: (sessionId: string) => void) => void;
+  },
+  pingIntervalMs: number,
+) {
+  const isHostId = (discordId: string | null) => discordId !== null && config.hostDiscordIds.includes(discordId);
+  const audienceOf = (m: Member): Audience => (isHostId(m.discordId) ? "host" : m.isCohost ? "moderator" : "member");
+  const sameOrigin = async (request: FastifyRequest, reply: FastifyReply) => {
+    // CSRF for cookie-authenticated writes and WebSocket upgrades: browsers always send Origin there.
+    if (request.headers.origin !== config.baseUrl.origin) return reply.code(403).send({ error: "forbidden" });
+  };
+
+  const live = new Map<string, Room>(); // by slug; only rooms with sockets or a join on its way
+  const loading = new Map<string, Promise<Room | null>>();
+  const conns = new Map<Socket, Conn>();
+  const buckets = new Map<string, Bucket>(); // by room id and user id
+
+  app.decorate("live", {
+    roomIds: () => [...live.values()].map((room) => room.id),
+    userIds: () => [...new Set([...conns.values()].map((conn) => conn.userId))],
+  });
+
+  // ---------------------------------------------------------------------------------------------
+  // Registry
+
+  async function read(where: SQL): Promise<RoomData | null> {
+    const [row] = await db.select().from(rooms).where(where);
+    if (!row) return null;
+    const [memberRows, eventRows] = await Promise.all([
+      db
+        .select({ ...userColumns, participation: roomMembers.participation, isCohost: roomMembers.isCohost })
+        .from(roomMembers)
+        .innerJoin(users, eq(users.id, roomMembers.userId))
+        .where(eq(roomMembers.roomId, row.id))
+        .orderBy(asc(roomMembers.joinedAt), asc(users.id)),
+      db.select().from(gameEvents).where(eq(gameEvents.roomId, row.id)).orderBy(asc(gameEvents.seq)),
+    ]);
+    const events = eventRows.map(
+      (e) => ({ seq: e.seq, type: e.type, actorUserId: e.actorUserId, payload: e.payload, createdAt: e.createdAt.toISOString() }) as GameEvent,
+    );
+    return {
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      isTest: row.isTest,
+      settings: row.settings,
+      watchToken: row.watchToken,
+      members: new Map(memberRows.map((m) => [m.userId, m])),
+      events,
+      game: reduce(events, row.settings),
+    };
+  }
+
+  function getRoom(slug: string): Promise<Room | null> {
+    const room = live.get(slug);
+    if (room) return Promise.resolve(room);
+    let pending = loading.get(slug);
+    if (!pending) {
+      pending = read(eq(rooms.slug, slug))
+        .then((data) => {
+          if (!data) return null;
+          const loaded: Room = {
+            ...data,
+            sockets: new Map(),
+            queue: Promise.resolve(),
+            tasks: 0,
+            version: 0,
+            rendered: new Map(),
+            urgent: false,
+            timer: null,
+            flushBy: 0,
+            dirtySince: 0,
+            evicted: false,
+          };
+          live.set(slug, loaded);
+          return loaded;
+        })
+        .finally(() => loading.delete(slug));
+      loading.set(slug, pending);
+    }
+    return pending;
+  }
+
+  function closeSocket(socket: Socket, reason: CloseReason) {
+    const conn = conns.get(socket);
+    if (conn) conn.reason = reason;
+    const [code, text] = CLOSE[reason];
+    socket.close(code, text);
+  }
+
+  // Drops the room from memory; the next join reads it again. Its sockets reconnect, if any are left.
+  function dispose(room: Room, reason: CloseReason = "retry") {
+    if (room.evicted) return;
+    room.evicted = true;
+    if (live.get(room.slug) === room) live.delete(room.slug);
+    if (room.timer) clearTimeout(room.timer);
+    for (const sockets of room.sockets.values()) for (const socket of sockets) closeSocket(socket, reason);
+  }
+
+  // After an unexpected failure memory may differ from the database (e.g. a COMMIT whose reply was lost):
+  // read the room again instead of computing the next seq from stale memory forever.
+  async function recover(room: Room, cause: unknown) {
+    app.log.error({ err: cause, roomId: room.id }, "room change failed, reading the room again");
+    try {
+      const data = await read(eq(rooms.id, room.id));
+      if (!data) return dispose(room, "room gone");
+      if ([...room.sockets.keys()].some((userId) => !data.members.has(userId))) throw new Error("a connected member is missing");
+      Object.assign(room, data);
+      changed(room, true);
+    } catch (err) {
+      app.log.error({ err, roomId: room.id }, "reading the room again failed");
+      dispose(room, "reload failed");
+    }
+  }
+
+  function run<T>(room: Room, task: () => Promise<T>): Promise<T> {
+    room.tasks++;
+    const result = room.queue.then(async () => {
+      try {
+        if (room.evicted) throw new Evicted();
+        return await task();
+      } catch (err) {
+        if (err instanceof RoomGone) dispose(room, "room gone");
+        else if (!(err instanceof CommandError || err instanceof Evicted)) await recover(room, err);
+        throw err;
+      } finally {
+        room.tasks--;
+        if (!room.evicted && room.tasks === 0) {
+          if (room.sockets.size === 0) dispose(room);
+          else if (room.urgent) flush(room);
+        }
+      }
+    });
+    room.queue = result.catch(() => undefined);
+    return result;
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // State: rendered once per audience and version, shared by every socket of that audience.
+
+  const send = (socket: Socket, text: string) => socket.readyState === OPEN && socket.send(text);
+
+  function sendState(room: Room, socket: Socket, conn: Conn) {
+    const member = room.members.get(conn.userId)!;
+    const audience = audienceOf(member);
+    let rendered = room.rendered.get(audience);
+    if (rendered?.version !== room.version) {
+      rendered = { version: room.version, body: JSON.stringify(roomView(room, audience, config)).slice(1) };
+      room.rendered.set(audience, rendered);
+    }
+    const viewer: RoomView["viewer"] = { kind: "member", userId: member.userId, isHost: audience === "host", canModerate: audience !== "member" };
+    send(socket, `{"type":"state","state":{"viewer":${JSON.stringify(viewer)},${rendered.body}}`);
+    conn.version = room.version;
+  }
+
+  function flush(room: Room) {
+    if (room.timer) clearTimeout(room.timer);
+    room.timer = null;
+    room.urgent = false;
+    if (room.evicted) return;
+    for (const sockets of room.sockets.values()) {
+      for (const socket of sockets) {
+        const conn = conns.get(socket);
+        if (conn && conn.version !== room.version) sendState(room, socket, conn);
+      }
+    }
+  }
+
+  // urgent: sent as soon as the queue is idle, at most BUSY_DELAY_MS late. Else (presence) debounced:
+  // PRESENCE_DELAY_MS after the last join or leave, at most PRESENCE_MAX_WAIT_MS after the first.
+  function changed(room: Room, urgent: boolean) {
+    room.version++;
+    const now = Date.now();
+    if (!room.timer) room.dirtySince = now;
+    let at = urgent ? now + BUSY_DELAY_MS : Math.min(now + PRESENCE_DELAY_MS, room.dirtySince + PRESENCE_MAX_WAIT_MS);
+    if (room.timer && (urgent || room.urgent)) at = Math.min(at, room.flushBy);
+    room.urgent ||= urgent;
+    if (room.timer) clearTimeout(room.timer);
+    room.flushBy = at;
+    room.timer = setTimeout(() => flush(room), at - now);
+  }
+
+  // Runs inside the room queue. Rules that reject the new events throw before anything is written.
+  async function commit(room: Room, change: { events?: NewEvent[]; settings?: Settings; write?: (tx: Tx) => Promise<unknown>; apply?: () => void }) {
+    const settings = change.settings ?? room.settings;
+    const now = new Date();
+    const last = room.events.at(-1)?.seq ?? 0;
+    const added = (change.events ?? []).map((e, i) => ({ ...e, seq: last + i + 1, createdAt: now.toISOString() }) as GameEvent);
+    const events = [...room.events, ...added];
+    const game = reduce(events, settings);
+    await db.transaction(async (tx) => {
+      // First: locks the room row against the cleanup, and finds out whether the room still exists.
+      const [kept] = await tx.update(rooms).set({ lastActivityAt: now, status: game.status, settings }).where(eq(rooms.id, room.id)).returning({ id: rooms.id });
+      if (!kept) throw new RoomGone();
+      if (added.length > 0) {
+        await tx.insert(gameEvents).values(added.map((e) => ({ roomId: room.id, seq: e.seq, type: e.type, actorUserId: e.actorUserId, payload: e.payload, createdAt: now })));
+      }
+      await change.write?.(tx);
+    });
+    change.apply?.();
+    Object.assign(room, { events, game, settings });
+    changed(room, true);
+  }
+
+  // A changed nickname shows in every room in memory the user belongs to.
+  function refreshUser(userId: string, except?: Room) {
+    for (const room of live.values()) {
+      if (room === except || !room.members.has(userId)) continue;
+      run(room, async () => {
+        const [user] = await db.select(userColumns).from(users).where(eq(users.id, userId));
+        if (user) Object.assign(room.members.get(userId)!, user);
+        changed(room, true);
+      }).catch((err) => err instanceof Evicted || app.log.error({ err, userId }, "refreshing a member failed"));
+    }
+  }
+
+  // Token bucket per person and room (spec 8.3).
+  function take(roomId: string, userId: string) {
+    const key = `${roomId}:${userId}`;
+    const now = Date.now();
+    const bucket = buckets.get(key) ?? { tokens: MESSAGE_BURST, at: now, strikes: 0 };
+    buckets.set(key, bucket);
+    bucket.tokens = Math.min(MESSAGE_BURST, bucket.tokens + ((now - bucket.at) / 1000) * MESSAGES_PER_SECOND);
+    bucket.at = now;
+    if (bucket.tokens < 1) return { ok: false, strikes: ++bucket.strikes };
+    bucket.tokens -= 1;
+    bucket.strikes = 0;
+    return { ok: true, strikes: 0 };
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Join and leave (spec 4.2, 4.9)
+
+  async function join(room: Room, socket: Socket, conn: Conn) {
+    if (socket.readyState !== OPEN) return; // closed while waiting in the queue
+    const { userId } = conn;
+    if ((room.sockets.get(userId)?.size ?? 0) >= MAX_SOCKETS_PER_USER) return closeSocket(socket, "too many tabs");
+    const [[user], [kept]] = await Promise.all([
+      db.select(userColumns).from(users).where(eq(users.id, userId)),
+      db.update(rooms).set({ lastActivityAt: new Date() }).where(eq(rooms.id, room.id)).returning({ id: rooms.id }),
+    ]);
+    if (!kept) throw new RoomGone();
+    if (!user) throw new Error("user vanished");
+    const member = room.members.get(userId);
+    if (member) {
+      Object.assign(member, user); // name or avatar may have changed at the last login; the rest stays
+    } else {
+      // Spec 4.2: players in the lobby, spectators once a game has started.
+      const participation: Participation = room.game.status === "lobby" ? "player" : "spectator";
+      await db.insert(roomMembers).values({ roomId: room.id, userId, participation }).onConflictDoNothing();
+      room.members.set(userId, { ...user, participation, isCohost: false });
+    }
+    if (socket.readyState !== OPEN) return;
+    room.sockets.set(userId, (room.sockets.get(userId) ?? new Set()).add(socket));
+    changed(room, false); // the others learn about it batched
+    sendState(room, socket, conn); // the newcomer at once
+  }
+
+  async function leave(room: Room, userId: string, socket: Socket) {
+    const sockets = room.sockets.get(userId);
+    if (!sockets?.delete(socket)) return;
+    if (sockets.size === 0) {
+      room.sockets.delete(userId);
+      changed(room, false);
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Messages (spec 7)
+
+  async function handle(room: Room, actorId: string, message: ClientMessage) {
+    const actor = room.members.get(actorId)!;
+    const isHost = isHostId(actor.discordId);
+    const canModerate = isHost || actor.isCohost;
+    const target = (userId: string) => {
+      const member = room.members.get(userId);
+      if (!member) throw fail("unknown_member", "Diese Person ist nicht in diesem Raum.");
+      return member;
+    };
+    const lobbyOnly = () => {
+      if (room.game.status !== "lobby") throw fail("not_in_lobby", "Das geht nur in der Lobby.");
+    };
+    const memberRow = (userId: string) => and(eq(roomMembers.roomId, room.id), eq(roomMembers.userId, userId));
+
+    switch (message.type) {
+      case "set_participation": {
+        if (message.userId !== actorId && !canModerate) throw forbidden();
+        lobbyOnly();
+        const member = target(message.userId);
+        const { participation } = message;
+        if (member.participation === participation) return;
+        return commit(room, {
+          events: [{ type: "participation_changed", actorUserId: actorId, payload: { userId: member.userId, participation } }],
+          write: (tx) => tx.update(roomMembers).set({ participation }).where(memberRow(member.userId)),
+          apply: () => (member.participation = participation),
+        });
+      }
+      case "update_settings": {
+        if (!canModerate) throw forbidden();
+        checkSettingsChange(room.game.status, message.settings);
+        return commit(room, { settings: { ...room.settings, ...message.settings } });
+      }
+      case "set_cohost": {
+        if (!isHost) throw forbidden(); // co-hosts cannot appoint co-hosts (spec 4.2)
+        const member = target(message.userId);
+        if (member.isSimulated) throw fail("invalid_target", "Simulierte Mitspieler können nicht Co-Host werden.");
+        if (isHostId(member.discordId)) throw fail("invalid_target", "Hosts sind in jedem Raum Host und lassen sich nicht ändern.");
+        const { isCohost } = message;
+        if (member.isCohost === isCohost) return;
+        return commit(room, {
+          events: [{ type: "cohost_changed", actorUserId: actorId, payload: { userId: member.userId, isCohost } }],
+          write: (tx) => tx.update(roomMembers).set({ isCohost }).where(memberRow(member.userId)),
+          apply: () => (member.isCohost = isCohost),
+        });
+      }
+      case "reset_nickname": {
+        if (!canModerate) throw forbidden();
+        const member = target(message.userId);
+        if (member.nickname === null) return;
+        await commit(room, {
+          events: [{ type: "nickname_reset", actorUserId: actorId, payload: { userId: member.userId } }],
+          write: (tx) => tx.update(users).set({ nickname: null }).where(eq(users.id, member.userId)),
+          apply: () => (member.nickname = null),
+        });
+        return refreshUser(member.userId, room);
+      }
+      default: {
+        const ctx: GameCommandContext = {
+          actor: { userId: actorId, isHost, canModerate },
+          room,
+          append: (events) => commit(room, { events }),
+          broadcast: (out) => {
+            const text = JSON.stringify(out);
+            for (const sockets of room.sockets.values()) for (const socket of sockets) send(socket, text);
+          },
+        };
+        return handleGameCommand(ctx, message);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Every ping interval (spec 8.1): cut off sockets that did not answer the last ping or whose session
+  // ran out, forget full rate-limit buckets and rooms nobody joined after all.
+
+  const tick = setInterval(() => {
+    const now = Date.now();
+    for (const [socket, conn] of conns) {
+      if (now >= conn.expiresAt) {
+        closeSocket(socket, "session expired");
+      } else if (!conn.alive) {
+        conn.reason = "ping timeout";
+        socket.terminate();
+      } else {
+        conn.alive = false;
+        socket.ping();
+      }
+    }
+    for (const [key, bucket] of buckets) {
+      if (bucket.tokens + ((now - bucket.at) / 1000) * MESSAGES_PER_SECOND >= MESSAGE_BURST) buckets.delete(key);
+    }
+    for (const room of live.values()) if (room.tasks === 0 && room.sockets.size === 0) dispose(room);
+  }, pingIntervalMs);
+  tick.unref();
+  app.addHook("onClose", async () => {
+    clearInterval(tick);
+    for (const room of live.values()) if (room.timer) clearTimeout(room.timer);
+  });
+
+  // Sockets do not outlive their session.
+  auth.onSessionEnd((sessionId) => {
+    for (const [socket, conn] of conns) if (conn.sessionId === sessionId) closeSocket(socket, "logged out");
+  });
+
+  // ---------------------------------------------------------------------------------------------
+  // Routes
+
+  const roomOf = new WeakMap<FastifyRequest, Room>();
+  const findRoom = async (request: FastifyRequest<{ Params: { slug: string } }>, reply: FastifyReply) => {
+    const room = await getRoom(request.params.slug);
+    if (!room) return reply.code(404).send({ error: "not_found" });
+    roomOf.set(request, room);
+  };
+
+  app.get<{ Params: { slug: string } }>(
+    "/ws/rooms/:slug",
+    { websocket: true, preHandler: [sameOrigin, auth.requireUser, findRoom] },
+    (socket: Socket, request) => {
+      const room = roomOf.get(request)!;
+      const userId = request.user!.id;
+      const session = request.session!;
+      const conn: Conn = { userId, sessionId: session.id, expiresAt: session.expiresAt.getTime(), alive: true, version: -1 };
+      conns.set(socket, conn);
+      const log = request.log;
+      log.info({ userId, roomId: room.id }, "ws connected");
+
+      const reply = (code: string, message: string) => send(socket, JSON.stringify({ type: "error", code, message }));
+      const failed = (err: unknown) => {
+        if (err instanceof Evicted) return closeSocket(socket, "retry");
+        if (err instanceof RoomGone) return closeSocket(socket, "room gone");
+        if (err instanceof CommandError) return reply(err.code, err.german);
+        log.error({ err, userId, roomId: room.id }, "ws message failed");
+        reply("internal", "Da ist etwas schiefgelaufen. Bitte versuche es noch einmal.");
+      };
+
+      socket.on("pong", () => (conn.alive = true));
+      // Oversized messages never get here: ws closes the connection with 1009 (maxPayload).
+      socket.on("message", (data, isBinary) => {
+        const budget = take(room.id, userId);
+        if (!budget.ok) {
+          if (budget.strikes < MAX_STRIKES) return reply("rate_limited", "Zu viele Nachrichten. Bitte warte einen Moment.");
+          return closeSocket(socket, "rate limit");
+        }
+        let json: unknown;
+        try {
+          json = isBinary ? undefined : JSON.parse(data.toString());
+        } catch {
+          json = undefined;
+        }
+        const parsed = clientMessageSchema.safeParse(json);
+        if (!parsed.success) return reply("invalid_message", "Diese Nachricht versteht der Server nicht.");
+        run(room, async () => {
+          if (room.sockets.get(userId)?.has(socket)) await handle(room, userId, parsed.data); // not if the join was refused
+        }).catch(failed);
+      });
+
+      socket.on("close", (code) => {
+        conns.delete(socket);
+        log.info({ userId, roomId: room.id, code, reason: conn.reason ?? "client" }, "ws closed");
+        run(room, () => leave(room, userId, socket)).catch((err) => err instanceof Evicted || failed(err));
+      });
+
+      if (!take(room.id, userId).ok) return closeSocket(socket, "rate limit"); // reconnect loops cost too
+      run(room, () => join(room, socket, conn)).catch((err) => {
+        if (err instanceof Evicted || err instanceof RoomGone) return failed(err);
+        log.error({ err, userId, roomId: room.id }, "ws join failed");
+        closeSocket(socket, "join failed");
+      });
+    },
+  );
+
+  app.post(
+    "/api/rooms",
+    { config: { rateLimit: { max: CREATE_ROOM_LIMIT_PER_MINUTE, timeWindow: "1 minute" } }, preHandler: [sameOrigin, auth.requireUser] },
+    async (request, reply) => {
+      if (!isHostId(request.user!.discordId)) return reply.code(403).send({ error: "forbidden" });
+      const body = createRoomRequestSchema.safeParse(request.body);
+      if (!body.success) return reply.code(400).send({ error: "invalid_request" });
+      const slug = randomBytes(16).toString("base64url"); // 128 bit, not guessable (spec 6)
+      await db.transaction(async (tx) => {
+        const [room] = await tx
+          .insert(rooms)
+          .values({ slug, name: body.data.name, isTest: body.data.isTest, settings: defaultSettings, createdBy: request.user!.id })
+          .returning({ id: rooms.id });
+        // The creator watches by default (spec 4.2).
+        await tx.insert(roomMembers).values({ roomId: room!.id, userId: request.user!.id, participation: "spectator" });
+      });
+      const response: CreateRoomResponse = { slug };
+      return reply.code(201).send(response);
+    },
+  );
+
+  app.get<{ Params: { slug: string } }>("/api/rooms/:slug", { preHandler: auth.requireUser }, async (request, reply) => {
+    const [row] = await db
+      .select({ slug: rooms.slug, name: rooms.name, isTest: rooms.isTest, status: rooms.status })
+      .from(rooms)
+      .where(eq(rooms.slug, request.params.slug));
+    if (!row) return reply.code(404).send({ error: "not_found" });
+    const summary: RoomSummary = row;
+    return summary;
+  });
+
+  // Each change reaches every room the user is in, so it is limited like room creation.
+  app.patch(
+    "/api/me",
+    { config: { rateLimit: { max: NICKNAME_LIMIT_PER_MINUTE, timeWindow: "1 minute" } }, preHandler: [sameOrigin, auth.requireUser] },
+    async (request, reply) => {
+      const body = patchMeRequestSchema.safeParse(request.body);
+      if (!body.success) return reply.code(400).send({ error: "invalid_nickname" });
+      await db.update(users).set({ nickname: body.data.nickname }).where(eq(users.id, request.user!.id));
+      refreshUser(request.user!.id);
+      return reply.code(204).send();
+    },
+  );
+}

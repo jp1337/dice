@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 import pg from "pg";
-import { buildApp } from "../src/server/app.js";
+import { type Deps, buildApp } from "../src/server/app.js";
 import { parseConfig } from "../src/server/config.js";
 
 // Fictitious values only: the repository is public.
@@ -32,14 +32,14 @@ export function makeWebRoot() {
   return root;
 }
 
-export async function makeApp(env: Record<string, string> = {}, databaseUrl = baseEnv.DATABASE_URL) {
+export async function makeApp(env: Record<string, string> = {}, databaseUrl = baseEnv.DATABASE_URL, deps: Partial<Deps> = {}) {
   const config = parseConfig({ ...baseEnv, ...env });
   const pool = new pg.Pool({ connectionString: databaseUrl, connectionTimeoutMillis: 2000 });
   const logs: Record<string, unknown>[] = [];
   const logStream = new PassThrough();
   logStream.on("data", (line: Buffer) => logs.push(JSON.parse(line.toString())));
   // Log level "info" so the request log can be checked.
-  const app = await buildApp({ ...config, nodeEnv: "development" }, { pool, webRoot: makeWebRoot(), logStream });
+  const app = await buildApp({ ...config, nodeEnv: "development" }, { pool, webRoot: makeWebRoot(), logStream, ...deps });
   app.addHook("onClose", () => pool.end());
   return { app, logs };
 }
