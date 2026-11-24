@@ -6,6 +6,11 @@ const optional = <T extends z.ZodType>(schema: T) =>
   z.preprocess((value) => (typeof value === "string" && value.trim() === "" ? undefined : value), schema.optional());
 
 const snowflake = z.string().regex(/^\d{17,20}$/, "must be a Discord ID (17 to 20 digits)");
+const flag = (fallback: boolean) =>
+  optional(z.enum(["true", "false"]).transform((value) => value === "true")).transform((value) => value ?? fallback);
+
+const DISCORD_API = "https://discord.com/api";
+const DISCORD_CDN = "https://cdn.discordapp.com"; // the only avatar host allowed outside tests (spec 5.1)
 const list = <T extends z.ZodType<string, string>>(item: T) =>
   z
     .string()
@@ -24,11 +29,14 @@ const envSchema = z
     PORT: z.coerce.number().int().min(1).max(65535).default(3000),
     BASE_URL: z.url({ protocol: /^https?$/ }),
     DATABASE_URL: z.string().min(1),
-    // Used from step 2 (Discord login) on.
-    SESSION_SECRET: optional(z.string().min(32)),
-    DISCORD_CLIENT_ID: optional(z.string()),
-    DISCORD_CLIENT_SECRET: optional(z.string()),
+    SESSION_SECRET: z.string().min(32),
+    DISCORD_CLIENT_ID: snowflake,
+    DISCORD_CLIENT_SECRET: z.string().min(1),
     DISCORD_GUILD_ID: snowflake,
+    // Only for tests, which point them at a local fake Discord. Refused in any other NODE_ENV below,
+    // so a stray value can never send the client secret or avatar downloads to another host.
+    DISCORD_API_BASE: optional(z.url()).transform((value) => value ?? DISCORD_API),
+    DISCORD_CDN_BASE: optional(z.url()).transform((value) => value ?? DISCORD_CDN),
     HOST_DISCORD_IDS: list(snowflake),
     TRUSTED_PROXIES: list(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()])),
     LEGAL_NAME: optional(z.string().trim()),
@@ -42,8 +50,15 @@ const envSchema = z
     LEGAL_EMAIL: optional(z.string().trim().pipe(z.email())),
     LEGAL_NOTE: optional(z.string().trim()),
     RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+    // Only switch sections of the privacy notice on and off (spec 9.2).
+    PRIVACY_CLOUDFLARE: flag(false),
+    PRIVACY_CROWDSEC: flag(true),
   })
   .superRefine((env, ctx) => {
+    if (env.NODE_ENV !== "test") {
+      if (env.DISCORD_API_BASE !== DISCORD_API) ctx.addIssue({ code: "custom", path: ["DISCORD_API_BASE"], message: "may only be set when NODE_ENV=test" });
+      if (env.DISCORD_CDN_BASE !== DISCORD_CDN) ctx.addIssue({ code: "custom", path: ["DISCORD_CDN_BASE"], message: "may only be set when NODE_ENV=test" });
+    }
     if (env.NODE_ENV !== "production") return;
     for (const key of ["LEGAL_NAME", "LEGAL_ADDRESS", "LEGAL_EMAIL"] as const) {
       if (!env[key]) ctx.addIssue({ code: "custom", path: [key], message: "is required in production" });
@@ -77,10 +92,13 @@ export function parseConfig(env: Record<string, string | undefined>) {
     discordClientId: e.DISCORD_CLIENT_ID,
     discordClientSecret: e.DISCORD_CLIENT_SECRET,
     discordGuildId: e.DISCORD_GUILD_ID,
+    discordApiBase: e.DISCORD_API_BASE.replace(/\/+$/, ""),
+    discordCdnBase: e.DISCORD_CDN_BASE.replace(/\/+$/, ""),
     hostDiscordIds: e.HOST_DISCORD_IDS,
     trustedProxies: e.TRUSTED_PROXIES,
     legal,
     retentionDays: e.RETENTION_DAYS,
+    privacyServices: { cloudflare: e.PRIVACY_CLOUDFLARE, crowdsec: e.PRIVACY_CROWDSEC },
   };
 }
 

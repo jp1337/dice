@@ -43,12 +43,90 @@ export function impressumHtml(legal: Legal | null) {
   return page("Impressum", `<p>Angaben gemäß § 5 DDG</p>\n${contact(legal)}${note}`);
 }
 
-// shortcut: placeholder until the full privacy notice is written in step 2 (spec 9.2), before the first real login.
-export function datenschutzHtml(legal: Legal | null) {
+export const PRIVACY_UPDATED = "24. November 2026";
+
+export type PrivacyServices = { cloudflare: boolean; crowdsec: boolean; retentionDays?: number };
+
+// Vendor facts checked against (2026-11-24):
+// CrowdSec: https://docs.crowdsec.net/docs/next/central_api/intro (signal meta-data: scenario, timestamp, machine ID, offending IP)
+// Cloudflare: https://www.cloudflare.com/trust-hub/gdpr/ (processor for end-user log data, mainly IP addresses, US and EU data centres)
+function protection(services: PrivacyServices) {
+  const crowdsec = services.crowdsec
+    ? `
+<p>Auf dem Server läuft CrowdSec, ein lokaler Schutz gegen Angriffe. CrowdSec wertet die Zugriffsprotokolle aus und sperrt auffällige IP-Adressen. Erkennt es einen Angriff, meldet es die IP-Adresse, die Art des Angriffs und den Zeitpunkt an das CrowdSec-Netzwerk (CrowdSec SAS, Frankreich). Die Protokolle selbst werden nicht übertragen.</p>`
+    : "";
+  const cloudflare = services.cloudflare
+    ? `
+<p>Vor dem Server liegt Cloudflare (Cloudflare, Inc., USA) als Reverse Proxy und Content Delivery Network. Alle Anfragen und Antworten laufen über das Netz von Cloudflare. Cloudflare verarbeitet dabei die IP-Adresse und die Daten der Anfrage, auch in Rechenzentren in den USA.</p>`
+    : "";
+  return `<h2>Hosting und Schutzdienste</h2>
+<p>Die App läuft auf einem Server von Hetzner (Hetzner Online GmbH) in Deutschland.</p>${crowdsec}${cloudflare}`;
+}
+
+export function datenschutzHtml(legal: Legal | null, services: PrivacyServices = { cloudflare: false, crowdsec: true }) {
+  const days = services.retentionDays ?? 90;
+  const mail = legal ? `eine E-Mail an <a href="mailto:${escapeHtml(legal.email)}">${escapeHtml(legal.email)}</a>` : "eine Nachricht an den Verantwortlichen";
   return page(
     "Datenschutzhinweis",
     `<h2>Verantwortlich</h2>
 ${legal ? contact(legal) : notConfigured}
-<p>Der vollständige Datenschutzhinweis folgt, bevor die Anmeldung über Discord freigeschaltet wird.</p>`,
+
+<h2>Welche Daten verarbeitet werden</h2>
+<ul>
+<li>Discord-ID, Discord-Benutzername und Anzeigename (Server-Nickname, sonst globaler Anzeigename), dazu der Zeitpunkt des letzten Logins</li>
+<li>selbst gewählter Spitzname, falls gesetzt</li>
+<li>Avatar-Bild (128 Pixel)</li>
+<li>Raumteilnahme: Rolle, Würfler oder Zuschauer, Platz in der Zugreihenfolge</li>
+<li>Würfe und Spielereignisse im Verlauf des Raums, auch Eingriffe von Hosts</li>
+<li>Sitzungs-Cookie für die Anmeldung</li>
+<li>IP-Adresse in den Protokollen des Servers, zusammen mit Zeit, aufgerufener Adresse, Statuscode und Nutzer-ID</li>
+</ul>
+<p>Eine E-Mail-Adresse wird nicht gespeichert. Die Zugangsschlüssel von Discord werden nach der Anmeldung verworfen.</p>
+
+<h2>Zweck</h2>
+<p>Die Daten dienen der Durchführung des Würfelspiels und dem Schutz vor Missbrauch. Die IP-Adresse wird nur für die Protokolle und für die Begrenzung zu vieler Anfragen verwendet.</p>
+
+<h2>Rechtsgrundlage</h2>
+<p><strong>Vom Betreiber zu ergänzen: Rechtsgrundlage für die Spieldaten, die Protokolle und die Schutzdienste.</strong></p>
+
+<h2>Anmeldung über Discord</h2>
+<p>Die Anmeldung läuft über Discord (Discord Inc., USA). Dafür wird der Browser auf die Webseite von Discord weitergeleitet. Dort gilt die <a href="https://discord.com/privacy">Datenschutzerklärung von Discord</a>.</p>
+<p>Nach der Anmeldung übermittelt Discord der App die Discord-ID, den Benutzernamen, den Anzeigenamen, den Avatar und die Mitgliedschaft auf dem Discord-Server der Veranstaltung. Zugang haben nur Mitglieder dieses Servers. Abgewiesene Anmeldungen werden im Protokoll vermerkt.</p>
+<p>Avatar-Bilder holt der Server selbst bei Discord ab und liefert sie aus. Der Browser nimmt nur während der Anmeldung Kontakt zu Discord auf.</p>
+
+<h2>Wer was sieht</h2>
+<p>Angemeldete Personen in einem Raum sehen von den anderen Teilnehmern Anzeigename oder Spitzname, Avatar, Rolle, Verbindungsstatus und Würfe. Hosts sehen zusätzlich den Discord-Namen und können Spitznamen zurücksetzen.</p>
+<p>Ein Host kann für einen Raum einen Zuschauer-Link einschalten. Dann sehen auch Personen ohne Anmeldung den Spielverlauf mit den Anzeigenamen der Würfler, aber ohne Avatare, Discord-IDs und Benutzernamen. Solange der Link aktiv ist, zeigt der Raum einen Hinweis.</p>
+<p>Emoji-Reaktionen erscheinen ohne Namen bei allen im Raum und werden nicht gespeichert.</p>
+
+<h2>Cookies und lokaler Speicher</h2>
+<p>Die App setzt genau ein technisch notwendiges Cookie: das Sitzungs-Cookie. Es hält die Anmeldung aufrecht und läuft nach 7 Tagen ab. Nur während der Anmeldung bei Discord kommt ein kurzlebiges Cookie hinzu, das den Anmeldevorgang absichert.</p>
+<p>Im lokalen Speicher des Browsers (localStorage) merkt sich die App nur Einstellungen: Ton, helles oder dunkles Design und ausgeblendete Reaktionen. Diese Werte bleiben im Browser und werden nicht an den Server gesendet.</p>
+<p>Es gibt kein Tracking, keine Analyse und keine Werbung.</p>
+
+${protection(services)}
+
+<h2>Speicherdauer</h2>
+<p>Die App löscht einmal täglich automatisch:</p>
+<ul>
+<li>Räume samt Teilnahmen, Würfen und Ereignissen ${days} Tage nach der letzten Aktivität im Raum</li>
+<li>Nutzer samt Avatar und Spitzname, wenn sie in keinem Raum mehr Mitglied sind und ihr letzter Login mehr als ${days} Tage zurückliegt</li>
+<li>abgelaufene Sitzungen</li>
+</ul>
+<p>Die Protokolle des Servers liegen außerhalb der App. Ihre Speicherdauer begrenzt der Betreiber auf dem Server.</p>
+
+<h2>Rechte der Betroffenen</h2>
+<p>Nach der Datenschutz-Grundverordnung (DSGVO) besteht das Recht auf</p>
+<ul>
+<li>Auskunft (Art. 15 DSGVO)</li>
+<li>Berichtigung (Art. 16 DSGVO)</li>
+<li>Löschung (Art. 17 DSGVO)</li>
+<li>Einschränkung der Verarbeitung (Art. 18 DSGVO)</li>
+<li>Datenübertragbarkeit (Art. 20 DSGVO)</li>
+<li>Widerspruch (Art. 21 DSGVO)</li>
+</ul>
+<p>Dafür genügt ${mail}. Außerdem besteht das Recht auf Beschwerde bei einer Datenschutz-Aufsichtsbehörde (Art. 77 DSGVO).</p>
+
+<p>Stand: ${PRIVACY_UPDATED}</p>`,
   );
 }
