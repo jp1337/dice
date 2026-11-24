@@ -22,7 +22,9 @@ their files. Change the script, run it, commit script and output together.
 
 `index.html` holds `__BASE_URL__` in `og:image`. `app.ts` reads the built file once and replaces it with
 the origin of `BASE_URL`; every path in `SPA_ROUTES` gets that same HTML, and `/index.html` itself is
-not served. A new client-side page needs its path in `SPA_ROUTES`. `test/preview.test.ts` checks it.
+not served. Room paths only match the slug alphabet (base64url, 16 to 64), anything else under `/r/` is a 404.
+A new client-side page needs its path in `SPA_ROUTES`. `test/preview.test.ts` checks it. `BASE_URL` is
+validated as a plain origin (`config.ts`) and HTML-escaped on top.
 
 ## CSP rules for the web code
 
@@ -32,14 +34,21 @@ The CSP has no `style-src`, so `default-src 'self'` applies to styles: no `style
 - Variation (avatar colours, emoji lanes) comes from a fixed set of classes (`tone-0…7`, `lane-0…5`).
 - Theme before first paint: `theme-init.js` is a classic script in `<head>`. It blocks the parser, so it
   sets `data-theme` before `<body>` renders; from our origin, the CSP allows it. `vite-ignore` keeps
-  Vite from bundling it. Colours use `light-dark()`, switched by `color-scheme` per `data-theme`.
+  Vite from bundling it. Dark colours stand twice in `style.css` (system preference, toggle), not as
+  `light-dark()`, which iOS before 17.5 drops; a test keeps both blocks equal.
+
+## No zod in the browser
+
+The `no-zod-in-browser` plugin in `vite.config.ts` fails the client build when any import reaches zod,
+directly or through `contracts.ts`. Values for the browser live in `src/shared/constants.ts`; from
+`contracts.ts` the web code takes types only, with `import type`. `test/bundle.test.ts` builds both cases.
 
 ## Building blocks
 
 | Import | Use |
 | --- | --- |
 | `Dice` `{values, rollKey, count?, onSettled?}` | New `rollKey` starts the 1.3 s tumble; `onSettled` when the result shows (six sound, banner) |
-| `SixBanner` `{template, name, platz, children?}` | Full screen, the page behind is `inert` while it is open; `children` = the host's "Weiter" button |
+| `SixBanner` `{template, name, platz, children?}` | Native modal `<dialog>`: the browser keeps the page behind inert; Escape does nothing; `children` = the host's "Weiter" button |
 | `ReactionBar` `{onReact, disabled?}` | Client cooldown 2 s, mirrors the server |
 | `useFloatingReactions()` → `{items, add}`, `FloatingReactions` `{items, hidden?}` | `add(msg.emojis)`; place in a `.reaction-stage` element |
 | `Avatar` `{userId, name, avatarUrl, size?}` | Initials on a colour from the user id when there is no image |

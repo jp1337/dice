@@ -12,7 +12,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import type { Pool } from "pg";
 import { registerAuth } from "./auth.js";
 import type { Config } from "./config.js";
-import { datenschutzHtml, impressumHtml } from "./legal.js";
+import { datenschutzHtml, escapeHtml, impressumHtml } from "./legal.js";
 import { robotsTxt } from "./robots.js";
 
 export const HEALTHZ_LIMIT_PER_MINUTE = 120;
@@ -25,7 +25,8 @@ export type Deps = {
 
 // Paths that answer with the SPA's index.html. Every one gets the same HTML, so the link preview
 // (spec 10.2) never depends on the room.
-export const SPA_ROUTES = ["/", "/r/:slug"];
+// Room slugs are base64url, 16 to 64 characters; anything else under /r/ is a 404.
+export const SPA_ROUTES = ["/", "/r/:slug(^[A-Za-z0-9_-]{16,64}$)"];
 
 const ROBOTS = "noindex, nofollow, noarchive, nosnippet, noimageindex";
 const HTML = "text/html; charset=utf-8";
@@ -170,11 +171,11 @@ export async function buildApp(config: Config, deps: Deps) {
   app.get("/datenschutz", (_request, reply) => reply.type(HTML).send(datenschutzHtml(config.legal, { ...config.privacyServices, retentionDays: config.retentionDays })));
 
   // The built index.html is a template: Open Graph needs absolute URLs, so __BASE_URL__ is filled in
-  // here, once. An origin cannot contain quotes or angle brackets, so it is safe inside an attribute.
+  // here, once. config.ts already allows only a plain origin; escaping is the second line of defence.
   // Without a build (server-only development) the SPA routes answer 404.
   let spaHtml: string | null = null;
   try {
-    spaHtml = readFileSync(path.join(deps.webRoot, "index.html"), "utf8").replaceAll("__BASE_URL__", config.baseUrl.origin);
+    spaHtml = readFileSync(path.join(deps.webRoot, "index.html"), "utf8").replaceAll("__BASE_URL__", escapeHtml(config.baseUrl.origin));
   } catch (err) {
     app.log.warn({ err }, "no index.html in the web root, the app pages are unavailable");
   }

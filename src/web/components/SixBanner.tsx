@@ -1,7 +1,9 @@
 // Full-screen banner on a six (spec 10), for everyone. The text comes from the host's template (R6) and
 // is rendered as text, never as HTML. Hosts get their "Weiter" button through children.
-import { type ReactNode, useEffect, useId, useRef } from "react";
-import { fillTemplate, inertOutside } from "../lib/ui.js";
+// A native modal <dialog>: the browser makes the whole page behind it inert, including elements mounted
+// while it is open. The heading names the dialog, so screen readers announce the result on open.
+import { type ReactNode, useId, useLayoutEffect, useRef } from "react";
+import { fillTemplate } from "../lib/ui.js";
 import { DieFace } from "./Dice.js";
 import "./SixBanner.css";
 
@@ -15,25 +17,37 @@ type Props = {
 const FOCUSABLE = "button:not([disabled]), a[href], input:not([disabled]), select, textarea, [tabindex='0']";
 
 export function SixBanner({ template, name, platz, children }: Props) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDialogElement>(null);
+  const unmounting = useRef(false);
   const titleId = useId();
 
-  // The page behind becomes inert, so neither Tab, pointer nor screen reader reaches it. Focus moves
-  // into the banner (the host's button, otherwise the text) and back where it was after.
-  useEffect(() => {
+  // Layout effect: open before the first paint, and close (which hands focus back) before React
+  // removes the element.
+  useLayoutEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return;
+    unmounting.current = false;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const root = ref.current;
-    if (!root) return;
-    const restore = inertOutside(root, document.body);
-    (root.querySelector<HTMLElement>(FOCUSABLE) ?? root.querySelector<HTMLElement>("h2"))?.focus();
+    dialog.showModal();
+    (dialog.querySelector<HTMLElement>(FOCUSABLE) ?? dialog.querySelector<HTMLElement>("h2"))?.focus();
     return () => {
-      restore(); // first: an inert element cannot take focus
+      unmounting.current = true;
+      dialog.close();
       previous?.focus();
     };
   }, []);
 
   return (
-    <div ref={ref} className="six-banner" role="alertdialog" aria-modal="true" aria-labelledby={titleId}>
+    <dialog
+      ref={ref}
+      className="six-banner"
+      role="alertdialog"
+      aria-labelledby={titleId}
+      // Only the host's "Weiter" ends the pause: Escape does nothing. Browsers let a repeated Escape
+      // close it anyway (close watcher rules), so it reopens while the banner is still meant to show.
+      onCancel={(event) => event.preventDefault()}
+      onClose={() => !unmounting.current && ref.current?.showModal()}
+    >
       <div className="six-ribbon">
         <DieFace value={6} className="six-die" />
       </div>
@@ -41,6 +55,6 @@ export function SixBanner({ template, name, platz, children }: Props) {
         {fillTemplate(template, { name, platz })}
       </h2>
       {children && <div className="six-actions">{children}</div>}
-    </div>
+    </dialog>
   );
 }

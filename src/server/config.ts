@@ -9,6 +9,16 @@ const snowflake = z.string().regex(/^\d{17,20}$/, "must be a Discord ID (17 to 2
 const flag = (fallback: boolean) =>
   optional(z.enum(["true", "false"]).transform((value) => value === "true")).transform((value) => value ?? fallback);
 
+// BASE_URL is written into HTML (og:image) and the CSP, so it must be a plain origin. The URL parser
+// lets quotes, "&" and ";" through in host names; only a-z, digits, "." and "-" are accepted here.
+function baseUrlProblem(url: URL, nodeEnv: string) {
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && nodeEnv !== "production")) return "must use https";
+  if (url.username || url.password) return "must not contain credentials";
+  if (url.pathname !== "/" || url.search || url.hash) return "must be an origin only: no path, query or fragment";
+  if (!/^[a-z0-9.-]+$/.test(url.hostname)) return "host may only contain a-z, 0-9, '.' and '-'";
+  return null;
+}
+
 const DISCORD_API = "https://discord.com/api";
 const DISCORD_CDN = "https://cdn.discordapp.com"; // the only avatar host allowed outside tests (spec 5.1)
 const list = <T extends z.ZodType<string, string>>(item: T) =>
@@ -59,6 +69,8 @@ const envSchema = z
       if (env.DISCORD_API_BASE !== DISCORD_API) ctx.addIssue({ code: "custom", path: ["DISCORD_API_BASE"], message: "may only be set when NODE_ENV=test" });
       if (env.DISCORD_CDN_BASE !== DISCORD_CDN) ctx.addIssue({ code: "custom", path: ["DISCORD_CDN_BASE"], message: "may only be set when NODE_ENV=test" });
     }
+    const problem = URL.canParse(env.BASE_URL) && baseUrlProblem(new URL(env.BASE_URL), env.NODE_ENV);
+    if (problem) ctx.addIssue({ code: "custom", path: ["BASE_URL"], message: problem });
     if (env.NODE_ENV !== "production") return;
     for (const key of ["LEGAL_NAME", "LEGAL_ADDRESS", "LEGAL_EMAIL"] as const) {
       if (!env[key]) ctx.addIssue({ code: "custom", path: [key], message: "is required in production" });

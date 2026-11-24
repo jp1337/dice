@@ -3,7 +3,7 @@ import type { Legal } from "./config.js";
 
 export const REPO_URL = "https://github.com/jp1337/dice";
 
-const escapeHtml = (text: string) =>
+export const escapeHtml = (text: string) =>
   text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 const notConfigured = "<p><strong>Angaben nicht konfiguriert.</strong></p>";

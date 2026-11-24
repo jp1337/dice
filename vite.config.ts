@@ -7,7 +7,21 @@ if (process.env.VITEST && !process.env.TEST_DATABASE_URL) {
 
 export default defineConfig({
   root: "src/web",
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      // zod belongs to the server: values the browser needs live in src/shared/constants.ts, and the
+      // web code takes only types from contracts.ts. Fails the build on any path that reaches zod.
+      name: "no-zod-in-browser",
+      apply: "build",
+      enforce: "pre",
+      resolveId(source, importer) {
+        if (source === "zod" || source.startsWith("zod/")) {
+          this.error(`zod must not reach the browser bundle (imported by ${importer}); import values from src/shared/constants.ts`);
+        }
+      },
+    },
+  ],
   build: { outDir: "../../dist/web", emptyOutDir: true },
   test: { root: ".", include: ["test/**/*.test.ts"] },
 });

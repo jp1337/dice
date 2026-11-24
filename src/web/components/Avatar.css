@@ -13,8 +13,8 @@
 
 /* Same lightness for every hue, so each tone keeps about 7:1 text contrast in either theme. */
 .avatar-initials {
-  background: light-dark(oklch(88% 0.06 var(--hue)), oklch(40% 0.09 var(--hue)));
-  color: light-dark(oklch(32% 0.09 var(--hue)), oklch(95% 0.03 var(--hue)));
+  background: oklch(var(--avatar-bg) var(--hue));
+  color: oklch(var(--avatar-fg) var(--hue));
   font-weight: 700;
   user-select: none;
 }

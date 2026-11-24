@@ -72,20 +72,3 @@ export function avatarTone(userId: string) {
   for (let i = 0; i < userId.length; i++) hash = Math.imul(hash ^ userId.charCodeAt(i), 0x01000193);
   return (hash >>> 0) % AVATAR_TONES;
 }
-
-type Inertable = { parentElement: Inertable | null; children: Iterable<unknown> };
-// Makes everything outside element inert (no focus, no pointer, hidden from screen readers): the
-// siblings of element and of each ancestor below stop (document.body). Returns the undo, which
-// leaves alone what was inert before.
-export function inertOutside(element: Inertable, stop: Inertable) {
-  const changed: { inert: boolean }[] = [];
-  for (let node = element; node !== stop && node.parentElement; node = node.parentElement) {
-    for (const child of node.parentElement.children) {
-      const sibling = child as { inert: boolean };
-      if (child === node || sibling.inert) continue;
-      sibling.inert = true;
-      changed.push(sibling);
-    }
-  }
-  return () => changed.forEach((sibling) => (sibling.inert = false));
-}

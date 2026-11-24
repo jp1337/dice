@@ -81,3 +81,31 @@ describe("parseConfig", () => {
     expect(() => parseConfig({ ...baseEnv, BASE_URL: "dice.example.org" })).toThrow(/BASE_URL/);
   });
 });
+
+// BASE_URL ends up in an HTML attribute (og:image) and in the CSP, so it must be a plain origin.
+describe("BASE_URL", () => {
+  it.each([
+    ["a path", "https://dice.example.org/dice"],
+    ["a query", "https://dice.example.org/?x=1"],
+    ["a fragment", "https://dice.example.org/#top"],
+    ["credentials", "https://user:secret@dice.example.org"],
+    ["a quote in the host", 'https://a"b.example.org'],
+    ["markup characters in the host", "https://a'b&c;d.example.org"],
+    ["another scheme", "ftp://dice.example.org"],
+  ])("rejects %s", (_name, url) => {
+    expect(() => parseConfig({ ...baseEnv, BASE_URL: url })).toThrow(/BASE_URL/);
+  });
+
+  it("needs https in production, allows http in development and tests", () => {
+    const production = { ...baseEnv, ...legalEnv, NODE_ENV: "production" };
+    expect(() => parseConfig({ ...production, BASE_URL: "http://dice.example.org" })).toThrow(/BASE_URL: must use https/);
+    expect(parseConfig(production).baseUrl.origin).toBe("https://dice.example.org");
+    for (const NODE_ENV of ["development", "test"]) {
+      expect(parseConfig({ ...baseEnv, NODE_ENV, BASE_URL: "http://localhost:3000" }).baseUrl.origin).toBe("http://localhost:3000");
+    }
+  });
+
+  it("accepts an origin with a port and a trailing slash, lowercased", () => {
+    expect(parseConfig({ ...baseEnv, BASE_URL: "https://Dice.Example.org:8443/" }).baseUrl.origin).toBe("https://dice.example.org:8443");
+  });
+});
