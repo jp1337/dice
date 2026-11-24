@@ -30,6 +30,7 @@ Tests migrate the database themselves and must survive running twice against the
 | `test/app.test.ts` | Headers on every kind of response, logging, rate limits |
 | `test/config.test.ts`, `robots.test.ts` | Configuration rules, `robots.txt` |
 | `test/db.test.ts` | Migrations, `/healthz`, a dropped database connection |
+| `test/rooms.test.ts` | Step 3: rooms over HTTP, a listening server with Node's `WebSocket` client, raw upgrades for refused and silent sockets; sessions are inserted directly (`sessionIdFor`) |
 | `test/docs.test.ts` | `docs-tech/` stays unpublished, links resolve, every variable documented |
 | `test/web.test.ts` | Web logic without a DOM: preferences with blocked storage, `theme-init.js`, sound gating, six text escaping, reaction cooldown and bursts, avatars, CSS timing, no inline styles or scripts, asset sizes, theme tokens without `light-dark()` |
 | `test/bundle.test.ts` | The client build fails when anything reaches zod |

@@ -7,12 +7,15 @@ import type { Writable } from "node:stream";
 import fastifyCookie from "@fastify/cookie";
 import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
+import fastifyWebsocket from "@fastify/websocket";
 import Fastify, { type FastifyError, type FastifyReply, type FastifyRequest, LogController } from "fastify";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { Pool } from "pg";
 import { registerAuth } from "./auth.js";
 import type { Config } from "./config.js";
 import { datenschutzHtml, escapeHtml, impressumHtml } from "./legal.js";
+import { MAX_CLIENT_MESSAGE_BYTES, PING_INTERVAL_MS } from "../shared/contracts.js";
+import { registerRooms } from "./rooms.js";
 import { robotsTxt } from "./robots.js";
 
 export const HEALTHZ_LIMIT_PER_MINUTE = 120;
@@ -21,6 +24,7 @@ export type Deps = {
   pool: Pool;
   webRoot: string; // directory with the Vite build output
   logStream?: Writable; // defaults to stdout
+  pingIntervalMs?: number; // WebSocket ping; defaults to PING_INTERVAL_MS, tests shorten it
 };
 
 // Paths that answer with the SPA's index.html. Every one gets the same HTML, so the link preview
@@ -152,7 +156,8 @@ export async function buildApp(config: Config, deps: Deps) {
   await app.register(fastifyRateLimit, { global: false });
   // Signs the short-lived login state cookie; key derived from SESSION_SECRET, separate from session ids.
   await app.register(fastifyCookie, { secret: createHmac("sha256", config.sessionSecret).update("cookie-signing").digest() });
-  await registerAuth(app, config, drizzle({ client: deps.pool, casing: "snake_case" }));
+  const db = drizzle({ client: deps.pool, casing: "snake_case" });
+  const { requireUser } = await registerAuth(app, config, db);
 
   // /healthz is public and touches the database, so it is limited (CodeQL js/missing-rate-limiting).
   // Generous enough for the container healthcheck and the deploy poll, which share one source address.
@@ -192,6 +197,10 @@ export async function buildApp(config: Config, deps: Deps) {
     index: false,
     allowedPath: (pathName) => pathName !== "/index.html",
   });
+
+  // Larger client messages close the connection (1009) before they are buffered or parsed.
+  await app.register(fastifyWebsocket, { options: { maxPayload: MAX_CLIENT_MESSAGE_BYTES } });
+  registerRooms(app, config, db, requireUser, deps.pingIntervalMs ?? PING_INTERVAL_MS);
 
   return app;
 }

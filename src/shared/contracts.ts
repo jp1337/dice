@@ -14,6 +14,8 @@ const die = z.int().min(1).max(6);
 // ---------------------------------------------------------------------------------------------
 // Room settings (spec 4.4, 4.11). Defaults are the values the spec calls standard.
 
+// No .default() here: update_settings uses settingsSchema.partial(), and a default inside it would
+// silently reset every setting the message leaves out.
 export const settingsSchema = z.object({
   bonusChains: z.boolean(), // R3
   lastPlayer: z.enum(["choice", "auto"]), // R5
@@ -131,7 +133,7 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
   msg("roll", {}),
   msg("claim_last_place", {}),
   // Host and co-host
-  msg("update_settings", { settings: settingsSchema.partial() }),
+  msg("update_settings", { settings: settingsSchema.partial().strict() }),
   msg("add_simulated_players", { count: z.int().min(1).max(30) }),
   msg("remove_simulated_player", { userId }),
   msg("start", {}),

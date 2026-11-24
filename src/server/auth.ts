@@ -70,10 +70,14 @@ const messages: Record<number, [string, string]> = {
   502: ["Discord antwortet nicht", "Discord hat gerade nicht richtig geantwortet. Bitte versuche es in einer Minute noch einmal."],
 };
 
+// The sessions table stores this hash, never the token. Own key derived from SESSION_SECRET.
+export function sessionIdFor(sessionSecret: string, token: string) {
+  const sessionKey = createHmac("sha256", sessionSecret).update("session-id").digest();
+  return createHmac("sha256", sessionKey).update(token).digest("hex");
+}
+
 export async function registerAuth(app: FastifyInstance, config: Config, db: NodePgDatabase) {
-  // Separate keys for separate purposes, both derived from SESSION_SECRET.
-  const sessionKey = createHmac("sha256", config.sessionSecret).update("session-id").digest();
-  const sessionId = (token: string) => createHmac("sha256", sessionKey).update(token).digest("hex");
+  const sessionId = (token: string) => sessionIdFor(config.sessionSecret, token);
   const redirectUri = new URL("/auth/callback", config.baseUrl).href;
   const cookieBase = { httpOnly: true, secure: true, sameSite: "lax" } as const;
   const loginLimit = { rateLimit: { max: LOGIN_LIMIT_PER_MINUTE, timeWindow: "1 minute" } };
@@ -226,4 +230,6 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
     if (!row?.image || !row.type || row.hash !== hash) return reply.code(404).send({ error: "not_found" });
     return reply.type(row.type).send(row.image);
   });
+
+  return { requireUser };
 }
