@@ -33,6 +33,7 @@ Tests migrate the database themselves and must survive running twice against the
 | `test/rooms.test.ts` | Step 3: rooms over HTTP, a listening server with Node's `WebSocket` client, raw upgrades for refused and silent sockets; sessions are inserted directly (`sessionIdFor`) |
 | `test/docs.test.ts` | `docs-tech/` stays unpublished, links resolve, every variable documented |
 | `test/web.test.ts` | Web logic without a DOM: preferences with blocked storage, `theme-init.js`, sound gating, six text escaping, reaction cooldown and bursts, avatars, CSS timing, no inline styles or scripts, asset sizes, theme tokens without `light-dark()` |
+| `test/room-view.test.ts` | Room client without a DOM: routes, reconnect backoff and close codes against a fake socket, button permissions per viewer, turn and gift lists, history texts ("würfelt für", undone), result text, form checks, roll animation timing |
 | `test/bundle.test.ts` | The client build fails when anything reaches zod |
 | `test/preview.test.ts` | Open Graph tags: in the served HTML, identical on every page, image URL from `BASE_URL` |
 

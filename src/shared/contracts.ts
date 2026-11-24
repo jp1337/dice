@@ -1,7 +1,7 @@
 // Shared contracts between server, game logic and web client.
 // Every message crossing the network is defined here as a zod schema; types are inferred from it.
 import { z } from "zod";
-import { NICKNAME_MAX, ROOM_NAME_MAX, reactionEmojis } from "./constants.js";
+import { INVISIBLE_TEXT, NICKNAME_MAX, ROOM_NAME_MAX, SIX_MESSAGE_MAX, VISIBLE_CHAR, reactionEmojis } from "./constants.js";
 
 // zod-free values live in constants.ts so the browser bundle can import them without zod.
 export * from "./constants.js";
@@ -14,7 +14,6 @@ const die = z.int().min(1).max(6);
 // Free text other people see (nicknames, room names, the six banner), so nobody can look blank or like
 // someone else: NFC, trimmed; no control, format, surrogate, private-use or unassigned characters, no
 // space but U+0020, no blank fillers, at most two combining marks on a character, something visible.
-const invisible = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\u115F\u1160\u2800\u3164\uFFA0]|(?! )\p{Z}|\p{M}{3}/u;
 const visibleText = (max: number) =>
   z
     .string()
@@ -24,7 +23,7 @@ const visibleText = (max: number) =>
         .string()
         .min(1)
         .max(max)
-        .refine((text) => !invisible.test(text) && /[\p{L}\p{N}\p{S}\p{P}]/u.test(text)),
+        .refine((text) => !INVISIBLE_TEXT.test(text) && VISIBLE_CHAR.test(text)),
     );
 
 // ---------------------------------------------------------------------------------------------
@@ -35,7 +34,7 @@ const visibleText = (max: number) =>
 export const settingsSchema = z.object({
   bonusChains: z.boolean(), // R3
   lastPlayer: z.enum(["choice", "auto"]), // R5
-  sixMessage: visibleText(200), // R6
+  sixMessage: visibleText(SIX_MESSAGE_MAX), // R6
   reactions: z.boolean(),
 });
 export type Settings = z.infer<typeof settingsSchema>;

@@ -57,3 +57,23 @@ directly or through `contracts.ts`. Values for the browser live in `src/shared/c
 | `useFlag(HIDE_REACTIONS_KEY)`, `useReducedMotion()` | Shared preference store, motion setting |
 
 Logic sits in `src/web/lib/` (plain functions, tested without a DOM); components only render.
+
+## Views
+
+No router: `main.tsx` picks the page from the path (`lib/routes.ts`); every page is a full load.
+
+| Path | View | Connects to |
+| --- | --- | --- |
+| `/` | `views/Start.tsx`: login, logged-in user, "Raum erstellen" for hosts | `GET /api/me`, `POST /api/rooms` |
+| `/r/:slug` | `views/RoomPage.tsx` → `Lobby`, `Game`, `Result` by game status | `GET /api/rooms/:slug` first (401 login, 404 not found), then `/ws/rooms/:slug` |
+| `/z/:token` | same screens, `viewer.kind === "guest"`: nothing that sends | `/ws/watch/:token`; `HEAD /z/:token` 404 = link off |
+
+| Module | Holds |
+| --- | --- |
+| `lib/connection.ts` | One socket per tab: backoff 0.5 s doubling to 30 s with jitter, reset by the first `state`; 1012/1013 once at once; 1008, 4xxx stop, 4001 login; a refused upgrade (1006 before open) is asked over HTTP. Error page after 3 failures without a state |
+| `lib/roll.ts` | The server sends the `state` with a new roll before `rolled`: the new seq holds back six banner and result until the dice land (or 1.5 s without `rolled`) |
+| `lib/room.ts` | Permissions per button, lists, history texts, result text, the `visibleText` checks of `constants.ts` |
+| `lib/useRoom.ts` | React glue: view, status, roll state, reactions, server errors |
+
+A six that ends the game has no pause, so its banner closes per viewer ("Zum Ergebnis"). Destructive
+host tools ask in the page (`ConfirmButton`), never `window.confirm`.

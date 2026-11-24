@@ -19,7 +19,7 @@
 
 .theme-toggle span {
   display: block;
-  padding: 6px 14px;
+  padding: 10px 14px; /* 44 px touch target with the 1.5 line height */
   border-radius: 999px;
   cursor: pointer;
 }
@@ -38,11 +38,13 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  text-align: start;
   border-color: var(--line);
 }
 
 .switch-track {
   position: relative;
+  flex-shrink: 0; /* a long label wraps, the track keeps its size */
   width: 36px;
   height: 20px;
   border-radius: 999px;
