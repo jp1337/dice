@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
@@ -23,11 +23,11 @@ export const legalEnv = {
   LEGAL_EMAIL: "dice@example.org",
 };
 
-// A stand-in for the Vite build output.
+// A stand-in for the Vite build output, with the real index.html: Vite keeps its meta tags as they are.
 export function makeWebRoot() {
   const root = mkdtempSync(path.join(tmpdir(), "dice-web-"));
   mkdirSync(path.join(root, "assets"));
-  writeFileSync(path.join(root, "index.html"), "<!doctype html><title>Würfel</title>");
+  copyFileSync(new URL("../src/web/index.html", import.meta.url), path.join(root, "index.html"));
   writeFileSync(path.join(root, "assets", "index-abc123.js"), "console.log(1)");
   return root;
 }

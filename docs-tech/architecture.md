@@ -16,7 +16,7 @@ instance.
 | `src/server/legal.ts`, `robots.ts` | Imprint and privacy notice HTML; `robots.txt` from a sourced crawler list |
 | `src/server/db/schema.ts`, `migrate.ts` | Drizzle schema; migrations applied at start |
 | `drizzle/` | Generated SQL migrations and their snapshots |
-| `src/web/` | React SPA, Vite root; built to `dist/web` and served by the app |
+| `src/web/` | React SPA, Vite root; built to `dist/web` and served by the app. `components/` render, `lib/` holds their logic, `public/` is copied as is ([ui-assets.md](ui-assets.md)) |
 | `test/` | Vitest; see [testing.md](testing.md) |
 
 ## Rules for changing things

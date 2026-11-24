@@ -31,6 +31,8 @@ Tests migrate the database themselves and must survive running twice against the
 | `test/config.test.ts`, `robots.test.ts` | Configuration rules, `robots.txt` |
 | `test/db.test.ts` | Migrations, `/healthz`, a dropped database connection |
 | `test/docs.test.ts` | `docs-tech/` stays unpublished, links resolve, every variable documented |
+| `test/web.test.ts` | Web logic without a DOM: preferences with blocked storage, `theme-init.js`, sound gating, six text escaping, reaction cooldown and bursts, avatars, CSS timing, no inline styles or scripts, asset sizes |
+| `test/preview.test.ts` | Open Graph tags: in the served HTML, identical on every page, image URL from `BASE_URL` |
 
 ## Rules
 

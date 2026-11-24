@@ -1,0 +1,87 @@
+.reaction-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.reaction-bar button {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 50%;
+  border-color: var(--line);
+  background: var(--surface);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.reaction-bar button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* Shrinks over the cooldown; empty otherwise. */
+.reaction-cooldown {
+  flex-basis: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+}
+
+.reaction-cooldown.is-active {
+  animation: reaction-cooldown var(--reaction-interval) linear both;
+}
+
+@keyframes reaction-cooldown {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+/* The dice area that hosts <FloatingReactions>. */
+.reaction-stage {
+  position: relative;
+}
+
+.floating-reactions {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.floating-emoji {
+  position: absolute;
+  bottom: 8%;
+  font-size: clamp(1.75rem, 6vw, 2.5rem);
+  animation: float-up var(--float-duration) ease-out both;
+}
+
+.lane-0 { left: 8%; --drift: -10px; }
+.lane-1 { left: 70%; --drift: 14px; }
+.lane-2 { left: 24%; --drift: 8px; }
+.lane-3 { left: 56%; --drift: -14px; }
+.lane-4 { left: 40%; --drift: -6px; }
+.lane-5 { left: 82%; --drift: -12px; }
+
+.delay-1 { animation-delay: 150ms; }
+.delay-2 { animation-delay: 300ms; }
+.delay-3 { animation-delay: 450ms; }
+
+@keyframes float-up {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.6); }
+  15% { opacity: 1; transform: translate(0, -20%) scale(1); }
+  100% { opacity: 0; transform: translate(var(--drift), -320%) scale(1); }
+}
+
+@keyframes float-fade {
+  0%, 100% { opacity: 0; }
+  20%, 70% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-emoji {
+    animation-name: float-fade;
+  }
+}
