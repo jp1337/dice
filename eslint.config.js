@@ -8,4 +8,8 @@ export default defineConfig(
   js.configs.recommended,
   tseslint.configs.recommended,
   { languageOptions: { globals: { ...globals.node, ...globals.browser } } },
+  {
+    // A leading underscore marks a parameter a signature requires but the body does not use yet.
+    rules: { "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }] },
+  },
 );
