@@ -22,10 +22,10 @@ Step 2 of 6. Not usable for a game yet.
 | Step | | State |
 | --- | --- | --- |
 | 1 | Skeleton: container, database, migrations, `/healthz`, CI, image | done |
-| 2 | Discord login, sessions, hosts, imprint and privacy notice | in review |
+| 2 | Discord login, sessions, hosts, imprint, privacy notice, daily cleanup | done |
 | 3 | Rooms and lobby over WebSocket | open |
 | 4 | Game rules: turns, bonus die, 6 pauses the game | open |
-| 5 | Host tools, co-hosts, test rooms, automatic data cleanup | open |
+| 5 | Host tools, co-hosts, test rooms, cleanup of simulated players | open |
 | 6 | Animation, sound, reactions, guest link, link preview | open |
 
 Works today: the container starts, migrates the database, answers `/healthz`, `/robots.txt`,

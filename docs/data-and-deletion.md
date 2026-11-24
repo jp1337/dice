@@ -13,7 +13,17 @@
 Discord tokens are dropped right after the login check. The browser never loads anything from Discord
 except the login page; the app fetches and serves avatars itself.
 
-**Not yet implemented:** the daily cleanup arrives with step 5. Until then nothing is deleted automatically.
+## Automatic deletion
+
+The app deletes at startup and then once a day (`RETENTION_DAYS`, default 90):
+
+| What | When |
+| --- | --- |
+| Sessions | Expired ones (they stop working at expiry; logout deletes immediately) |
+| Rooms, with members and events | `RETENTION_DAYS` after the last activity in the room |
+| Users | In no room any more and last login older than `RETENTION_DAYS` |
+
+Each run logs only counts.
 
 ## Deleting one person by hand
 
