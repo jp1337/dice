@@ -245,13 +245,14 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
     });
 
     it("serves the app shell for /r/:slug without a session and without room data", async () => {
-      const slug = await newRoom(host);
-      for (const target of [slug, "does-not-exist"]) {
-        const res = await app.inject({ url: `/r/${target}` });
+      const shell = (await app.inject({ url: "/" })).body;
+      const slugs = [await newRoom(host), await newRoom(host), randomBytes(16).toString("base64url")]; // the last one does not exist
+      for (const slug of slugs) {
+        expect(slug).toMatch(/^[A-Za-z0-9_-]{16,64}$/); // what SPA_ROUTES accepts
+        const res = await app.inject({ url: `/r/${slug}` });
         expect(res.statusCode).toBe(200);
-        expect(res.headers["content-type"]).toMatch(/text\/html/);
-        expect(res.body).toBe("<!doctype html><title>Würfel</title>");
-        expect(res.headers["x-robots-tag"]).toBeDefined();
+        expect(res.body).toBe(shell);
+        expect(res.body).not.toContain("Jahresabschluss");
       }
     });
 
@@ -346,7 +347,30 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
     });
 
     // reduce is a stub until step 4 and throws on game_started, so a running room cannot be loaded yet.
-    it.todo("makes a latecomer to a running game a spectator, and refuses set_participation outside the lobby");
+    it("makes a latecomer to a running game a spectator and allows only reactions to change outside the lobby", async () => {
+      const slug = await newRoom(host);
+      const player = await makeUser();
+      await connect(slug, player).then((c) => c.close());
+      await until(async () => expect(app.live.roomIds()).not.toContain(await roomIdOf(slug)));
+      await pool.query(
+        "insert into game_events (room_id, seq, type, actor_user_id, payload) select id, 1, 'game_started', $2, $3 from rooms where slug = $1",
+        [slug, host.id, { order: [player.id] }],
+      );
+      const ch = await connect(slug, host);
+      const late = await makeUser();
+      const cl = await connect(slug, late);
+      expect(cl.state.room.status).toBe("running");
+      expect(cl.member(late.id)?.participation).toBe("spectator");
+      cl.send({ type: "set_participation", userId: late.id, participation: "player" });
+      ch.send({ type: "set_participation", userId: late.id, participation: "player" });
+      ch.send({ type: "update_settings", settings: { bonusChains: false } });
+      ch.send({ type: "update_settings", settings: { reactions: false } });
+      await until(() => expect(cl.state.room.settings.reactions).toBe(false));
+      expect(cl.errors).toEqual(["not_in_lobby"]);
+      expect(ch.errors).toEqual(["not_in_lobby", "not_in_lobby"]);
+      expect(cl.state.room.settings.bonusChains).toBe(true);
+      expect(cl.member(late.id)?.participation).toBe("spectator");
+    });
 
     it("lets everyone switch only themselves; hosts and co-hosts switch anyone", async () => {
       const slug = await newRoom(host);
