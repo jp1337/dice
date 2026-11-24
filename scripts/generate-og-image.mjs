@@ -1,10 +1,10 @@
-// Draws the link preview image of spec 10.2 (1200×630 PNG): two dice on a gold ribbon, nothing about any
-// room. Pure Node, with a minimal PNG encoder on node:zlib. Deterministic. Usage: node scripts/generate-og-image.mjs
+// Draws the link preview image of spec 10.2: a small square PNG (Discord shows it as the thumbnail of a
+// "summary" card), two dice on a gold ribbon, nothing about any room. Pure Node, with a minimal PNG encoder on node:zlib. Deterministic. Usage: node scripts/generate-og-image.mjs
 import { writeFileSync } from "node:fs";
 import { crc32, deflateSync } from "node:zlib";
 
-const W = 1200;
-const H = 630;
+const W = 256;
+const H = 256;
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 // The dark theme tokens of src/web/style.css.
 const night = hex("#0f1d27");
@@ -26,21 +26,21 @@ const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 
 const PIPS = { 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] };
 const dice = [
-  { cx: 480, cy: 300, size: 250, angle: -0.2, value: 5, pip: ink },
-  { cx: 760, cy: 330, size: 250, angle: 0.15, value: 6, pip: cranberry },
+  { cx: 74, cy: 112, size: 84, angle: -0.2, value: 5, pip: ink },
+  { cx: 180, cy: 126, size: 84, angle: 0.15, value: 6, pip: cranberry },
 ];
 
 function shade(x, y) {
   // Night sky, a little lighter at the top, with a warm glow behind the dice.
   let c = mix(nightTop, night, y / H);
-  const glow = Math.exp(-(((x - 620) / 420) ** 2 + ((y - 320) / 260) ** 2));
+  const glow = Math.exp(-(((x - 128) / 120) ** 2 + ((y - 120) / 100) ** 2));
   c = mix(c, gold, 0.12 * glow);
   // The ribbon a gift is tied with.
-  c = mix(c, gold, coverage(Math.abs(y - 470) - 16) * 0.9);
+  c = mix(c, gold, coverage(Math.abs(y - 182) - 5) * 0.9);
   for (const d of dice) {
     const h = d.size / 2;
     // Soft shadow under the die.
-    const shadow = Math.exp(-(((x - d.cx - 14) / (h * 1.05)) ** 2 + ((y - d.cy - h - 6) / 22) ** 2));
+    const shadow = Math.exp(-(((x - d.cx - h * 0.1) / (h * 1.05)) ** 2 + ((y - d.cy - h * 1.05) / (h * 0.18)) ** 2));
     c = mix(c, [0, 0, 0], 0.45 * shadow);
     const cos = Math.cos(-d.angle);
     const sin = Math.sin(-d.angle);
@@ -49,7 +49,7 @@ function shade(x, y) {
     const edge = box(px, py, h, h, d.size * 0.16);
     const body = coverage(edge);
     if (body === 0) continue;
-    const face = mix(ivory, ivoryEdge, Math.min(1, Math.max(0, (edge + 18) / 18)) * 0.8 + (py / h + 1) * 0.08);
+    const face = mix(ivory, ivoryEdge, Math.min(1, Math.max(0, (edge + h * 0.15) / (h * 0.15))) * 0.8 + (py / h + 1) * 0.08);
     let die = face;
     for (const [gx, gy] of PIPS[d.value]) {
       die = mix(die, d.pip, coverage(Math.hypot(px - gx * h * 0.5, py - gy * h * 0.5) - d.size * 0.085));
@@ -66,9 +66,10 @@ let prev = new Uint8Array(W * 3);
 for (let y = 0; y < H; y++) {
   const row = new Uint8Array(W * 3);
   for (let x = 0; x < W; x++) {
-    // 2×2 supersampling for smooth gradients and edges.
-    const s = [0.25, 0.75].flatMap((dy) => [0.25, 0.75].map((dx) => shade(x + dx, y + dy)));
-    for (let ch = 0; ch < 3; ch++) row[x * 3 + ch] = Math.round(s.reduce((sum, c) => sum + c[ch], 0) / 4);
+    // 4×4 supersampling: smooth edges at this small size.
+    const offsets = [0.125, 0.375, 0.625, 0.875];
+    const s = offsets.flatMap((dy) => offsets.map((dx) => shade(x + dx, y + dy)));
+    for (let ch = 0; ch < 3; ch++) row[x * 3 + ch] = Math.round(s.reduce((sum, c) => sum + c[ch], 0) / s.length);
   }
   raw[y * rowBytes] = 2;
   for (let i = 0; i < row.length; i++) raw[y * rowBytes + 1 + i] = (row[i] - prev[i]) & 0xff;

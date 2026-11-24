@@ -7,13 +7,20 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { SixBanner } from "../src/web/components/SixBanner.js";
-import { REACTION_INTERVAL_MS, ROLL_COOLDOWN_MS } from "../src/shared/contracts.js";
+import * as constants from "../src/shared/constants.js";
+import * as contracts from "../src/shared/contracts.js";
 import { THEME_KEY, applyTheme, createPrefs, themeOf } from "../src/web/lib/prefs.js";
 import { type Clip, createSoundPlayer } from "../src/web/lib/sound.js";
-import { AVATAR_TONES, FLOAT_LANES, FLOAT_MS, ROLL_ANIMATION_MS, avatarTone, cooldownLeft, expandBurst, fillTemplate, initials } from "../src/web/lib/ui.js";
+import { AVATAR_TONES, FLOAT_LANES, FLOAT_MS, ROLL_ANIMATION_MS, avatarTone, cooldownLeft, expandBurst, fillTemplate, inertOutside, initials } from "../src/web/lib/ui.js";
 
+const { REACTION_INTERVAL_MS, ROLL_COOLDOWN_MS } = constants;
 const web = (file: string) => new URL(`../src/web/${file}`, import.meta.url);
 const read = (file: string) => readFileSync(web(file), "utf8");
+
+function walk(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => (statSync(path.join(dir, name)).isDirectory() ? walk(path.join(dir, name)) : [path.join(dir, name)]));
+}
+const sources = walk(web(".").pathname).filter((file) => /\.(tsx?|html)$/.test(file));
 
 function memoryStorage() {
   const data = new Map<string, string>();
@@ -182,11 +189,6 @@ describe("timing", () => {
 });
 
 describe("CSP (default-src 'self', no style-src): nothing inline", () => {
-  function walk(dir: string): string[] {
-    return readdirSync(dir).flatMap((name) => (statSync(path.join(dir, name)).isDirectory() ? walk(path.join(dir, name)) : [path.join(dir, name)]));
-  }
-  const sources = walk(web(".").pathname).filter((file) => /\.(tsx?|html)$/.test(file));
-
   it("no style attributes or <style> elements, no inline scripts", () => {
     expect(sources.length).toBeGreaterThan(5);
     for (const file of sources) {
@@ -207,9 +209,60 @@ describe("public assets", () => {
     }
   });
 
-  it("the preview image is a 1200×630 PNG", () => {
+  it("the preview image is a small square PNG, as index.html declares it (spec 10.2)", () => {
     const png = readFileSync(web("public/og.png"));
     expect(png.subarray(1, 4).toString()).toBe("PNG");
-    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1200, 630]);
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([256, 256]);
+    const html = read("index.html");
+    expect(html).toContain('<meta property="og:image:width" content="256" />');
+    expect(html).toContain('<meta property="og:image:height" content="256" />');
+    expect(html).toContain('<meta name="twitter:card" content="summary" />');
+  });
+});
+
+describe("the browser bundle stays free of zod", () => {
+  // Every import or re-export statement that names contracts.ts.
+  const statements = sources
+    .filter((file) => /\.tsx?$/.test(file))
+    .flatMap((file) =>
+      [...readFileSync(file, "utf8").matchAll(/\b(?:import|export)\b[^;]*?["'][^"']*shared\/contracts(?:\.js)?["']/g)].map((m) => `${path.basename(file)}: ${m[0]}`),
+    );
+
+  it("src/web takes only types from contracts.ts (values come from constants.ts)", () => {
+    expect(statements.length, "the check must see at least one import").toBeGreaterThan(0);
+    // "import { type X }" is not enough: with verbatimModuleSyntax it still loads the module.
+    expect(statements.filter((statement) => !/^[^:]+: import type\s/.test(statement))).toEqual([]);
+  });
+
+  it("constants.ts needs no zod, and contracts.ts re-exports it unchanged", () => {
+    expect(readFileSync(new URL("../src/shared/constants.ts", import.meta.url), "utf8")).not.toMatch(/^import(?! type)/m);
+    for (const [name, value] of Object.entries(constants)) expect(contracts[name as keyof typeof contracts], name).toBe(value);
+  });
+});
+
+describe("six banner makes the page behind it inert", () => {
+  type Fake = { name: string; inert: boolean; parentElement: Fake | null; children: Fake[] };
+  const node = (name: string, children: Fake[] = [], inert = false): Fake => {
+    const n: Fake = { name, inert, parentElement: null, children };
+    for (const child of children) child.parentElement = n;
+    return n;
+  };
+
+  it("everything outside the banner, up to body, and back on close", () => {
+    const banner = node("banner");
+    const header = node("header");
+    const main = node("main", [node("dice"), banner]);
+    const dialog = node("dialog", [], true); // already inert: must stay inert
+    const root = node("root", [header, main, dialog]);
+    const script = node("script");
+    const body = node("body", [root, script]);
+    const html = node("html", [node("head"), body]);
+
+    const restore = inertOutside(banner, body);
+    const inert = (n: Fake): string[] => [...(n.inert ? [n.name] : []), ...n.children.flatMap(inert)];
+    expect(inert(html).sort()).toEqual(["dialog", "dice", "header", "script"]); // not head
+    expect(banner.inert || main.inert || root.inert).toBe(false);
+    restore();
+    expect(inert(html)).toEqual(["dialog"]);
   });
 });

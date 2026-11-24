@@ -1,6 +1,10 @@
 // Shared contracts between server, game logic and web client.
 // Every message crossing the network is defined here as a zod schema; types are inferred from it.
 import { z } from "zod";
+import { NICKNAME_MAX, ROOM_NAME_MAX, reactionEmojis } from "./constants.js";
+
+// zod-free values live in constants.ts so the browser bundle can import them without zod.
+export * from "./constants.js";
 
 const userId = z.uuid();
 export type UserId = z.infer<typeof userId>;
@@ -111,7 +115,6 @@ export interface GameState {
 // ---------------------------------------------------------------------------------------------
 // Emoji reactions (spec 4.11)
 
-export const reactionEmojis = ["🎉", "😮", "😂", "👏", "🍀", "❤️"] as const;
 export const reactionSchema = z.enum(reactionEmojis);
 
 // ---------------------------------------------------------------------------------------------
@@ -149,8 +152,6 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
   msg("set_cohost", { userId, isCohost: z.boolean() }),
 ]);
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
-
-export const MAX_CLIENT_MESSAGE_BYTES = 4096;
 
 // ---------------------------------------------------------------------------------------------
 // WebSocket: server to client
@@ -192,14 +193,6 @@ export type ServerMessage =
   | { type: "error"; code: string; message: string }; // message in German
 
 // ---------------------------------------------------------------------------------------------
-// Limits shared by server and client
-
-export const NICKNAME_MAX = 32;
-export const ROLL_COOLDOWN_MS = 2000;
-export const REACTION_INTERVAL_MS = 2000;
-export const PING_INTERVAL_MS = 25_000;
-
-// ---------------------------------------------------------------------------------------------
 // HTTP: GET /api/me (spec 7). 401 without a session.
 
 export interface MeResponse {
@@ -211,8 +204,6 @@ export interface MeResponse {
 
 // ---------------------------------------------------------------------------------------------
 // HTTP: rooms and profile (spec 7)
-
-export const ROOM_NAME_MAX = 60;
 
 export const createRoomRequestSchema = z
   .object({ name: z.string().trim().min(1).max(ROOM_NAME_MAX), isTest: z.boolean() })

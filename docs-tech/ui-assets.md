@@ -9,12 +9,13 @@ their files. Change the script, run it, commit script and output together.
 | --- | --- | --- |
 | `src/web/public/sounds/roll.wav` | `node scripts/generate-sounds.mjs` | 26 KB |
 | `src/web/public/sounds/six.wav` | same | 39 KB |
-| `src/web/public/og.png` (1200×630) | `node scripts/generate-og-image.mjs` | 89 KB |
+| `src/web/public/og.png` (256×256) | `node scripts/generate-og-image.mjs` | 22 KB |
 
 - Sounds: synthesized (rattle: sine knocks plus filtered noise; six: G major chime), mono 16 bit 22.05 kHz
   WAV, quiet on purpose (voice channel). The script refuses a file over 60 KB.
-- Preview image: drawn with signed distance functions, 2×2 supersampled, encoded by a minimal PNG
-  writer (`node:zlib`). No text: Discord prints `og:title` beside it.
+- Preview image: drawn with signed distance functions, 4×4 supersampled, encoded by a minimal PNG
+  writer (`node:zlib`). Square and small: `twitter:card` is `summary`, so Discord shows it as a
+  thumbnail beside `og:title` (spec 10.2: "kleines Bild"). No text in it.
 - `src/web/public/` is copied unchanged to `dist/web/`; `favicon.svg` and `theme-init.js` are hand-written.
 
 ## Server side of the link preview
@@ -38,7 +39,7 @@ The CSP has no `style-src`, so `default-src 'self'` applies to styles: no `style
 | Import | Use |
 | --- | --- |
 | `Dice` `{values, rollKey, count?, onSettled?}` | New `rollKey` starts the 1.3 s tumble; `onSettled` when the result shows (six sound, banner) |
-| `SixBanner` `{template, name, platz, children?}` | Full screen; `children` = the host's "Weiter" button |
+| `SixBanner` `{template, name, platz, children?}` | Full screen, the page behind is `inert` while it is open; `children` = the host's "Weiter" button |
 | `ReactionBar` `{onReact, disabled?}` | Client cooldown 2 s, mirrors the server |
 | `useFloatingReactions()` → `{items, add}`, `FloatingReactions` `{items, hidden?}` | `add(msg.emojis)`; place in a `.reaction-stage` element |
 | `Avatar` `{userId, name, avatarUrl, size?}` | Initials on a colour from the user id when there is no image |

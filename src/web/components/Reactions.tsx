@@ -1,6 +1,6 @@
 // Emoji reactions (spec 4.11): the bar to send one, and the layer where everyone's fly over the dice.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { reactionEmojis } from "../../shared/contracts.js";
+import { reactionEmojis } from "../../shared/constants.js";
 import { FLOAT_MS, type FloatingEmoji, type ReactionEmoji, cooldownLeft, expandBurst, reactionLabels } from "../lib/ui.js";
 import "./Reactions.css";
 
