@@ -195,3 +195,13 @@ export const NICKNAME_MAX = 32;
 export const ROLL_COOLDOWN_MS = 2000;
 export const REACTION_INTERVAL_MS = 2000;
 export const PING_INTERVAL_MS = 25_000;
+
+// ---------------------------------------------------------------------------------------------
+// HTTP: GET /api/me (spec 7). 401 without a session.
+
+export interface MeResponse {
+  userId: UserId;
+  displayName: string; // nickname > server nickname > global name (spec 4.10)
+  avatarUrl: string | null; // /avatars/:userId/:hash, null = initials placeholder
+  isHost: boolean; // listed in HOST_DISCORD_IDS; only hosts may create rooms
+}

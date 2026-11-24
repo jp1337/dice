@@ -49,6 +49,34 @@ describe("parseConfig", () => {
     expect(() => parseConfig({ ...baseEnv, HOST_DISCORD_IDS: "abc" })).toThrow(/HOST_DISCORD_IDS/);
   });
 
+  it("requires SESSION_SECRET (32+ characters) and the Discord application", () => {
+    for (const key of ["SESSION_SECRET", "DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"] as const) {
+      expect(() => parseConfig({ ...baseEnv, [key]: undefined })).toThrow(new RegExp(key));
+      expect(() => parseConfig({ ...baseEnv, [key]: "" })).toThrow(new RegExp(key));
+    }
+    expect(() => parseConfig({ ...baseEnv, SESSION_SECRET: "x".repeat(31) })).toThrow(/SESSION_SECRET/);
+  });
+
+  it("allows another Discord API or CDN only under NODE_ENV=test", () => {
+    const fake = { DISCORD_API_BASE: "http://127.0.0.1:9", DISCORD_CDN_BASE: "http://127.0.0.1:9/" };
+    expect(parseConfig({ ...baseEnv, ...fake })).toMatchObject({ discordApiBase: "http://127.0.0.1:9", discordCdnBase: "http://127.0.0.1:9" });
+    for (const NODE_ENV of ["development", "production"]) {
+      const env = { ...baseEnv, ...legalEnv, NODE_ENV };
+      expect(() => parseConfig({ ...env, DISCORD_CDN_BASE: "https://evil.example" })).toThrow(/DISCORD_CDN_BASE: may only be set when NODE_ENV=test/);
+      expect(() => parseConfig({ ...env, DISCORD_API_BASE: "https://evil.example/api" })).toThrow(/DISCORD_API_BASE/);
+      expect(parseConfig({ ...env, DISCORD_CDN_BASE: "" })).toMatchObject({
+        discordApiBase: "https://discord.com/api",
+        discordCdnBase: "https://cdn.discordapp.com",
+      });
+    }
+  });
+
+  it("parses the privacy switches", () => {
+    expect(parseConfig(baseEnv).privacyServices).toEqual({ cloudflare: false, crowdsec: true });
+    expect(parseConfig({ ...baseEnv, PRIVACY_CLOUDFLARE: "true", PRIVACY_CROWDSEC: "false" }).privacyServices).toEqual({ cloudflare: true, crowdsec: false });
+    expect(() => parseConfig({ ...baseEnv, PRIVACY_CLOUDFLARE: "yes" })).toThrow(/PRIVACY_CLOUDFLARE/);
+  });
+
   it("requires BASE_URL to be an http(s) URL", () => {
     expect(() => parseConfig({ ...baseEnv, BASE_URL: "dice.example.org" })).toThrow(/BASE_URL/);
   });

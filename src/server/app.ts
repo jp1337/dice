@@ -1,10 +1,14 @@
 // HTTP application: security headers, logging, public pages and static files (spec 7, 8).
+import { createHmac } from "node:crypto";
 import { STATUS_CODES } from "node:http";
 import type { Writable } from "node:stream";
+import fastifyCookie from "@fastify/cookie";
 import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyError, type FastifyReply, type FastifyRequest, LogController } from "fastify";
+import { drizzle } from "drizzle-orm/node-postgres";
 import type { Pool } from "pg";
+import { registerAuth } from "./auth.js";
 import type { Config } from "./config.js";
 import { datenschutzHtml, impressumHtml } from "./legal.js";
 import { robotsTxt } from "./robots.js";
@@ -21,6 +25,26 @@ const ROBOTS = "noindex, nofollow, noarchive, nosnippet, noimageindex";
 const HTML = "text/html; charset=utf-8";
 const TEXT = "text/plain; charset=utf-8";
 
+type PgError = Error & { code: string; severity: string; constraint?: string; table?: string };
+const isPgError = (e: unknown): e is PgError =>
+  e instanceof Error && typeof (e as PgError).severity === "string" && typeof (e as PgError).code === "string";
+
+// Database errors carry the SQL, its parameters (names, Discord IDs, avatar bytes) and row details in
+// message, detail and stack. Only their SQLSTATE and the affected constraint and table are logged.
+export function serializeError(err: Error & { query?: unknown; params?: unknown; code?: unknown }): Record<string, unknown> {
+  const db = isPgError(err) ? err : isPgError(err.cause) ? err.cause : null;
+  if (db || "query" in err || "params" in err) {
+    return { type: err.constructor.name, code: db?.code, constraint: db?.constraint, table: db?.table };
+  }
+  return {
+    type: err.constructor.name,
+    message: err.message,
+    stack: err.stack,
+    ...(err.code !== undefined && { code: err.code }),
+    ...(err.cause instanceof Error && { cause: serializeError(err.cause) }),
+  };
+}
+
 function logRequest(request: FastifyRequest, reply: FastifyReply) {
   request.log.info(
     {
@@ -28,7 +52,7 @@ function logRequest(request: FastifyRequest, reply: FastifyReply) {
       method: request.method,
       path: request.url.split("?")[0], // query strings may carry codes or tokens
       status: reply.statusCode,
-      userId: null, // set once sessions exist (step 2)
+      userId: request.user?.id ?? null, // set by routes that resolve the session
       ms: Math.round(reply.elapsedTime),
     },
     "request",
@@ -80,6 +104,8 @@ export async function buildApp(config: Config, deps: Deps) {
       level: config.nodeEnv === "test" ? "silent" : "info",
       timestamp: () => `,"time":"${new Date().toISOString()}"`,
       redact: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]'],
+      // Cast: Fastify's type demands message and stack, which database errors deliberately lack.
+      serializers: { err: serializeError as (err: Error) => { type: string; message: string; stack: string } },
       ...(deps.logStream && { stream: deps.logStream }),
     },
   });
@@ -94,6 +120,10 @@ export async function buildApp(config: Config, deps: Deps) {
     // Vite puts a content hash into every file name under /assets/.
     if (request.url.startsWith("/assets/") && reply.statusCode < 400) {
       reply.header("Cache-Control", "public, max-age=31536000, immutable");
+    }
+    // The hash is part of the URL, so a new avatar gets a new URL (spec 5.1). Private: needs a session.
+    if (request.routeOptions.url === "/avatars/:userId/:hash" && reply.statusCode === 200) {
+      reply.header("Cache-Control", "private, max-age=31536000, immutable");
     }
     return payload;
   });
@@ -113,6 +143,9 @@ export async function buildApp(config: Config, deps: Deps) {
 
   // Per client IP (request.ip honours TRUSTED_PROXIES). Routes opt in with config.rateLimit.
   await app.register(fastifyRateLimit, { global: false });
+  // Signs the short-lived login state cookie; key derived from SESSION_SECRET, separate from session ids.
+  await app.register(fastifyCookie, { secret: createHmac("sha256", config.sessionSecret).update("cookie-signing").digest() });
+  await registerAuth(app, config, drizzle({ client: deps.pool, casing: "snake_case" }));
 
   // /healthz is public and touches the database, so it is limited (CodeQL js/missing-rate-limiting).
   // Generous enough for the container healthcheck and the deploy poll, which share one source address.
@@ -128,7 +161,7 @@ export async function buildApp(config: Config, deps: Deps) {
 
   app.get("/robots.txt", (_request, reply) => reply.type(TEXT).send(robotsTxt));
   app.get("/impressum", (_request, reply) => reply.type(HTML).send(impressumHtml(config.legal)));
-  app.get("/datenschutz", (_request, reply) => reply.type(HTML).send(datenschutzHtml(config.legal)));
+  app.get("/datenschutz", (_request, reply) => reply.type(HTML).send(datenschutzHtml(config.legal, { ...config.privacyServices, retentionDays: config.retentionDays })));
 
   // Serves index.html for "/" and the hashed files under /assets/.
   await app.register(fastifyStatic, { root: deps.webRoot, cacheControl: false, dotfiles: "ignore" });

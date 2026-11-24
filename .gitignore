@@ -7,3 +7,5 @@ coverage/
 wuerfel-tool-konzept.md
 .personal-denylist
 .vitest/
+# Claude Code agent worktrees
+.claude/

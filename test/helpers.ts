@@ -12,6 +12,9 @@ export const baseEnv = {
   BASE_URL: "https://dice.example.org",
   DATABASE_URL: "postgres://dice@127.0.0.1:1/dice",
   DISCORD_GUILD_ID: "100000000000000001",
+  SESSION_SECRET: "test-session-secret-0123456789abcdef",
+  DISCORD_CLIENT_ID: "100000000000000009",
+  DISCORD_CLIENT_SECRET: "test-client-secret",
 };
 
 export const legalEnv = {
