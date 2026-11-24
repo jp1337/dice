@@ -1,12 +1,15 @@
 // HTTP application: security headers, logging, public pages and static files (spec 7, 8).
 import { STATUS_CODES } from "node:http";
 import type { Writable } from "node:stream";
+import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyError, type FastifyReply, type FastifyRequest, LogController } from "fastify";
 import type { Pool } from "pg";
 import type { Config } from "./config.js";
 import { datenschutzHtml, impressumHtml } from "./legal.js";
 import { robotsTxt } from "./robots.js";
+
+export const HEALTHZ_LIMIT_PER_MINUTE = 120;
 
 export type Deps = {
   pool: Pool;
@@ -108,7 +111,12 @@ export async function buildApp(config: Config, deps: Deps) {
     return reply.code(status).send({ error: STATUS_CODES[status] ?? "Error" });
   });
 
-  app.get("/healthz", async (request, reply) => {
+  // Per client IP (request.ip honours TRUSTED_PROXIES). Routes opt in with config.rateLimit.
+  await app.register(fastifyRateLimit, { global: false });
+
+  // /healthz is public and touches the database, so it is limited (CodeQL js/missing-rate-limiting).
+  // Generous enough for the container healthcheck and the deploy poll, which share one source address.
+  app.get("/healthz", { config: { rateLimit: { max: HEALTHZ_LIMIT_PER_MINUTE, timeWindow: "1 minute" } } }, async (request, reply) => {
     try {
       await deps.pool.query("select 1");
       return reply.type(TEXT).send("ok");

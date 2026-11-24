@@ -1,5 +1,6 @@
 import { connect, type AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { HEALTHZ_LIMIT_PER_MINUTE } from "../src/server/app.js";
 import { legalEnv, makeApp } from "./helpers.js";
 
 const ROBOTS = "noindex, nofollow, noarchive, nosnippet, noimageindex";
@@ -172,5 +173,22 @@ describe("forwarded headers", () => {
     await proxied.inject({ url: "/robots.txt", remoteAddress: "192.0.2.10", headers: forwarded });
     expect(proxiedLogs.filter((l) => l.msg === "request").map((l) => l.ip)).toEqual(["198.51.100.9", "203.0.113.7"]);
     await proxied.close();
+  });
+});
+
+describe("rate limiting", () => {
+  it("limits /healthz per client and keeps the security headers on 429", async () => {
+    const { app: limited } = await makeApp();
+    try {
+      for (let i = 0; i < HEALTHZ_LIMIT_PER_MINUTE; i++) {
+        expect((await limited.inject({ url: "/healthz" })).statusCode).toBe(503);
+      }
+      const res = await limited.inject({ url: "/healthz" });
+      expect(res.statusCode).toBe(429);
+      expectHeaders(res.headers);
+      expect(res.headers["cache-control"]).toBe("no-store");
+    } finally {
+      await limited.close();
+    }
   });
 });
