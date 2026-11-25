@@ -1173,12 +1173,15 @@ details[open] > summary::after {
     min-height: 9rem;
   }
 
+  /* Turn order as tall as its list (a few players leave no empty box), shrinking to scroll when
+     long; the history takes the rest and keeps room for a few lines below its switch. */
   .game .turns-panel {
-    flex-grow: 3;
+    flex: 0 1 auto;
+    min-height: 6rem;
   }
 
   .game .history-panel {
-    min-height: 7rem;
+    min-height: 11rem;
   }
 
   .gifts-panel .gifts,

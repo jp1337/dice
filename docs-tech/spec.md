@@ -84,7 +84,7 @@ public on/off · reset a nickname · switch reactions off · end the game, back 
 - Chosen at creation by a host, permanent, labelled "Testraum" for everyone.
 - Only there: hosts add (up to 30) and remove simulated players in the lobby; the server refuses them elsewhere.
 - Simulated players are `users` rows without Discord ID (`Testspieler 1`, marked in the UI), belong to one
-  test room, roll by themselves about 3 s after their turn starts, under exactly the same rules and code.
+  test room, roll by themselves 6 s after their turn starts (3 s was too fast to watch a roll land), under exactly the same rules and code.
 - Real users can join and play: mixed rehearsals work.
 
 ## Public room (one link: `/r/:slug`)

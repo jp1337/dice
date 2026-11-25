@@ -7,6 +7,7 @@ export const reactionEmojis = ["🎉", "😮", "😂", "👏", "🍀", "❤️"]
 // Limits shared by server and client
 export const MAX_CLIENT_MESSAGE_BYTES = 4096;
 export const NICKNAME_MAX = 32;
+export const MAX_SIMULATED_PLAYERS = 30; // per test room (spec 4.7)
 export const ROLL_COOLDOWN_MS = 2000;
 export const REACTION_INTERVAL_MS = 2000;
 export const PING_INTERVAL_MS = 25_000;

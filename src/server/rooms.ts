@@ -24,6 +24,7 @@ import {
   defaultSettings,
   eventVisibility,
   patchMeRequestSchema,
+  MAX_SIMULATED_PLAYERS,
 } from "../shared/contracts.js";
 import { reduce } from "../shared/game/reduce.js";
 import type { LiveRooms } from "./cleanup.js";
@@ -43,8 +44,8 @@ export const MAX_SOCKETS_PER_USER = 5; // per room
 export const PRESENCE_DELAY_MS = 300;
 export const PRESENCE_MAX_WAIT_MS = 2000;
 const BUSY_DELAY_MS = 100; // the longest a change waits for a busy queue
-export const SIMULATED_ROLL_DELAY_MS = 3000; // spec 4.7: "etwa 3 Sekunden nachdem sie dran sind"
-export const MAX_SIMULATED_PLAYERS = 30; // per room (spec 4.7)
+// Spec 4.7 said "etwa 3 Sekunden"; in rehearsals that was too fast to watch a roll land, so 6 s.
+export const SIMULATED_ROLL_DELAY_MS = 6000;
 export const MAX_GUESTS_PER_ROOM = 200; // spec 4.8
 export const MAX_GUESTS_PER_IP = 5; // guest connections per IP, over all rooms (spec 4.8)
 export const GUEST_CONNECTS_PER_MINUTE = 60; // per IP, requests without a session; the room lookup touches the database

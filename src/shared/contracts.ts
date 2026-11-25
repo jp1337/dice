@@ -1,7 +1,7 @@
 // Shared contracts between server, game logic and web client.
 // Every message crossing the network is defined here as a zod schema; types are inferred from it.
 import { z } from "zod";
-import { NICKNAME_MAX, ROOM_NAME_MAX, SIX_MESSAGE_MAX, isVisibleText, reactionEmojis } from "./constants.js";
+import { MAX_SIMULATED_PLAYERS, NICKNAME_MAX, ROOM_NAME_MAX, SIX_MESSAGE_MAX, isVisibleText, reactionEmojis } from "./constants.js";
 
 // zod-free values live in constants.ts so the browser bundle can import them without zod.
 export * from "./constants.js";
@@ -150,7 +150,7 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
   msg("claim_last_place", {}),
   // Host and co-host
   msg("update_settings", { settings: settingsSchema.partial().strict() }),
-  msg("add_simulated_players", { count: z.int().min(1).max(30) }),
+  msg("add_simulated_players", { count: z.int().min(1).max(MAX_SIMULATED_PLAYERS) }),
   msg("remove_simulated_player", { userId }),
   msg("start", {}),
   msg("pause", {}),
