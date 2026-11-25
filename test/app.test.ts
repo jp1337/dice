@@ -70,18 +70,31 @@ describe("every kind of response", () => {
     expect(conf).toMatch(new RegExp(`^ {4}access_log \\S+ ${name};$`, "m"));
     // The map shortens IPv4 to /16 and IPv6 to /48, the same as src/server/log-ip.ts.
     expect(conf).toMatch(/^map \$remote_addr \$dice_ip \{$/m);
-    // A guest link is the token in the path: $uri as it is would log the key to the room.
+    // The room slug is in the path: $uri as it is would log the key to a public room.
     expect(line).not.toMatch(/\$uri\b/);
     expect(line).toContain("$dice_uri");
     expect(conf).toMatch(/^map \$uri \$dice_uri \{$/m);
   });
 
-  it.each([`/z/${"a".repeat(22)}`, `/ws/watch/${"a".repeat(22)}`])("never logs the guest token of %s", async (url) => {
+  // The slug opens a public room without a login: a log line must never carry it.
+  const SLUG = "a".repeat(22);
+  const slugPaths = [`/r/${SLUG}`, `/api/rooms/${SLUG}`, `/ws/rooms/${SLUG}`, `/r/${SLUG}/?x=1`];
+  it.each(slugPaths)("never logs the room slug of %s", async (url) => {
     logs.length = 0;
     await app.inject({ url });
     const line = logs.find((l) => l.msg === "request");
-    expect(line?.path).toMatch(/^\/(z|ws\/watch)\/:token$/);
-    expect(JSON.stringify(logs)).not.toContain("a".repeat(22));
+    expect(line?.path).toMatch(/^\/(r|api\/rooms|ws\/rooms)\/:slug\/?$/);
+    expect(JSON.stringify(logs)).not.toContain(SLUG);
+  });
+
+  it("docs/nginx.example.conf masks the same paths as the app", () => {
+    const conf = readFileSync(new URL("../docs/nginx.example.conf", import.meta.url), "utf8");
+    const map = conf.match(/^map \$uri \$dice_uri \{\n([^}]*)\}/m)![1]!;
+    const entries = [...map.matchAll(/^ +~(\S+) +(\S+);$/gm)].map(([, re, to]) => [new RegExp(re!), to!] as const);
+    // nginx tries the regular expressions in order; $uri has no query string.
+    const nginx = (uri: string) => entries.find(([re]) => re.test(uri))?.[1] ?? uri;
+    for (const uri of slugPaths.map((u) => u.split("?")[0]!)) expect(nginx(uri), uri).toMatch(/^\/(r|api\/rooms|ws\/rooms)\/:slug$/);
+    expect(nginx("/api/rooms")).toBe("/api/rooms"); // creating a room has no slug
   });
 
   it("also on errors", async () => {
@@ -160,7 +173,6 @@ describe("routes", () => {
 
   it.each([
     ["/does-not-exist", "Diese Seite gibt es nicht."],
-    ["/z/kurz", "Dieser Zuschauer-Link ist nicht mehr aktiv."],
   ])("%s answers 404 with a page and a way back", async (url, text) => {
     const res = await app.inject({ url });
     expect(res.statusCode).toBe(404);
@@ -264,7 +276,7 @@ describe("rate limiting", () => {
     ["/healthz", HEALTHZ_LIMIT_PER_MINUTE],
     ["/auth/login", LOGIN_LIMIT_PER_MINUTE],
     ["/auth/callback", LOGIN_LIMIT_PER_MINUTE],
-    [`/z/${"a".repeat(22)}`, GUEST_CONNECTS_PER_MINUTE],
+    [`/api/rooms/${"a".repeat(22)}`, GUEST_CONNECTS_PER_MINUTE], // without a session
   ])("HEAD %s shares the budget of GET", async (url, max) => {
     const { app: limited } = await makeApp({ DISCORD_API_BASE: "http://127.0.0.1:1" });
     try {

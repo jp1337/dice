@@ -64,7 +64,7 @@ export function deriveRoom(view: RoomView, online: boolean) {
       setCohost: online && isHost,
       resetNickname: canModerate,
       simulatedPlayers: canModerate && lobby && room.isTest,
-      watchLink: canModerate,
+      setPublic: canModerate,
       pause: canModerate && running && !game.pause,
       continue: canModerate && running && game.pause !== null,
       skip: canModerate && running,
@@ -203,8 +203,8 @@ export function describeEvent(
     }
     case "nickname_reset":
       return `${actor} setzt den Spitznamen von ${name(event.payload.userId)} zurück`;
-    case "watch_link_changed":
-      return `${actor} schaltet den Zuschauer-Link ${event.payload.enabled ? "ein" : "aus"}`;
+    case "public_changed":
+      return `${actor} macht den Raum ${event.payload.isPublic ? "öffentlich" : "nicht öffentlich"}`;
     case "simulated_players_changed": {
       const { added, removed } = event.payload;
       const parts = [added.length > 0 && `fügt ${added.length} Testspieler hinzu`, removed.length > 0 && `entfernt ${removed.length} Testspieler`];

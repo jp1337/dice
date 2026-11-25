@@ -10,7 +10,7 @@ import { parseConfig } from "../src/server/config.js";
 import { runMigrations } from "../src/server/db/migrate.js";
 import { runCleanup } from "../src/server/cleanup.js";
 import { CommandError } from "../src/server/game-commands.js";
-import { MAX_SOCKETS_PER_USER, MAX_STRIKES, MESSAGE_BURST, type Member, NICKNAME_LIMIT_PER_MINUTE, checkSettingsChange, roomView } from "../src/server/rooms.js";
+import { GUEST_CONNECTS_PER_MINUTE, MAX_SOCKETS_PER_USER, MAX_STRIKES, MESSAGE_BURST, type Member, NICKNAME_LIMIT_PER_MINUTE, checkSettingsChange, roomView } from "../src/server/rooms.js";
 import { type GameEvent, MAX_CLIENT_MESSAGE_BYTES, NICKNAME_MAX, type RoomView, defaultSettings } from "../src/shared/contracts.js";
 import { initialGameState } from "../src/shared/game/reduce.js";
 import { baseEnv, makeApp, ownDatabase } from "./helpers.js";
@@ -46,7 +46,7 @@ describe("guest view (spec 4.8)", () => {
       name: "Feier",
       isTest: false,
       settings: defaultSettings,
-      watchToken: "w",
+      isPublic: true,
       members: new Map([
         ["h", member("h", "spectator", HOST_ID)],
         ["p", member("p", "player", newDiscordId())],
@@ -58,15 +58,13 @@ describe("guest view (spec 4.8)", () => {
       game: { ...initialGameState(), history },
     };
     const view = roomView(room, "guest", config);
-    expect(view.room.slug).toBe("");
-    expect(view.room).not.toHaveProperty("watchUrl");
+    expect(view.room).toMatchObject({ slug: "secret-slug", isPublic: true }); // guests came through the room link
     expect(view.members.map((m) => m.userId)).toEqual(["p"]);
     expect(view.members[0]).toMatchObject({ avatarUrl: null, displayName: "Name p" });
     expect(view.members[0]).not.toHaveProperty("discordName");
     expect(view.game.history).toEqual([]);
     expect(view.room).not.toHaveProperty("guestCount");
     const host = roomView(room, "host", config);
-    expect(host.room.watchUrl).toBe(`${ORIGIN}/z/w`);
     expect(host.members).toHaveLength(3);
     expect(host.game.history).toHaveLength(1);
     expect(host.room.guestCount).toBe(2);
@@ -173,15 +171,39 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       expect(slug).toMatch(/^[\w-]{22}$/); // 128 bit
       expect(await newRoom(host)).not.toBe(slug);
       const { rows } = await pool.query(
-        "select r.name, r.is_test, r.settings, m.user_id, m.participation, m.is_cohost from rooms r join room_members m on m.room_id = r.id where r.slug = $1",
+        "select r.name, r.is_test, r.settings, r.is_public, m.user_id, m.participation, m.is_cohost from rooms r join room_members m on m.room_id = r.id where r.slug = $1",
         [slug],
       );
-      expect(rows).toEqual([{ name: "Probe", is_test: true, settings: defaultSettings, user_id: host.id, participation: "spectator", is_cohost: false }]);
+      expect(rows).toEqual([{ name: "Probe", is_test: true, settings: defaultSettings, is_public: true, user_id: host.id, participation: "spectator", is_cohost: false }]);
 
       const summary = await app.inject({ url: `/api/rooms/${slug}`, cookies: cookies(user) });
-      expect(summary.json()).toEqual({ slug, name: "Probe", isTest: true, status: "lobby" });
-      expect((await app.inject({ url: `/api/rooms/${slug}` })).statusCode).toBe(401);
+      expect(summary.json()).toEqual({ slug, name: "Probe", isTest: true, status: "lobby", isPublic: true });
       expect((await app.inject({ url: "/api/rooms/unknown", cookies: cookies(user) })).statusCode).toBe(404);
+    });
+
+    it("answers a room without a session only while it is public, else like an unknown room (spec 4.8)", async () => {
+      const slug = await newRoom(host);
+      const anonymous = (url: string) => app.inject({ url, remoteAddress: nextIp() });
+      const summary = await anonymous(`/api/rooms/${slug}`);
+      expect(summary.statusCode).toBe(200);
+      expect(summary.json()).toEqual({ slug, name: "Jahresabschluss", isTest: false, status: "lobby", isPublic: true });
+      await pool.query("update rooms set is_public = false where slug = $1", [slug]);
+      expect((await anonymous(`/api/rooms/${slug}`)).statusCode).toBe(401);
+      expect((await anonymous(`/api/rooms/${randomBytes(16).toString("base64url")}`)).statusCode).toBe(401);
+      expect((await app.inject({ url: `/api/rooms/${slug}`, cookies: cookies(await makeUser()) })).statusCode).toBe(200); // members always
+    });
+
+    it("limits room lookups without a session per IP, never members", async () => {
+      const { app: limited } = await makeApp(env, dbUrl);
+      try {
+        const slug = await newRoom(host, limited);
+        const get = (user?: User) => limited.inject({ url: `/api/rooms/${slug}`, ...(user && { cookies: cookies(user) }), remoteAddress: "192.0.2.9" });
+        for (let i = 0; i < GUEST_CONNECTS_PER_MINUTE; i++) expect((await get()).statusCode).toBe(200);
+        expect((await get()).statusCode).toBe(429);
+        expect((await get(host)).statusCode).toBe(200);
+      } finally {
+        await limited.close();
+      }
     });
 
     it("limits room creation per IP", async () => {
@@ -231,11 +253,16 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
   });
 
   describe("WebSocket access", () => {
-    it("refuses the upgrade without a session, with a foreign Origin and for an unknown room", async () => {
+    it("refuses the upgrade without a session (unless public), with a foreign Origin and for an unknown room", async () => {
       const slug = await newRoom(host);
       const user = await makeUser();
       const cookie = `${SESSION_COOKIE}=${user.token}`;
+      const guest = await upgrade(`/ws/rooms/${await newRoom(host)}`, { origin: ORIGIN });
+      expect(guest.status).toBe(101); // new rooms are public
+      guest.socket?.destroy();
+      await pool.query("update rooms set is_public = false where slug = $1", [slug]); // not in memory yet
       expect((await upgrade(`/ws/rooms/${slug}`, { origin: ORIGIN })).status).toBe(401);
+      expect((await upgrade("/ws/rooms/unknown", { origin: ORIGIN })).status).toBe(401);
       expect((await upgrade(`/ws/rooms/${slug}`, { origin: ORIGIN, cookie: `${SESSION_COOKIE}=forged` })).status).toBe(401);
       expect((await upgrade(`/ws/rooms/${slug}`, { cookie, origin: "https://evil.example" })).status).toBe(403);
       expect((await upgrade(`/ws/rooms/${slug}`, { cookie })).status).toBe(403);
@@ -263,7 +290,7 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
         [c.id, "player", true],
       ]);
       expect(cb.state.viewer).toEqual({ kind: "member", userId: b.id, isHost: false, canModerate: false });
-      expect(cb.state.room).toMatchObject({ slug, name: "Jahresabschluss", status: "lobby", watchLinkActive: false });
+      expect(cb.state.room).toMatchObject({ slug, name: "Jahresabschluss", status: "lobby", isPublic: true });
       expect(cb.member(a.id)).toMatchObject({ displayName: "Erika", avatarUrl: `/avatars/${a.id}/${"b".repeat(32)}`, isHost: false });
       expect(cb.member(host.id)?.isHost).toBe(true);
       const { rows } = await pool.query("select count(*)::int as n from room_members m join rooms r on r.id = m.room_id where r.slug = $1", [slug]);

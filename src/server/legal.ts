@@ -37,7 +37,7 @@ ${body}
 `;
 }
 
-// Unknown addresses and guest links that are off: a page with a way back, not a bare "Nicht gefunden".
+// Unknown addresses: a page with a way back, not a bare "Nicht gefunden".
 export function notFoundHtml(text: string, css: string | null = null) {
   return page("Nicht gefunden", `<p>${escapeHtml(text)}</p>\n<p><a class="button" href="/">Zur Startseite</a></p>`, css);
 }
@@ -108,7 +108,7 @@ ${legal ? contact(legal) : notConfigured}
 
 <h2>Wer was sieht</h2>
 <p>Angemeldete Personen in einem Raum sehen von den anderen Teilnehmern Anzeigename oder Spitzname, Avatar, Rolle, Verbindungsstatus und Würfe. Hosts sehen zusätzlich den Discord-Namen. Hosts und Co-Hosts können Spitznamen zurücksetzen.</p>
-<p>Ein Host kann für einen Raum einen Zuschauer-Link einschalten. Dann sehen auch Personen ohne Anmeldung den Spielverlauf mit den Anzeigenamen der Würfler und aller, die darin vorkommen (etwa ein Host, der für jemanden würfelt), aber ohne Avatare, Discord-IDs und Benutzernamen. Solange der Link aktiv ist, zeigt der Raum einen Hinweis.</p>
+<p>Neue Räume sind öffentlich; ein Host kann das für jeden Raum ausschalten. In einem öffentlichen Raum sehen auch Personen ohne Anmeldung, die den Raum-Link haben, den Spielverlauf mit den Anzeigenamen der Würfler und aller, die darin vorkommen (etwa ein Host, der für jemanden würfelt), aber ohne Avatare, Discord-IDs und Benutzernamen. Solange der Raum öffentlich ist, zeigt er angemeldeten Personen einen Hinweis.</p>
 <p>Emoji-Reaktionen erscheinen ohne Namen bei allen im Raum und werden nicht gespeichert.</p>
 
 <h2>Cookies und lokaler Speicher</h2>

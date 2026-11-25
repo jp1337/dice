@@ -18,7 +18,7 @@ SSE), more than one app instance.
 
 | Area | Choice |
 | --- | --- |
-| Login | Discord OAuth2 only, members of `DISCORD_GUILD_ID` only. Sole exception: the read-only guest link |
+| Login | Discord OAuth2 only, members of `DISCORD_GUILD_ID` only. Sole exception: watching a public room read-only |
 | Stack | Node.js LTS, TypeScript, Fastify + `@fastify/websocket`, React + Vite SPA served by the backend, Drizzle ORM, Vitest. Deviations only with a written reason |
 | Database | PostgreSQL; migrations in the repository, applied at container start |
 | Runtime | One multi-stage image, non-root; Docker Compose; behind nginx with CrowdSec, maybe Cloudflare later |
@@ -68,14 +68,14 @@ The gift order so far is visible to everyone throughout.
 - History has two levels, both with name and time; the server filters it per recipient:
   - **public:** every roll; a host rolling for someone is marked ("X rolls for Y");
   - **hosts and co-hosts only:** everything else (skip, undo, pause/continue, remove, add, last place,
-    co-host, participation, nickname reset, guest link, simulated players). Never sent to anyone else.
+    co-host, participation, nickname reset, public on/off, simulated players). Never sent to anyone else.
 - Removed players get no place. Latecomers are appended to the end of the turn order.
 
 ## Host tools
 
 Pause/continue · skip the current player once · roll for the current player · remove a player · append a
-latecomer · undo the last roll · assign the last place · appoint/remove co-hosts (hosts only) · guest link
-on/off/regenerate · reset a nickname · switch reactions off · end the game, back to the lobby.
+latecomer · undo the last roll · assign the last place · appoint/remove co-hosts (hosts only) · room
+public on/off · reset a nickname · switch reactions off · end the game, back to the lobby.
 
 **No turn time limit, no automatic roll.** A host decides to skip or roll for an unresponsive player.
 
@@ -87,11 +87,15 @@ on/off/regenerate · reset a nickname · switch reactions off · end the game, b
   test room, roll by themselves about 3 s after their turn starts, under exactly the same rules and code.
 - Real users can join and play: mixed rehearsals work.
 
-## Guest link (`/z/:token`)
+## Public room (one link: `/r/:slug`)
 
-- Off by default. A host enables, disables or regenerates it per room; disabling or regenerating
-  disconnects all guests at once. Token: random 128 bit, unrelated to the room slug.
-- While on, every member sees: "Zuschauer-Link aktiv: Dein Anzeigename ist für Gäste sichtbar."
+- One link per room. Hosts and co-hosts switch "Öffentlich" per room, on for new rooms (rooms from before
+  the switch: on only where their old guest link was on).
+  - **On:** anyone with the link watches as a guest, without logging in.
+  - **Off:** only logged-in members; guests are disconnected at once (4001, asked to log in).
+- Logged-in members always get the member view through the same link.
+- The slug is the key: never logged (app and nginx example).
+- While on, every member sees: "Öffentlicher Raum: Gäste ohne Anmeldung sehen deinen Anzeigenamen."
 - Guests read room name, status, turn order, active player, dice and animation, six banner, gift order,
   public history. **Display names with initials only:** no avatars, Discord IDs, usernames, moderation
   entries, or lobby members who neither play nor hold a place.
@@ -120,9 +124,9 @@ connected/disconnected; a disconnected active player is flagged to hosts. Still 
 - Return target survives the login; only own relative paths.
 - Stored: Discord ID, username, display name, avatar. No e-mail; Discord tokens discarded after the check.
 - Sessions in PostgreSQL, 7 days, cookie `HttpOnly`, `Secure`, `SameSite=Lax`, not bound to the IP.
-- Without a session only `/`, login, `/impressum`, `/datenschutz`, `/robots.txt`, `/healthz` and an active
-  guest link respond. A room link without session gets the app shell with preview tags and a login prompt,
-  no room data.
+- Without a session only `/`, login, `/impressum`, `/datenschutz`, `/robots.txt`, `/healthz` and public rooms
+  (guest view) respond. A room link without session always gets the app shell with preview tags; a room
+  that is not public then shows a login prompt, no room data.
 - Login runs entirely in the browser (no Discord app needed); must also work when the Discord mobile app
   intercepts the link, and in its in-app browser.
 
@@ -150,7 +154,7 @@ The game state is never stored; it is `reduce(events, settings) -> GameState` ov
 ## Interfaces
 
 **HTTP:** `GET /auth/login`, `GET /auth/callback`, `POST /auth/logout` · `GET`/`PATCH /api/me` (nickname
-only) · `POST /api/rooms` (hosts), `GET /api/rooms/:slug` · `GET /r/:slug`, `GET /z/:token` (404 when off)
+only) · `POST /api/rooms` (hosts), `GET /api/rooms/:slug` (without session: 401 unless public) · `GET /r/:slug`
 · `GET /healthz` (database check, no details) · `GET /impressum`, `/datenschutz`, `/robots.txt` ·
 `GET /avatars/:userId/:hash`.
 
@@ -160,11 +164,11 @@ only) · `POST /api/rooms` (hosts), `GET /api/rooms/:slug` · `GET /r/:slug`, `G
 | --- | --- |
 | Any member | `set_participation` (self, lobby only), `react` |
 | Player | `roll`, `claim_last_place` (last player only) |
-| Host, co-host | `set_participation` (anyone), `update_settings`, `add_simulated_players`, `remove_simulated_player`, `start`, `pause`, `continue`, `skip`, `roll_for`, `remove_player`, `add_player`, `assign_last_place`, `undo`, `set_watch_link`, `reset_nickname`, `end`, `reset` |
+| Host, co-host | `set_participation` (anyone), `update_settings`, `add_simulated_players`, `remove_simulated_player`, `start`, `pause`, `continue`, `skip`, `roll_for`, `remove_player`, `add_player`, `assign_last_place`, `undo`, `set_public`, `reset_nickname`, `end`, `reset` |
 | Host only | `set_cohost` |
 | Server | `state` (full room and game state after every change, filtered per recipient), `rolled` (animation trigger), `reactions` (batched), `error` (code + German text) |
 
-**WebSocket `/ws/watch/:token`:** no session, valid token and `Origin`; sends the guest `state` and
+**Without a session** (public rooms only, else 401): `/ws/rooms/:slug` with `Origin` sends the guest `state` and
 `rolled`, drops everything received.
 
 Server rules: every action is checked against host status, turn and game status; the client decides
@@ -180,8 +184,9 @@ KB at most. The game never depends on one connection, a host's included.
 - Forwarded headers trusted only from `TRUSTED_PROXIES`. IP used for logs and rate limits only.
 - Status codes: 401 no session, 403 no permission, 404 unknown, 429 rate limited; never 200 with an error.
 - JSON logs on stdout: time, client IP, method, path, status, user ID; rejected logins logged; never
-  tokens or cookies.
-- Rate limits: login, room creation, WebSocket messages per connection, reactions, guest connections per IP.
+  tokens, cookies or room slugs (logged as `/r/:slug`, `/api/rooms/:slug`, `/ws/rooms/:slug`).
+- Rate limits: login, room creation, WebSocket messages per connection, reactions, room lookups and connections
+  without a session per IP.
 - Standard methods, small size-limited JSON bodies, no user data in URLs except the room slug.
 - Everything from the own domain. Headers: CSP `default-src 'self'`, `connect-src 'self'` + own `wss`,
   `img-src 'self' data:`, `frame-ancestors 'none'`; `X-Content-Type-Options: nosniff`;
@@ -206,7 +211,7 @@ KB at most. The game never depends on one connection, a host's included.
 ## Interface
 
 Start (login button with privacy link; hosts: create room, "test room"), lobby, game view, guest view
-("Du schaust als Gast zu", no buttons, reactions or avatars), six banner (hosts: "continue"), result.
+("Du schaust als Gast zu" with a login link; no buttons, reactions or avatars), six banner (hosts: "continue"), result.
 Footer on every page: imprint, privacy notice, GitHub. Mobile-first usable; light and dark following the
 system with a toggle (`localStorage`); connection state visible. Distinct short sounds for a roll and a 6,
 on by default, per-user mute in `localStorage`, playing from the first click; sound files self-made or
@@ -220,7 +225,7 @@ MIT-compatible, origin in the README. Open Graph preview identical for all rooms
 | `reduce` | turn order, bonus after 1, chain, expiry, 6 with one and two dice, 6 with 1, elimination, last player (roll on, claim, host assigns, `auto`), skip with pending bonus, remove, latecomer, undo, every setting both ways |
 | WebSocket | roll out of turn refused, host actions from non-hosts refused, no roll while paused, second host takes over, state rebuilt after restart |
 | Roles and history | co-host has tools but cannot appoint; non-hosts get no moderation entries; reconnect restores role, place, bonus; removed player returns as spectator; self-switch only in lobby |
-| Guest link | off = 404; guest state has no avatars, IDs, usernames, moderation; guest messages dropped; regenerate disconnects; limits per room and IP |
+| Public room | on by default; off = 401 without a session, guests disconnected at once; guest state has no avatars, IDs, usernames, moderation; guest messages dropped; limits per room and IP; slug never logged |
 | Nicknames, reactions | length and character checks, host reset, reaction rate limit, disabled reactions refused |
 | Test rooms | simulated players roll by themselves only on their turn, refused in normal rooms, an all-simulated game completes |
 | Avatars | same hash no download, new hash replaces, none gives placeholder, failed download does not block login, foreign hosts and oversized files refused |
@@ -241,7 +246,7 @@ security, no indexing" applies from step 1.
 | 3 | Rooms and lobby: create, join by link, WebSocket `state`, participation, reconnect, nicknames |
 | 4 | Game logic: `reduce` with tests, rolling, turn checks, bonus, six pause, last player, result |
 | 5 | Host tools, co-hosts, two-level history, test rooms, reconnect, restart recovery, cleanup |
-| 6 | Polish: animation, sound, banner, reactions, guest link, theme toggle, link preview, mobile, README |
+| 6 | Polish: animation, sound, banner, reactions, public rooms, theme toggle, link preview, mobile, README |
 
 Work is done by subagents after the main agent has written the contracts and the migration; an
 independent subagent reviews every package against this spec before merge.

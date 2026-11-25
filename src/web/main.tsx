@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { DieFace } from "./components/Dice.js";
 import { SoundToggle, ThemeToggle } from "./components/Toggles.js";
 import { parseRoute } from "./lib/routes.js";
-import { GuestPage, RoomPage } from "./views/RoomPage.js";
+import { RoomPage } from "./views/RoomPage.js";
 import { StartPage } from "./views/Start.js";
 import "./views/views.css";
 
@@ -25,7 +25,6 @@ function App() {
           </div>
         )}
         {route.page === "room" && <RoomPage slug={route.slug} />}
-        {route.page === "guest" && <GuestPage token={route.token} />}
       </main>
       <footer>
         <span>
