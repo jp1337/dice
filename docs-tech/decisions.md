@@ -4,6 +4,8 @@ Newest first. A decision changes by a new row, not by editing an old one.
 
 | Date | Decision | Why |
 | --- | --- | --- |
+| 2026-11-25 | Harvest-festival look (wood, parchment, pixel bevels, Pixelify Sans for headings); replaces the teal "Flip7" tokens | Made for the person the event is for; original, no game assets |
+| 2026-11-25 | From 1100 × 540 px every room screen fills the window; long lists scroll inside their panel | On a desktop the lobby with 30 players was 4700 px tall, the game 3000 px |
 | 2026-11-25 | Every log line carries the client address only through `logIp`: IPv4 `/16`, IPv6 `/48`, IPv4-mapped IPv6 as IPv4; rate limits and the guest limit per IP keep the full `request.ip` in memory. Deviates from spec 8.3 "Client-IP" | Logs leave the app and are kept for weeks; a full address there is personal data nobody needs. /16 and /48 are what an nginx in front can shorten to as well |
 | 2026-11-24 | `skip` and `roll_for` carry the `userId` the host saw as active; another active player is refused with `turn_changed` | Two hosts skipping at once skipped two players; a late "Für X würfeln" rolled for the next one |
 | 2026-11-24 | A simulated player's timer is bound to its turn (`active:history length`); fired behind any other change it only reschedules, with the full delay | A timer queued behind a skip or undo rolled at once for the next player |

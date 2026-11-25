@@ -19,47 +19,72 @@ compares pixels (`--check`).
   writer (`node:zlib`). Square and small: `twitter:card` is `summary`, so Discord shows it as a
   thumbnail beside `og:title` (spec 10.2: "kleines Bild"). No text in it.
 - `src/web/public/` is copied unchanged to `dist/web/`; `favicon.svg` and `theme-init.js` are hand-written.
+- `src/web/public/fonts/PixelifySans.ttf` (77 KB, variable 400–700): Pixelify Sans by the Pixelify Sans
+  Project Authors, SIL Open Font License 1.1 (`OFL.txt` beside it), unmodified, from
+  `github.com/google/fonts/tree/main/ofl/pixelifysans`. Served under `/fonts/` with the default `no-store`.
 
 ## Look
 
-Tokens after the "Flip7 Card Game" design system (yiujc, DESIGNmd, MIT; its logo, name and artwork are
-not used). All in `style.css` as plain custom properties.
+Harvest festival in a small valley town: parchment panels in wooden frames, a plank table for the dice,
+pixel bevels on every control. Original work; no assets, names or UI frames from any game. All in
+`style.css` as plain custom properties.
 
 | Colour | Used for |
 | --- | --- |
-| Teal `#2ba8a2` | every control, card accent bar, the felt the dice lie on (`#17766f` → `#0f5e59`) |
-| Gold `#ffd23f` | the one call to action ("Würfeln", "Start", "Weiter"), whose turn, first place |
-| Coral `#ef6c4a` | the six banner, danger, third place |
-| Cream `#fff8e7` | dice, inputs, ribbons |
+| Pumpkin `#e9792f` | the one call to action ("Würfeln", "Start", "Weiter"), the active turn token |
+| Wheat `#f2c14e` | your turn plaque, first place, the six sunburst with pumpkin |
+| Wood `#8a5229` / `#4e2a12` | frames, the plank table, number tokens |
+| Parchment `#fbf0d4` | panels (light), signs and dice (both themes) |
+| Meadow `#3d7424` / berry `#a8304a` | switches on, connection / danger, notices |
+| Sky bands `#cbe7ef` → `#e2efcc` | page background; dark: night `#1b2033` with stars |
 
-Patterns: pill buttons (≥ 44 px), gold gradient with gloss for `.primary`, coloured glow instead of
-black shadows, 6 px left accent bar on cards, dashed dividers, emoji section titles, folded `.ribbon`
-(needs an isolated parent: `.ribbon-wrap`), bunting on `body::before`, `Confetti` on the six and the result.
-Motion ≤ 500 ms except the dice (1.3 s) and confetti; all of it off with reduced motion.
+| Pattern | How |
+| --- | --- |
+| Pixel frame | four hard `box-shadow` copies, no blur; the corners stay notched. Buttons swap `--face`, `--hi`, `--lo`, `--frame` |
+| Sign (`.ribbon`) | parchment in a plank frame on two ropes; needs an isolated parent (`.ribbon-wrap`, `.hero`) |
+| Headings | Pixelify Sans for `h1`–`h3`, `summary`, sign, turn; body stays the system face. Digits come from the system face too (`unicode-range`): its 5 reads as an S |
+| Motion | ≤ 500 ms except the dice (1.3 s) and confetti; stepped bob on the roll button; all off with reduced motion |
+
+### Desktop shell
+
+From 1100 × 540 px the page is the window (`#root` is `100dvh`). Each room screen is a grid; long lists
+(participants, turn order, gift order, history) scroll inside their own panel, never the page. Below that
+size the page scrolls as before.
+
+| Screen | Columns |
+| --- | --- |
+| Lobby | host card · "Du" + settings · participants (non-hosts: two columns) |
+| Game | gifts + more host tools · dice, host bar, reactions · turn order, history, participants |
+| Result | sign, gift order, buttons · history |
+
+On a phone the game's column wrappers are `display: contents` and CSS `order` restores the reading order;
+the DOM order already matches the focus order. Every scroller is `position: relative`, or the `.sr-only`
+text inside it would stretch the page.
 
 ### Contrast (WCAG AA: text ≥ 4.5, borders and focus ≥ 3)
 
 | Pair | Light | Dark |
 | --- | --- | --- |
-| `--fg` on `--bg` / `--surface` / `--field` | 11.4 / 12.4 / 11.7 | 14.3 / 11.8 / 10.6 |
-| `--muted` on `--bg` / `--surface` | 5.8 / 6.2 | 8.3 / 6.9 |
-| `--accent` on `--bg` (links, h1) | 6.7 | 7.4 |
-| Button text `--accent` on `--tint` | 6.5 | 5.5 |
-| `--on-fill` on `--fill` (theme toggle) | 6.4 | 7.4 |
-| `--danger` on `--tint-coral` | 4.7 | 5.7 |
-| `--fg` on `--tint-gold` / `--tint-sky` (badges) | 11.1 / 10.7 | 10.4 / 11.2 |
-| `--edge` on `--surface` / `--field` (input border) | 3.6 / 3.4 | 4.3 / 3.8 |
-| `--focus` on `--bg` | 4.9 | 9.0 |
+| `--fg` on `--bg` / `--bg-low` / `--surface` / `--field` | 10.8 / 11.6 / 12.4 / 13.5 | 13.1 / 11.8 / 11.9 / 13.4 |
+| `--fg` on `--tint` (buttons) | 10.7 | 9.1 |
+| `--muted` on `--bg` / `--surface` | 6.1 / 7.0 | 8.7 / 7.9 |
+| `--accent` on `--bg` / `--surface` (links, title) | 6.0 / 6.9 | 7.8 / 7.1 |
+| `--on-fill` on `--fill` (theme toggle) | 5.4 | 7.9 |
+| `--danger` on `--tint-berry` | 6.1 | 7.1 |
+| `--fg` on `--tint-wheat` / `--tint-sky` / `--tint-meadow` (badges) | 10.9 / 11.3 / 11.5 | 8.5 / 9.7 / 9.5 |
+| `--edge` on `--field` / `--surface` (input border) | 4.7 / 4.3 | 5.1 / 4.5 |
+| `--focus` on `--bg` / `--surface` | 5.1 / 5.8 | 10.2 / 9.2 |
 
 Same in both themes:
 
 | Pair | Ratio |
 | --- | --- |
-| `--on-gold` on gold / gold-dark / gold-light | 9.6 / 7.4 / 11.0 |
-| White on felt (lightest `#17766f`) / cream on felt | 5.4 / 5.1 |
-| `--ink` on cream (ribbon, six banner text) | 11.7 |
-| White on notice `#b53a1e` / on bronze `#c2462a` | 5.9 / 5.0 |
-| `--ink` on silver `#b5c1c4` | 6.7 |
+| `--on-pumpkin` on pumpkin / pumpkin-light | 5.9 / 8.3 |
+| `--on-wheat` on wheat | 8.7 |
+| Cream on wood / plank / wood-dark (table text, tokens) | 5.8 / 6.7 / 11.5 |
+| `--ink` on parchment (signs, six banner) | 12.4 |
+| White on berry (notice) / on copper `#9c5a2a` | 6.6 / 5.4 |
+| `--ink` on silver `#c9c2b4` | 7.9 |
 
 The ratios come from the WCAG relative-luminance formula; recompute them when a token changes.
 
@@ -93,7 +118,7 @@ directly or through `contracts.ts`. Values for the browser live in `src/shared/c
 | Import | Use |
 | --- | --- |
 | `Dice` `{values, rollKey, count?, onSettled?}` | New `rollKey` starts the 1.3 s tumble; `onSettled` when the result shows (six sound, banner) |
-| `Confetti` | 12 CSS pieces, `position: fixed`, three falls; hidden with reduced motion |
+| `Confetti` | 12 square CSS pieces, `position: fixed`, three falls; hidden with reduced motion |
 | `SixBanner` `{template, name, platz, children?}` | Native modal `<dialog>`: the browser keeps the page behind inert; Escape does nothing; `children` = the host's "Weiter" button |
 | `ReactionBar` `{onReact, disabled?}` | Client cooldown 2 s, mirrors the server |
 | `useFloatingReactions()` → `{items, add}`, `FloatingReactions` `{items, hidden?}` | `add(msg.emojis)`; place in a `.reaction-stage` element |
