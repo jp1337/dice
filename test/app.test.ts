@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { connect, type AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { HEALTHZ_LIMIT_PER_MINUTE, serializeError } from "../src/server/app.js";
@@ -39,6 +40,22 @@ describe("every kind of response", () => {
 
   it.each(urls)("HEAD %s carries the same headers", async (url) => {
     expectHeaders((await app.inject({ method: "HEAD", url })).headers);
+  });
+
+  // nginx answers "/%zz" (400), too large bodies (413) and 502 during a restart itself, without the app's
+  // headers; the acceptance harness found that. The example fills them in there, only where the app sent none.
+  it("docs/nginx.example.conf adds the same headers to nginx's own responses", async () => {
+    const conf = readFileSync(new URL("../docs/nginx.example.conf", import.meta.url), "utf8");
+    const headers = (await app.inject({ url: "/" })).headers;
+    for (const name of ["X-Robots-Tag", "Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy"]) {
+      const variable = conf.match(new RegExp(`^ {4}add_header ${name} +\\$(\\w+) always;$`, "m"))?.[1];
+      expect(variable, `server-level add_header ${name} ... always`).toBeDefined();
+      const upstream = `upstream_http_${name.toLowerCase().replaceAll("-", "_")}`;
+      const fallback = conf.match(new RegExp(`^map \\$${upstream} \\$${variable} \\{ "" "([^"]+)"; default ""; \\}$`, "m"))?.[1];
+      expect(fallback, `map for ${name}`).toBeDefined();
+      if (name !== "Content-Security-Policy") expect(fallback).toBe(headers[name.toLowerCase()]); // nginx's pages load nothing: stricter CSP
+    }
+    expect(conf).not.toMatch(/^ {8}add_header/m); // one inside a location would silently drop the server-level ones there
   });
 
   it("also on errors", async () => {

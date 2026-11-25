@@ -4,6 +4,7 @@ import { request as httpRequest } from "node:http";
 import type { AddressInfo, Socket as NetSocket } from "node:net";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { SHUTDOWN_GRACE_MS } from "../src/server/app.js";
 import { SESSION_COOKIE } from "../src/server/auth.js";
 import { parseConfig } from "../src/server/config.js";
 import { runMigrations } from "../src/server/db/migrate.js";
@@ -118,11 +119,11 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
   const roomIdOf = async (slug: string) => (await pool.query("select id from rooms where slug = $1", [slug])).rows[0]?.id as string | undefined;
 
   // The status of an upgrade request that is refused before the upgrade (101 if it was accepted).
-  function upgrade(path: string, headers: Record<string, string>) {
+  function upgrade(path: string, headers: Record<string, string>, targetPort = port) {
     return new Promise<{ status: number; socket?: NetSocket }>((resolve, reject) => {
       const req = httpRequest({
         host: "127.0.0.1",
-        port,
+        port: targetPort,
         path,
         headers: { connection: "Upgrade", upgrade: "websocket", "sec-websocket-version": "13", "sec-websocket-key": randomBytes(16).toString("base64"), ...headers },
       });
@@ -579,6 +580,27 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
         await admin.end();
         await slow.close();
       }
+    });
+
+    // Found by the acceptance harness: a client that did not answer the close handshake held the shutdown for
+    // ws's 30 s close timeout, so `podman restart` / `docker compose up` killed the app after 10 s.
+    it("closes every socket with 1012 on shutdown without waiting for clients that never answer", async () => {
+      const { app: stopping } = await makeApp(env, dbUrl);
+      await stopping.listen({ port: 0, host: "127.0.0.1" });
+      const stoppingPort = (stopping.server.address() as AddressInfo).port;
+      const slug = await newRoom(host, stopping);
+      const polite = await connect(slug, await makeUser(), stoppingPort);
+      const silent = await makeUser();
+      const { status, socket } = await upgrade(`/ws/rooms/${slug}`, { cookie: `${SESSION_COOKIE}=${silent.token}`, origin: ORIGIN }, stoppingPort);
+      expect(status).toBe(101);
+      socket!.resume(); // reads the close frame, never answers it
+      const cut = new Promise((resolve) => socket!.on("close", resolve));
+      await until(() => expect(stopping.live.userIds()).toContain(silent.id));
+      const started = Date.now();
+      await stopping.close();
+      expect(Date.now() - started).toBeLessThan(SHUTDOWN_GRACE_MS + 1000);
+      expect(await polite.closed).toEqual({ code: 1012, reason: "Der Server startet neu. Bitte verbinde dich neu." });
+      await cut;
     });
 
     it("closes the sockets of a room that was deleted underneath", async () => {
