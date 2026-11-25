@@ -14,7 +14,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import type { Pool } from "pg";
 import { registerAuth } from "./auth.js";
 import type { Config } from "./config.js";
-import { datenschutzHtml, escapeHtml, impressumHtml } from "./legal.js";
+import { datenschutzHtml, escapeHtml, impressumHtml, notFoundHtml } from "./legal.js";
 import { logIp } from "./log-ip.js";
 import { MAX_CLIENT_MESSAGE_BYTES, PING_INTERVAL_MS, ROLL_COOLDOWN_MS } from "../shared/contracts.js";
 import { rooms } from "./db/schema.js";
@@ -154,9 +154,24 @@ export async function buildApp(config: Config, deps: Deps) {
 
   app.addHook("onResponse", async (request, reply) => logRequest(request, reply));
 
+  // The built index.html is a template: Open Graph needs absolute URLs, so __BASE_URL__ is filled in
+  // here, once. config.ts already allows only a plain origin; escaping is the second line of defence.
+  // Without a build (server-only development) the SPA routes answer 404.
+  let spaHtml: string | null = null;
+  try {
+    spaHtml = readFileSync(path.join(deps.webRoot, "index.html"), "utf8").replaceAll("__BASE_URL__", escapeHtml(config.baseUrl.origin));
+  } catch (err) {
+    app.log.warn({ err }, "no index.html in the web root, the app pages are unavailable");
+  }
+  // The app's stylesheet, for the server-rendered pages (legal, 404).
+  const appCss = spaHtml?.match(/<link rel="stylesheet"[^>]*href="([^"]+\.css)"/)?.[1] ?? null;
+
   app.setNotFoundHandler((request, reply) => {
     if (/^\/api(\/|\?|$)/.test(request.url)) return reply.code(404).send({ error: "not_found" });
-    return reply.code(404).type(TEXT).send("Nicht gefunden");
+    const text = request.url.startsWith("/z/")
+      ? "Dieser Zuschauer-Link ist nicht mehr aktiv. Frag beim Host nach einem neuen."
+      : "Diese Seite gibt es nicht. Prüfe den Link oder fang auf der Startseite an.";
+    return reply.code(404).type(HTML).send(notFoundHtml(text, appCss));
   });
 
   app.setErrorHandler<FastifyError>((error, request, reply) => {
@@ -185,18 +200,9 @@ export async function buildApp(config: Config, deps: Deps) {
   });
 
   app.get("/robots.txt", (_request, reply) => reply.type(TEXT).send(robotsTxt));
-  app.get("/impressum", (_request, reply) => reply.type(HTML).send(impressumHtml(config.legal)));
-  app.get("/datenschutz", (_request, reply) => reply.type(HTML).send(datenschutzHtml(config.legal, { ...config.privacyServices, retentionDays: config.retentionDays })));
+  app.get("/impressum", (_request, reply) => reply.type(HTML).send(impressumHtml(config.legal, appCss)));
+  app.get("/datenschutz", (_request, reply) => reply.type(HTML).send(datenschutzHtml(config.legal, { ...config.privacyServices, retentionDays: config.retentionDays }, appCss)));
 
-  // The built index.html is a template: Open Graph needs absolute URLs, so __BASE_URL__ is filled in
-  // here, once. config.ts already allows only a plain origin; escaping is the second line of defence.
-  // Without a build (server-only development) the SPA routes answer 404.
-  let spaHtml: string | null = null;
-  try {
-    spaHtml = readFileSync(path.join(deps.webRoot, "index.html"), "utf8").replaceAll("__BASE_URL__", escapeHtml(config.baseUrl.origin));
-  } catch (err) {
-    app.log.warn({ err }, "no index.html in the web root, the app pages are unavailable");
-  }
   const watchLinkActive = async (token: string) => (await db.select({ id: rooms.id }).from(rooms).where(eq(rooms.watchToken, token))).length > 0;
   for (const url of SPA_ROUTES) {
     const watch = url === WATCH_ROUTE;

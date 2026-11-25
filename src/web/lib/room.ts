@@ -114,6 +114,17 @@ export function sixBannerValues(view: RoomView) {
 }
 
 // One line under the dice: who got the newest gift.
+// Who the dice on the table belong to. The turn line names the next player as soon as the state
+// arrives, while the dice still tumble; without this nobody can tell whose result they show.
+export function rollCaption(view: RoomView, myId: UserId | null, busy: boolean) {
+  const roll = view.game.lastRoll;
+  if (!roll) return "Noch hat niemand gewürfelt.";
+  const mine = roll.userId === myId;
+  const who = mine ? "Du" : namesOf(view).name(roll.userId);
+  if (busy) return `${who} ${mine ? "würfelst" : "würfelt"} …`;
+  return `${who} ${mine ? "hast" : "hat"} ${diceText(roll.dice)} gewürfelt.`;
+}
+
 export function lastGiftText(view: RoomView) {
   const gifts = view.game.giftOrder;
   const last = gifts.at(-1);

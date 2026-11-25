@@ -137,7 +137,8 @@ body::before {
     conic-gradient(from -40deg at 80px 100%, var(--coral) 80deg, transparent 0) 0 0 / 96px 16px repeat-x;
 }
 
-#root {
+#root,
+.page {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -146,6 +147,15 @@ body::before {
 
 main {
   flex: 1;
+}
+
+/* Server-rendered pages (Impressum, Datenschutz, 404): the app's frame, text in a readable column. */
+.doc > * {
+  max-width: 72ch;
+}
+
+.doc h2 {
+  margin-top: 32px;
 }
 
 footer {

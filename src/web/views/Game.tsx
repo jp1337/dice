@@ -8,8 +8,8 @@ import { FloatingReactions, ReactionBar } from "../components/Reactions.js";
 import { ReactionsToggle, Switch } from "../components/Toggles.js";
 import { useFlag } from "../lib/hooks.js";
 import { HIDE_REACTIONS_KEY } from "../lib/prefs.js";
-import { type Derived, giftList, historyLines, lastGiftText, latecomers, pickOption, turnList } from "../lib/room.js";
-import { rollLocked, shownDice } from "../lib/roll.js";
+import { type Derived, giftList, historyLines, lastGiftText, latecomers, pickOption, rollCaption, turnList } from "../lib/room.js";
+import { rollBusy, rollLocked, shownDice } from "../lib/roll.js";
 import type { useRoom } from "../lib/useRoom.js";
 import { ConfirmButton } from "./Controls.js";
 import { GuestLink } from "./Lobby.js";
@@ -70,12 +70,15 @@ function HostBar({ view, d, room }: Props) {
             Pause
           </button>
         )}
-        {/* The player named on the button: if the turn moved on meanwhile, the server answers turn_changed. */}
-        <button type="button" disabled={!can.skip || !active} onClick={() => active && send({ type: "skip", userId: active })}>
-          {d.activeName} überspringen
-        </button>
-        {!d.isActive && (
-          <button type="button" disabled={!can.rollFor || locked || !active} onClick={() => active && send({ type: "roll_for", userId: active })}>
+        {/* The player named on the button: if the turn moved on meanwhile, the server answers turn_changed.
+            No one active (the last six is still on screen): no name to put on them. */}
+        {active && (
+          <button type="button" disabled={!can.skip} onClick={() => send({ type: "skip", userId: active })}>
+            {d.activeName} überspringen
+          </button>
+        )}
+        {active && !d.isActive && (
+          <button type="button" disabled={!can.rollFor || locked} onClick={() => send({ type: "roll_for", userId: active })}>
             Für {d.activeName} würfeln
           </button>
         )}
@@ -210,6 +213,7 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
           </p>
         )}
         <Dice values={shownDice(room.roll, view)} rollKey={room.roll.rollKey} count={game.activeDiceCount} onSettled={onSettled} />
+        <p className="roll-caption">{rollCaption(view, d.myId, rollBusy(room.roll))}</p>
         <FloatingReactions items={room.floating} hidden={hideReactions} />
         {lastGift && <p className="last-gift">{lastGift}</p>}
         {(inTurn || d.can.claimLastPlace) && (
