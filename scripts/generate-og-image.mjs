@@ -17,15 +17,15 @@ const c = {
   cloud: hex("#fff4d6"),
   meadow: hex("#6aa84f"),
   meadowDark: hex("#3d7424"),
-  plank: hex("#7d4a25"),
-  wood: hex("#8a5229"),
-  woodLight: hex("#b07040"),
+  plank: hex("#6f4b2f"),
+  wood: hex("#7b5434"),
+  woodLight: hex("#9c7650"),
   woodDark: hex("#4e2a12"),
   face: hex("#fff6df"),
   faceShade: hex("#ead8ad"),
   ink: hex("#4e2a12"),
   berry: hex("#a8304a"),
-  pumpkin: hex("#e9792f"),
+  holly: hex("#5a9a3e"),
   wheat: hex("#f2c14e"),
 };
 
@@ -55,9 +55,9 @@ rect(0, 40, GRID, 24, c.plank);
 rect(0, 40, GRID, 1, c.woodLight);
 for (const y of [47, 55]) rect(0, y, GRID, 1, c.woodDark);
 for (const [x, y, w] of [[5, 43, 9], [30, 44, 12], [50, 42, 8], [14, 50, 10], [40, 51, 14], [3, 58, 12], [26, 59, 9], [48, 60, 11]]) rect(x, y, w, 1, c.wood);
-// Bunting: a string with pennants in wheat, pumpkin and berry.
+// Bunting: a string with pennants in wheat, holly and berry.
 rect(0, 1, GRID, 1, c.woodDark);
-[c.wheat, c.pumpkin, c.berry].forEach((colour, k) => {
+[c.wheat, c.holly, c.berry].forEach((colour, k) => {
   for (let x = k * 8; x < GRID; x += 24) {
     rect(x + 1, 2, 5, 1, colour);
     rect(x + 2, 3, 3, 1, colour);

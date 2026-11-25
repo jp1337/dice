@@ -37,13 +37,14 @@ ffmpeg -i dice-shake-2.ogg -i dice-throw-1.ogg -filter_complex "[0]atrim=0:0.65,
 
 Harvest festival in a small valley town: parchment panels in wooden frames, a plank table for the dice,
 pixel bevels on every control. Original work; no assets, names or UI frames from any game. All in
-`style.css` as plain custom properties.
+`style.css` as plain custom properties. No orange anywhere, by wish of the event's host: wood is
+brown, the call to action evergreen, title and links berry.
 
 | Colour | Used for |
 | --- | --- |
-| Pumpkin `#e9792f` | the one call to action ("Würfeln", "Start", "Weiter"), the active turn token |
-| Wheat `#f2c14e` | your turn plaque, first place, the six sunburst with pumpkin |
-| Wood `#8a5229` / `#4e2a12` | frames, the plank table, number tokens |
+| Holly `#3f7d2a` | the one call to action ("Würfeln", "Start", "Weiter"), the active turn token |
+| Wheat `#f2c14e` | your turn plaque, first place, the six sunburst with holly |
+| Wood `#7b5434` / `#4e2a12` | frames, the plank table, number tokens |
 | Parchment `#fbf0d4` | panels (light), signs and dice (both themes) |
 | Meadow `#3d7424` / berry `#a8304a` | switches on, connection / danger, notices |
 | Sky bands `#cbe7ef` → `#e2efcc` | page background; dark: night `#1b2033` with stars |
@@ -78,7 +79,7 @@ text inside it would stretch the page.
 | `--fg` on `--bg` / `--bg-low` / `--surface` / `--field` | 10.8 / 11.6 / 12.4 / 13.5 | 13.1 / 11.8 / 11.9 / 13.4 |
 | `--fg` on `--tint` (buttons) | 10.7 | 9.1 |
 | `--muted` on `--bg` / `--surface` | 6.1 / 7.0 | 8.7 / 7.9 |
-| `--accent` on `--bg` / `--surface` (links, title) | 6.0 / 6.9 | 7.8 / 7.1 |
+| `--accent` on `--bg` / `--surface` (links, title) | 6.6 / 7.6 | 7.7 / 7.0 |
 | `--on-fill` on `--fill` (theme toggle) | 5.4 | 7.9 |
 | `--danger` on `--tint-berry` | 6.1 | 7.1 |
 | `--fg` on `--tint-wheat` / `--tint-sky` / `--tint-meadow` (badges) | 10.9 / 11.3 / 11.5 | 8.5 / 9.7 / 9.5 |
@@ -89,11 +90,11 @@ Same in both themes:
 
 | Pair | Ratio |
 | --- | --- |
-| `--on-pumpkin` on pumpkin / pumpkin-light | 5.9 / 8.3 |
+| `--on-holly` on holly (primary button, turn token) | 4.8 |
 | `--on-wheat` on wheat | 8.7 |
-| Cream on wood / plank / wood-dark (table text, tokens) | 5.8 / 6.7 / 11.5 |
+| Cream on wood / plank / wood-dark (table text, tokens) | 6.1 / 7.0 / 11.5 |
 | `--ink` on parchment (signs, six banner) | 12.4 |
-| White on berry (notice) / on copper `#9c5a2a` | 6.6 / 5.4 |
+| White on berry (notice) / on bronze `#8d6e4f` | 6.6 / 4.7 |
 | `--ink` on silver `#c9c2b4` | 7.9 |
 
 The ratios come from the WCAG relative-luminance formula; recompute them when a token changes.

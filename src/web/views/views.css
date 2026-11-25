@@ -396,12 +396,12 @@ label {
 }
 
 :root[data-theme="dark"] .hero .ribbon {
-  color: #8a3a10; /* the sign stays parchment */
+  color: #8c2440; /* the sign stays parchment */
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .hero .ribbon {
-    color: #8a3a10;
+    color: #8c2440;
   }
 }
 
@@ -572,7 +572,7 @@ label {
   outline-color: var(--cream);
 }
 
-/* Not your turn: a chalk outline on the planks, not a muddy pumpkin. */
+/* Not your turn: a chalk outline on the planks, not a muddy green. */
 .stage .primary:disabled {
   --face: rgb(255 255 255 / 0.06);
   --frame: rgb(255 244 214 / 0.45);
@@ -766,7 +766,7 @@ label {
 .turns .is-active {
   background: var(--tint-wheat);
   box-shadow:
-    inset 4px 0 0 var(--pumpkin),
+    inset 4px 0 0 var(--holly),
     inset 0 0 0 2px var(--wheat-dark);
 }
 
@@ -775,8 +775,8 @@ label {
 }
 
 .turns .is-active::before {
-  background: var(--pumpkin);
-  color: var(--on-pumpkin);
+  background: var(--holly);
+  color: var(--on-holly);
 }
 
 /* Podium: wheat gold, silver, copper; the medal is decoration (empty alt text where supported). */
@@ -822,7 +822,7 @@ label {
 }
 
 .gifts li:nth-child(3)::before {
-  background: #9c5a2a;
+  background: #8d6e4f;
   color: #ffffff;
 }
 
