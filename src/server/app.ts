@@ -1,5 +1,5 @@
 // HTTP application: security headers, logging, public pages and static files (spec 7, 8).
-import { createHmac } from "node:crypto";
+import { createHmac, randomInt } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { STATUS_CODES } from "node:http";
 import path from "node:path";
@@ -29,6 +29,7 @@ export type Deps = {
   pingIntervalMs?: number; // WebSocket ping; defaults to PING_INTERVAL_MS, tests shorten it
   rollCooldownMs?: number; // defaults to ROLL_COOLDOWN_MS, tests shorten it
   simulatedRollDelayMs?: number; // defaults to SIMULATED_ROLL_DELAY_MS, tests shorten it
+  randomInt?: (min: number, maxExclusive: number) => number; // dice and start order; defaults to crypto.randomInt, tests force values
 };
 
 // Paths that answer with the SPA's index.html. Every one gets the same HTML, so the link preview
@@ -217,6 +218,7 @@ export async function buildApp(config: Config, deps: Deps) {
     pingIntervalMs: deps.pingIntervalMs ?? PING_INTERVAL_MS,
     rollCooldownMs: deps.rollCooldownMs ?? ROLL_COOLDOWN_MS,
     simulatedRollDelayMs: deps.simulatedRollDelayMs ?? SIMULATED_ROLL_DELAY_MS,
+    randomInt: deps.randomInt ?? randomInt,
   });
 
   return app;

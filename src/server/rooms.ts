@@ -228,7 +228,7 @@ export function registerRooms(
     requireUser: (request: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
     onSessionEnd: (listener: (sessionId: string) => void) => void;
   },
-  timing: { pingIntervalMs: number; rollCooldownMs: number; simulatedRollDelayMs: number },
+  timing: { pingIntervalMs: number; rollCooldownMs: number; simulatedRollDelayMs: number; randomInt: (min: number, maxExclusive: number) => number },
 ) {
   const isHostId = (discordId: string | null) => discordId !== null && config.hostDiscordIds.includes(discordId);
   const audienceOf = (m: Member): Audience => (isHostId(m.discordId) ? "host" : m.isCohost ? "moderator" : "member");
@@ -492,7 +492,7 @@ export function registerRooms(
     try {
       // Something happened while the timer waited in the queue: the new turn gets its own full delay.
       if (turnOf(room) !== key || !active) return;
-      const ctx = { actor: { userId: active, canModerate: false }, room, rollCooldownMs: timing.rollCooldownMs, now: Date.now() };
+      const ctx = { actor: { userId: active, canModerate: false }, room, rollCooldownMs: timing.rollCooldownMs, now: Date.now(), randomInt: timing.randomInt };
       const { events } = handleGameCommand(ctx, { type: "roll" });
       await commit(room, { events }); // actor: the simulated player, as for a real roll
     } catch (err) {
@@ -704,7 +704,7 @@ export function registerRooms(
         });
       }
       default: {
-        const { events, participation: change } = handleGameCommand({ actor: { userId: actorId, canModerate }, room, rollCooldownMs: timing.rollCooldownMs, now: Date.now() }, message);
+        const { events, participation: change } = handleGameCommand({ actor: { userId: actorId, canModerate }, room, rollCooldownMs: timing.rollCooldownMs, now: Date.now(), randomInt: timing.randomInt }, message);
         if (!change) return commit(room, { events });
         const member = room.members.get(change.userId)!;
         return commit(room, {

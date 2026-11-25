@@ -1,7 +1,6 @@
 // Where the game rules plug into the rooms: every game command (decide.ts) arrives here, already
 // validated and serialized per room. Checks what decide cannot see (room membership, the roll
 // cooldown) and returns what rooms.ts commits. Simulated players go through here too.
-import { randomInt } from "node:crypto";
 import type { GameState, Participation, UserId } from "../shared/contracts.js";
 import { type GameCommand, type NewEvent, decide } from "../shared/game/decide.js";
 
@@ -26,6 +25,7 @@ export type GameCommandContext = {
   };
   rollCooldownMs: number;
   now: number;
+  randomInt: (min: number, maxExclusive: number) => number; // crypto.randomInt in production
 };
 
 export type GameCommandResult = {
@@ -36,7 +36,7 @@ export type GameCommandResult = {
 export function handleGameCommand(ctx: GameCommandContext, command: GameCommand): GameCommandResult {
   const { room } = ctx;
   const players = [...room.members].flatMap(([userId, m]) => (m.participation === "player" ? [userId] : []));
-  const result = decide(room.game, command, { actorUserId: ctx.actor.userId, actorIsHost: ctx.actor.canModerate, players, randomInt });
+  const result = decide(room.game, command, { actorUserId: ctx.actor.userId, actorIsHost: ctx.actor.canModerate, players, randomInt: ctx.randomInt });
   if ("error" in result) throw new CommandError(result.error.code, result.error.message);
   // Spec 7: no roll for about 2 s after a roll, so the animation runs through for everyone.
   if (result.events.some((e) => e.type === "rolled") && ctx.now < room.lastRollAt + ctx.rollCooldownMs)

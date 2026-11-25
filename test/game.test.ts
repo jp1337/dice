@@ -1,6 +1,6 @@
 // The game over the room WebSocket (spec 4.3 to 4.11, 7, 13, 16) against a real PostgreSQL and a listening
 // server: turns, host tools, the roll cooldown, test rooms, the guest link, reactions, restart recovery.
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -17,7 +17,10 @@ import { Client, HOST2_ID, HOST_ID, ORIGIN, type User, env, makeUser as makeUser
 const dbUrl = process.env.TEST_DATABASE_URL;
 // The shared app has no roll cooldown (it has its own tests and app) and fast simulated players.
 const BOT_DELAY = 30; // injected instead of SIMULATED_ROLL_DELAY_MS
-const timing = { rollCooldownMs: 0, simulatedRollDelayMs: BOT_DELAY };
+// Dice come from crypto.randomInt unless a test queues values: a test that must not see a 6 says so.
+const forcedRandom: number[] = [];
+const randomIntForTests = (min: number, maxExclusive: number) => forcedRandom.shift() ?? randomInt(min, maxExclusive);
+const timing = { rollCooldownMs: 0, simulatedRollDelayMs: BOT_DELAY, randomInt: randomIntForTests };
 
 type App = Awaited<ReturnType<typeof makeApp>>["app"];
 type Players = Map<string, Client>; // by user id
@@ -50,6 +53,7 @@ describe("handleGameCommand: what decide cannot see", () => {
     room: { game: reduce([], defaultSettings), members: new Map(members.map(([id, participation]) => [id, { participation }])), lastRollAt: 0 },
     rollCooldownMs: 2000,
     now: 10_000,
+    randomInt,
     ...over,
   });
   const running = (members: [string, Participation][]) => {
@@ -531,10 +535,13 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       await until(() => expect(ch.state.game.pause).toBe("host"));
       ch.send({ type: "continue" });
       const rolledFor = ch.state.game.activeUserId!;
+      forcedRandom.push(3, 3); // no 6 (also with the bonus die), so the player stays in the game and can be removed
       ch.send({ type: "roll_for", userId: rolledFor });
       await until(() => expect(guest.messages.some((m) => m.type === "rolled")).toBe(true));
+      await until(() => expect(ch.state.game.lastRoll?.userId).toBe(rolledFor)); // the host's own state, not the guest's
+      expect(ch.state.game.turnOrder).toContain(rolledFor);
       // Removed after the roll: still named in the public history, so guests still see the name.
-      if (ch.state.game.turnOrder.includes(rolledFor)) ch.send({ type: "remove_player", userId: rolledFor });
+      ch.send({ type: "remove_player", userId: rolledFor });
       await until(() => expect(ch.member(rolledFor)?.participation).toBe("spectator"));
       await until(() => expect(guest.state.game.removed.length + guest.state.game.giftOrder.length).toBe(1));
 
