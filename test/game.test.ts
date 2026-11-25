@@ -1,5 +1,5 @@
 // The game over the room WebSocket (spec 4.3 to 4.11, 7, 13, 16) against a real PostgreSQL and a listening
-// server: turns, host tools, the roll cooldown, test rooms, the guest link, reactions, restart recovery.
+// server: turns, host tools, the roll cooldown, test rooms, public rooms, reactions, restart recovery.
 import { randomBytes, randomInt } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import pg from "pg";
@@ -9,7 +9,7 @@ import { runCleanup } from "../src/server/cleanup.js";
 import { runMigrations } from "../src/server/db/migrate.js";
 import { CommandError, type GameCommandContext, handleGameCommand } from "../src/server/game-commands.js";
 import { MAX_GUESTS_PER_IP, MAX_GUESTS_PER_ROOM, MAX_SIMULATED_PLAYERS } from "../src/server/rooms.js";
-import { type GameEvent, type Participation, type RoomView, type Settings, defaultSettings } from "../src/shared/contracts.js";
+import { type GameEvent, type Participation, type Settings, defaultSettings } from "../src/shared/contracts.js";
 import { reduce } from "../src/shared/game/reduce.js";
 import { makeApp, ownDatabase } from "./helpers.js";
 import { Client, HOST2_ID, HOST_ID, ORIGIN, type User, env, makeUser as makeUserIn, until } from "./ws.js";
@@ -121,8 +121,8 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
     await until(() => client.state);
     return client;
   }
-  async function watch(token: string, headers: Record<string, string> = {}, targetPort = port) {
-    const client = open(`/ws/watch/${token}`, undefined, headers, targetPort);
+  async function watch(slug: string, headers: Record<string, string> = {}, targetPort = port) {
+    const client = open(`/ws/rooms/${slug}`, undefined, headers, targetPort); // no session: a guest
     await until(() => client.state);
     return client;
   }
@@ -139,7 +139,6 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
     await app.listen({ port: 0, host: "127.0.0.1" });
     return (app.server.address() as AddressInfo).port;
   }
-  const tokenOf = (view: RoomView) => new URL(view.room.watchUrl!).pathname.split("/").at(-1)!;
 
   // A room with real players (and simulated ones in a test room) and a running game; the host watches.
   async function startGame(n: number, options: { isTest?: boolean; sims?: number; settings?: Partial<Settings> } = {}) {
@@ -191,9 +190,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
   describe("turns and rights (spec 4.1, 7, 16)", () => {
     it("plays a complete game with three real clients to a complete gift order", { timeout: 60_000 }, async () => {
       const { slug, ch, players, users } = await startGame(3);
-      ch.send({ type: "set_watch_link", action: "enable" }); // a guest watches the whole game too
-      await until(() => expect(ch.state.room.watchUrl).toBeDefined());
-      const guest = await watch(tokenOf(ch.state));
+      const guest = await watch(slug); // new rooms are public
       await play(ch, players, true);
       const ids = users.map((u) => u.id);
       for (const c of [ch, guest, ...players.values()]) {
@@ -247,11 +244,11 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
         { type: "reset" },
       ];
       for (const message of hostOnly) player.send(message);
-      for (const message of [{ type: "set_watch_link", action: "enable" }, { type: "add_simulated_players", count: 1 }]) player.send(message);
+      for (const message of [{ type: "set_public", isPublic: false }, { type: "add_simulated_players", count: 1 }]) player.send(message);
       await until(() => expect(player.errors).toHaveLength(hostOnly.length + 2));
       expect(player.errors).toEqual([...hostOnly.map(() => "not_host"), "forbidden", "forbidden"]);
       expect((await eventsOf(slug)).map((e) => e.type)).toEqual(["game_started"]);
-      expect(ch.state.room.watchLinkActive).toBe(false);
+      expect(ch.state.room.isPublic).toBe(true);
     });
 
     it("refuses rolls during a pause", async () => {
@@ -443,28 +440,23 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       try {
         const from = { "x-forwarded-for": "198.51.100.77" };
         const elsewhere = await newRoom(false, proxied.app);
-        const ce = await connect(elsewhere, host, proxiedPort);
-        ce.send({ type: "set_watch_link", action: "enable" });
-        await until(() => expect(ce.state.room.watchUrl).toBeDefined());
-        await Promise.all(Array.from({ length: MAX_GUESTS_PER_IP }, () => watch(tokenOf(ce.state), from, proxiedPort)));
+        await Promise.all(Array.from({ length: MAX_GUESTS_PER_IP }, () => watch(elsewhere, from, proxiedPort)));
 
         // A running test room whose simulated player is due, with nobody connected.
         const slug = await newRoom(true, proxied.app);
         const roomId = await roomIdOf(slug);
         const ch = await connect(slug, host, proxiedPort);
-        ch.send({ type: "set_watch_link", action: "enable" });
         ch.send({ type: "add_simulated_players", count: 2 });
         await until(() => expect(ch.state.members.filter((m) => m.isSimulated)).toHaveLength(2));
         ch.send({ type: "start" });
         ch.send({ type: "pause" });
         await until(() => expect(ch.state.game.pause).not.toBeNull()); // the host's, or a six's
-        const token = tokenOf(ch.state);
         await ch.close();
         await until(() => expect(proxied.app.live.roomIds()).not.toContain(roomId));
         await pool.query("insert into game_events (room_id, seq, type, actor_user_id, payload) select $1, max(seq) + 1, 'continued', $2, '{}' from game_events where room_id = $1", [roomId, host.id]);
         const events = (await eventsOf(slug)).length;
 
-        const refused = open(`/ws/watch/${token}`, undefined, from, proxiedPort);
+        const refused = open(`/ws/rooms/${slug}`, undefined, from, proxiedPort);
         expect((await refused.closed).code).toBe(1008);
         expect(proxied.app.live.roomIds()).toContain(roomId); // loaded for the attempt
         expect(proxied.app.live.simulatedTurn(roomId)).toBeNull();
@@ -496,39 +488,25 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
     });
   });
 
-  describe("guest link (spec 4.8)", () => {
-    it("is off by default: 404 for the page and the socket", async () => {
+  describe("public room (spec 4.8)", () => {
+    it("is public by default; the old guest link path is gone", async () => {
       const slug = await newRoom();
       const ch = await connect(slug, host);
-      expect(ch.state.room).toMatchObject({ watchLinkActive: false, guestCount: 0 });
-      expect(ch.state.room).not.toHaveProperty("watchUrl");
-      const token = randomBytes(16).toString("base64url");
-      for (const method of ["GET", "HEAD"] as const) {
-        expect((await app.inject({ method, url: `/z/${token}`, remoteAddress: nextIp() })).statusCode).toBe(404);
-        expect((await app.inject({ method, url: "/z/short", remoteAddress: nextIp() })).statusCode).toBe(404);
-      }
-      const refused = open(`/ws/watch/${token}`);
-      expect((await refused.closed).code).toBe(1006); // the upgrade was answered with 404
+      expect(ch.state.room).toMatchObject({ isPublic: true, guestCount: 0 });
+      expect((await app.inject({ url: `/z/${randomBytes(16).toString("base64url")}`, remoteAddress: nextIp() })).statusCode).toBe(404);
     });
 
     it("shows a read-only guest view: players and places, display names, public history", { timeout: 30_000 }, async () => {
       const { slug, ch, users } = await startGame(3);
       const watcher = await makeUser("Zuschauerin");
       const cw = await connect(slug, watcher);
-      ch.send({ type: "set_watch_link", action: "enable" });
-      await until(() => expect(cw.state.room.watchLinkActive).toBe(true));
-      expect(cw.state.room).not.toHaveProperty("watchUrl");
-      const token = tokenOf(ch.state);
-      expect(token).toMatch(/^[\w-]{22}$/);
-      expect(ch.state.room.watchUrl).toBe(`${ORIGIN}/z/${token}`);
-      const page = await app.inject({ url: `/z/${token}`, remoteAddress: nextIp() });
-      expect(page.statusCode).toBe(200);
-      expect((await app.inject({ method: "HEAD", url: `/z/${token}`, remoteAddress: nextIp() })).statusCode).toBe(200); // the client probes with HEAD
-      expect(page.body).toBe((await app.inject({ url: "/" })).body);
+      expect(cw.state.room.isPublic).toBe(true);
+      expect(cw.state.viewer).toMatchObject({ kind: "member" }); // logged in: the member view through the same link
+      expect(cw.state.room).not.toHaveProperty("guestCount");
 
-      const foreign = open(`/ws/watch/${token}`, undefined, { origin: "https://evil.example" });
+      const foreign = open(`/ws/rooms/${slug}`, undefined, { origin: "https://evil.example" });
       expect((await foreign.closed).code).toBe(1006); // 403 before the upgrade
-      const guest = await watch(token);
+      const guest = await watch(slug);
       await until(() => expect(ch.state.room.guestCount).toBe(1));
       expect(ch.state.members).toHaveLength(5); // guests are no members
       ch.send({ type: "pause" });
@@ -547,9 +525,8 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
 
       const view = guest.state;
       expect(view.viewer).toEqual({ kind: "guest" });
-      expect(view.room.slug).toBe("");
+      expect(view.room).toMatchObject({ slug, isPublic: true }); // the guest came through the room link
       expect(view.room).not.toHaveProperty("guestCount");
-      expect(view.room).not.toHaveProperty("watchUrl");
       // The players, and the host who rolled for one of them (named in the public history).
       expect(view.members.map((m) => m.userId).sort()).toEqual([...users.map((u) => u.id), host.id].sort());
       expect(view.members.find((m) => m.userId === host.id)).toMatchObject({ displayName: ch.member(host.id)!.displayName, avatarUrl: null });
@@ -561,7 +538,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       }
       expect(view.game.history.map((e) => e.type)).toEqual(["rolled"]);
       const text = JSON.stringify(guest.messages);
-      for (const secret of [slug, host.discordId, watcher.discordId, "Zuschauerin", ...users.map((u) => u.discordId), "henrike-", "/avatars/", "paused", "player_removed"]) {
+      for (const secret of [host.discordId, watcher.discordId, "Zuschauerin", ...users.map((u) => u.discordId), "henrike-", "/avatars/", "paused", "player_removed"]) {
         expect(text).not.toContain(secret);
       }
 
@@ -574,29 +551,29 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       expect((await eventsOf(slug)).length).toBe(events);
     });
 
-    it("disconnects guests at once when the link is regenerated or switched off", async () => {
+    it("disconnects guests at once when switched off, keeps members, lets guests in again when switched on", async () => {
       const slug = await newRoom();
       const ch = await connect(slug, host);
-      ch.send({ type: "set_watch_link", action: "enable" });
-      await until(() => expect(ch.state.room.watchUrl).toBeDefined());
-      const old = tokenOf(ch.state);
-      const guests = [await watch(old), await watch(old)];
+      const cu = await connect(slug, await makeUser());
+      const guests = [await watch(slug), await watch(slug)];
       await until(() => expect(ch.state.room.guestCount).toBe(2));
-      ch.send({ type: "set_watch_link", action: "enable" }); // already on: nothing changes
-      ch.send({ type: "set_watch_link", action: "regenerate" });
-      for (const g of guests) expect(await g.closed).toEqual({ code: 4004, reason: "Dieser Zuschauer-Link gilt nicht mehr." });
-      await until(() => expect(tokenOf(ch.state)).not.toBe(old));
+      ch.send({ type: "set_public", isPublic: true }); // already on: nothing changes
+      ch.send({ type: "set_public", isPublic: false });
+      for (const g of guests) expect(await g.closed).toEqual({ code: 4001, reason: "Der Raum ist nicht mehr öffentlich. Melde dich an, um weiter zuzuschauen." });
+      await until(() => expect(cu.state.room.isPublic).toBe(false));
       expect(ch.state.room.guestCount).toBe(0);
-      const fresh = tokenOf(ch.state);
-      expect((await app.inject({ url: `/z/${old}`, remoteAddress: nextIp() })).statusCode).toBe(404);
-      expect((await open(`/ws/watch/${old}`).closed).code).toBe(1006);
-      const again = await watch(fresh);
-      ch.send({ type: "set_watch_link", action: "disable" });
-      expect((await again.closed).code).toBe(4004);
-      await until(() => expect(ch.state.room.watchLinkActive).toBe(false));
-      expect((await app.inject({ url: `/z/${fresh}`, remoteAddress: nextIp() })).statusCode).toBe(404);
-      expect((await app.inject({ method: "HEAD", url: `/z/${fresh}`, remoteAddress: nextIp() })).statusCode).toBe(404);
-      expect(ch.state.game.history.map((e) => e.type)).toEqual(["watch_link_changed", "watch_link_changed", "watch_link_changed"]);
+      expect(cu.ws.readyState).toBe(WebSocket.OPEN);
+      expect((await pool.query("select is_public from rooms where slug = $1", [slug])).rows).toEqual([{ is_public: false }]);
+      expect((await open(`/ws/rooms/${slug}`).closed).code).toBe(1006); // 401 before the upgrade
+      expect((await app.inject({ url: `/api/rooms/${slug}`, remoteAddress: nextIp() })).statusCode).toBe(401);
+      ch.send({ type: "set_public", isPublic: true });
+      await until(() => expect(ch.state.room.isPublic).toBe(true));
+      await watch(slug);
+      await until(() => expect(ch.state.room.guestCount).toBe(1));
+      expect(ch.state.game.history.map((e) => [e.type, e.payload])).toEqual([
+        ["public_changed", { isPublic: false }],
+        ["public_changed", { isPublic: true }],
+      ]);
     });
 
     it(`allows ${MAX_GUESTS_PER_IP} guest connections per IP and ${MAX_GUESTS_PER_ROOM} per room`, { timeout: 60_000 }, async () => {
@@ -606,22 +583,19 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       try {
         const slug = await newRoom(false, proxied.app);
         const ch = await connect(slug, host, proxiedPort);
-        ch.send({ type: "set_watch_link", action: "enable" });
-        await until(() => expect(ch.state.room.watchUrl).toBeDefined());
-        const token = tokenOf(ch.state);
         const from = (address: string) => ({ "x-forwarded-for": address });
 
-        const same = await Promise.all(Array.from({ length: MAX_GUESTS_PER_IP }, () => watch(token, from("198.51.100.1"), proxiedPort)));
-        const sixth = open(`/ws/watch/${token}`, undefined, from("198.51.100.1"), proxiedPort);
+        const same = await Promise.all(Array.from({ length: MAX_GUESTS_PER_IP }, () => watch(slug, from("198.51.100.1"), proxiedPort)));
+        const sixth = open(`/ws/rooms/${slug}`, undefined, from("198.51.100.1"), proxiedPort);
         expect(await sixth.closed).toEqual({ code: 1008, reason: "Zu viele Zuschauer-Verbindungen von deiner Adresse." });
         await same[0]!.close();
         await until(() => expect(ch.state.room.guestCount).toBe(MAX_GUESTS_PER_IP - 1));
-        same[0] = await watch(token, from("198.51.100.1"), proxiedPort); // a freed slot counts again
+        same[0] = await watch(slug, from("198.51.100.1"), proxiedPort); // a freed slot counts again
 
         const rest = MAX_GUESTS_PER_ROOM - MAX_GUESTS_PER_IP;
-        await Promise.all(Array.from({ length: rest }, (_, i) => watch(token, from(`10.9.${i >> 8}.${i & 255}`), proxiedPort)));
+        await Promise.all(Array.from({ length: rest }, (_, i) => watch(slug, from(`10.9.${i >> 8}.${i & 255}`), proxiedPort)));
         await until(() => expect(ch.state.room.guestCount).toBe(MAX_GUESTS_PER_ROOM));
-        const over = open(`/ws/watch/${token}`, undefined, from("192.0.2.200"), proxiedPort);
+        const over = open(`/ws/rooms/${slug}`, undefined, from("192.0.2.200"), proxiedPort);
         expect(await over.closed).toEqual({ code: 1008, reason: "Zu viele Zuschauer in diesem Raum." });
         expect(ch.state.members).toHaveLength(1); // guests never show up as members
       } finally {
@@ -636,10 +610,6 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       const proxiedPort = await listen(proxied.app);
       try {
         const slug = await newRoom(false, proxied.app);
-        const ch = await connect(slug, host, proxiedPort);
-        ch.send({ type: "set_watch_link", action: "enable" });
-        await until(() => expect(ch.state.room.watchUrl).toBeDefined());
-        const token = tokenOf(ch.state);
         const cases = [
           { address: "198.51.100.23", short: "198.51.0.0", leaks: ["198.51.100.23"] },
           { address: "2001:db8:abcd:12::7", short: "2001:db8:abcd::", leaks: ["2001:db8:abcd:12", ":12::7"] },
@@ -654,7 +624,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
           const member = open(`/ws/rooms/${slug}`, host2, from, proxiedPort);
           await until(() => member.state);
           await member.close();
-          await (await watch(token, from, proxiedPort)).close();
+          await (await watch(slug, from, proxiedPort)).close();
           await until(() => expect(proxied.logs.map((l) => l.msg)).toEqual(expect.arrayContaining(["login failed", "ws closed", "guest connected", "guest closed"])));
 
           const ips = proxied.logs.filter((l) => "ip" in l).map((l) => l.ip);
@@ -680,9 +650,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       const { slug, ch, players } = await startGame(2);
       const active = ch.state.game.activeUserId!;
       const [other] = [...players].filter(([id]) => id !== active).map(([, c]) => c);
-      ch.send({ type: "set_watch_link", action: "enable" });
-      await until(() => expect(ch.state.room.watchUrl).toBeDefined());
-      const guest = await watch(tokenOf(ch.state));
+      const guest = await watch(slug); // new rooms are public
       const events = (await eventsOf(slug)).length;
 
       players.get(active)!.send({ type: "react", emoji: "🎉" });

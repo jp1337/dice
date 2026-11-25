@@ -12,7 +12,7 @@ import { type Derived, giftList, historyLines, lastGiftText, latecomers, pickOpt
 import { rollBusy, rollLocked, shownDice } from "../lib/roll.js";
 import type { useRoom } from "../lib/useRoom.js";
 import { ConfirmButton } from "./Controls.js";
-import { GuestLink } from "./Lobby.js";
+import { RoomLink } from "./Lobby.js";
 import { Participants } from "./Participants.js";
 
 type Room = ReturnType<typeof useRoom>;
@@ -111,7 +111,7 @@ function MoreHostTools({ view, d, room }: Props) {
         )}
         {can.addPlayer && <PickAndAct label="Als Nachzügler anhängen" options={late} action={(userId) => send({ type: "add_player", userId })} />}
         <Switch on={view.room.settings.reactions} disabled={!can.toggleReactions} onChange={(on) => send({ type: "update_settings", settings: { reactions: on } })} label="Reaktionen im Raum erlaubt" />
-        <GuestLink view={view} d={d} send={send} />
+        <RoomLink view={view} d={d} send={send} />
         <span className="row">
           <ConfirmButton label="Spiel beenden" question="Spiel wirklich beenden?" disabled={!can.end} className="danger" onConfirm={() => send({ type: "end" })} />
           <ConfirmButton label="Zurück in die Lobby" question={RESET_QUESTION} disabled={!can.reset} className="danger" onConfirm={() => send({ type: "reset" })} />

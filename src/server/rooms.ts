@@ -47,9 +47,8 @@ export const SIMULATED_ROLL_DELAY_MS = 3000; // spec 4.7: "etwa 3 Sekunden nachd
 export const MAX_SIMULATED_PLAYERS = 30; // per room (spec 4.7)
 export const MAX_GUESTS_PER_ROOM = 200; // spec 4.8
 export const MAX_GUESTS_PER_IP = 5; // guest connections per IP, over all rooms (spec 4.8)
-export const GUEST_CONNECTS_PER_MINUTE = 60; // per IP; the token lookup touches the database
+export const GUEST_CONNECTS_PER_MINUTE = 60; // per IP, requests without a session; the room lookup touches the database
 export const REACTION_BUNDLE_MS = 250; // reactions reach everyone bundled, at most this often (spec 4.11)
-const WATCH_TOKEN = /^[A-Za-z0-9_-]{22}$/; // 128 bit, base64url
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -82,7 +81,7 @@ const CLOSE = {
   "join failed": [1011, "Beitritt fehlgeschlagen."],
   "logged out": [4001, "Du hast dich abgemeldet. Melde dich wieder an, um weiterzumachen."],
   "session expired": [4001, "Sitzung abgelaufen. Bitte melde dich neu an."],
-  "watch link changed": [4004, "Dieser Zuschauer-Link gilt nicht mehr."],
+  "not public": [4001, "Der Raum ist nicht mehr öffentlich. Melde dich an, um weiter zuzuschauen."],
   "too many guests": [1008, "Zu viele Zuschauer in diesem Raum."],
   "too many guest connections": [1008, "Zu viele Zuschauer-Verbindungen von deiner Adresse."],
 } as const;
@@ -116,7 +115,7 @@ type RoomData = {
   name: string;
   isTest: boolean;
   settings: Settings;
-  watchToken: string | null;
+  isPublic: boolean;
   members: Map<string, Member>; // insertion order = join order
   events: GameEvent[];
   game: GameState;
@@ -205,16 +204,13 @@ export function roomView(room: RoomData & Pick<Room, "sockets" | "guests">, audi
     );
   return {
     room: {
-      slug: guest ? "" : room.slug, // the room link is for server members only
+      slug: room.slug,
       name: room.name,
       isTest: room.isTest,
       status: room.game.status,
       settings: room.settings,
-      watchLinkActive: room.watchToken !== null,
-      ...(canModerate && {
-        ...(room.watchToken && { watchUrl: new URL(`/z/${room.watchToken}`, config.baseUrl).href }),
-        guestCount: room.guests.size,
-      }),
+      isPublic: room.isPublic,
+      ...(canModerate && { guestCount: room.guests.size }),
     },
     members,
     game: { ...room.game, history },
@@ -227,6 +223,7 @@ export function registerRooms(
   db: Db,
   auth: {
     requireUser: (request: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
+    loadUser: (request: FastifyRequest) => Promise<unknown>;
     onSessionEnd: (listener: (sessionId: string) => void) => void;
   },
   timing: { pingIntervalMs: number; rollCooldownMs: number; simulatedRollDelayMs: number; randomInt: (min: number, maxExclusive: number) => number },
@@ -274,7 +271,7 @@ export function registerRooms(
       name: row.name,
       isTest: row.isTest,
       settings: row.settings,
-      watchToken: row.watchToken,
+      isPublic: row.isPublic,
       members: new Map(memberRows.map((m) => [m.userId, m])),
       events,
       game: reduce(events, row.settings),
@@ -688,18 +685,17 @@ export function registerRooms(
           apply: () => room.members.delete(member.userId),
         });
       }
-      case "set_watch_link": {
+      case "set_public": {
         if (!canModerate) throw forbidden();
-        const { action } = message;
-        if ((action === "enable" && room.watchToken) || (action === "disable" && !room.watchToken)) return;
-        const token = action === "disable" ? null : randomBytes(16).toString("base64url"); // 128 bit (spec 4.8)
+        const { isPublic } = message;
+        if (room.isPublic === isPublic) return;
         return commit(room, {
-          events: [{ type: "watch_link_changed", actorUserId: actorId, payload: { enabled: token !== null } }],
-          write: (tx) => tx.update(rooms).set({ watchToken: token }).where(eq(rooms.id, room.id)),
+          events: [{ type: "public_changed", actorUserId: actorId, payload: { isPublic } }],
+          write: (tx) => tx.update(rooms).set({ isPublic }).where(eq(rooms.id, room.id)),
           apply: () => {
-            room.watchToken = token;
-            // Off or new: every guest of the old link goes at once.
-            for (const socket of room.guests) closeSocket(socket, "watch link changed");
+            room.isPublic = isPublic;
+            // Off: every guest goes at once.
+            for (const socket of room.guests) closeSocket(socket, "not public");
             room.guests.clear();
           },
         });
@@ -753,18 +749,24 @@ export function registerRooms(
   // ---------------------------------------------------------------------------------------------
   // Routes
 
+  // The room link serves members and, in a public room, guests (spec 4.8). Without a session
+  // (auth.loadUser), a room that is not public answers like a missing one: 401, log in.
   const roomOf = new WeakMap<FastifyRequest, Room>();
   const findRoom = async (request: FastifyRequest<{ Params: { slug: string } }>, reply: FastifyReply) => {
     const room = await getRoom(request.params.slug);
+    if (!request.user && !room?.isPublic) return reply.code(401).send({ error: "unauthorized" });
     if (!room) return reply.code(404).send({ error: "not_found" });
     roomOf.set(request, room);
   };
+  // Requests without a session reach the database too, so they are limited per IP; members are not.
+  const guestLimit = () => app.rateLimit({ max: GUEST_CONNECTS_PER_MINUTE, timeWindow: "1 minute", allowList: (request) => request.user !== null });
 
   app.get<{ Params: { slug: string } }>(
     "/ws/rooms/:slug",
-    { websocket: true, preHandler: [sameOrigin, auth.requireUser, findRoom] },
+    { websocket: true, onRequest: [auth.loadUser, guestLimit()], preHandler: [sameOrigin, findRoom] },
     (socket: Socket, request) => {
       const room = roomOf.get(request)!;
+      if (!request.user) return watch(socket, request, room);
       const userId = request.user!.id;
       const session = request.session!;
       const conn: Conn & { userId: string } = { userId, sessionId: session.id, expiresAt: session.expiresAt.getTime(), alive: true, version: -1 };
@@ -817,58 +819,42 @@ export function registerRooms(
     },
   );
 
-  // Anonymous guests (spec 4.8): no session, read-only, the guest view of the state.
-  const findWatchRoom = async (request: FastifyRequest<{ Params: { token: string } }>, reply: FastifyReply) => {
-    const { token } = request.params;
-    let room = WATCH_TOKEN.test(token) ? [...live.values()].find((r) => r.watchToken === token) : undefined;
-    if (!room && WATCH_TOKEN.test(token)) {
-      const [row] = await db.select({ slug: rooms.slug }).from(rooms).where(eq(rooms.watchToken, token));
-      if (row) room = (await getRoom(row.slug)) ?? undefined;
-    }
-    if (room?.watchToken !== token) return reply.code(404).send({ error: "not_found" });
-    roomOf.set(request, room);
-  };
+  // Guests (spec 4.8): no session, read-only, the guest view of the state.
+  function watch(socket: Socket, request: FastifyRequest, room: Room) {
+    const conn: Conn = { userId: null, sessionId: "", expiresAt: Infinity, alive: true, version: -1 };
+    conns.set(socket, conn);
+    const log = request.log;
+    log.info({ roomId: room.id, ip: logIp(request.ip) }, "guest connected");
 
-  app.get<{ Params: { token: string } }>(
-    "/ws/watch/:token",
-    { websocket: true, onRequest: app.rateLimit({ max: GUEST_CONNECTS_PER_MINUTE, timeWindow: "1 minute" }), preHandler: [sameOrigin, findWatchRoom] },
-    (socket: Socket, request) => {
-      const room = roomOf.get(request)!;
-      const conn: Conn = { userId: null, sessionId: "", expiresAt: Infinity, alive: true, version: -1 };
-      conns.set(socket, conn);
-      const log = request.log;
-      log.info({ roomId: room.id, ip: logIp(request.ip) }, "guest connected");
-
-      socket.on("pong", () => (conn.alive = true));
-      socket.on("message", () => undefined); // read-only: whatever a guest sends is dropped
-      socket.on("close", (code) => {
-        conns.delete(socket);
-        if (conn.ip !== undefined) {
-          const left = guestsPerIp.get(conn.ip)! - 1;
-          if (left > 0) guestsPerIp.set(conn.ip, left);
-          else guestsPerIp.delete(conn.ip);
-        }
-        log.info({ roomId: room.id, code, reason: conn.reason ?? "client" }, "guest closed");
-        run(room, async () => {
-          if (room.guests.delete(socket)) changed(room, false); // hosts see the guest count
-        }).catch((err) => err instanceof Evicted || log.error({ err, roomId: room.id }, "guest leave failed"));
-      });
-
-      const fromIp = guestsPerIp.get(request.ip) ?? 0;
-      if (fromIp >= MAX_GUESTS_PER_IP) return closeSocket(socket, "too many guest connections");
-      guestsPerIp.set(request.ip, fromIp + 1);
-      conn.ip = request.ip;
+    socket.on("pong", () => (conn.alive = true));
+    socket.on("message", () => undefined); // read-only: whatever a guest sends is dropped
+    socket.on("close", (code) => {
+      conns.delete(socket);
+      if (conn.ip !== undefined) {
+        const left = guestsPerIp.get(conn.ip)! - 1;
+        if (left > 0) guestsPerIp.set(conn.ip, left);
+        else guestsPerIp.delete(conn.ip);
+      }
+      log.info({ roomId: room.id, code, reason: conn.reason ?? "client" }, "guest closed");
       run(room, async () => {
-        if (socket.readyState !== OPEN) return;
-        if (room.watchToken !== request.params.token) return closeSocket(socket, "watch link changed"); // changed while waiting
-        if (room.guests.size >= MAX_GUESTS_PER_ROOM) return closeSocket(socket, "too many guests");
-        room.guests.add(socket);
-        schedule(room);
-        changed(room, false);
-        sendState(room, socket, conn);
-      }).catch((err) => closeSocket(socket, err instanceof Evicted ? "retry" : "join failed"));
-    },
-  );
+        if (room.guests.delete(socket)) changed(room, false); // hosts see the guest count
+      }).catch((err) => err instanceof Evicted || log.error({ err, roomId: room.id }, "guest leave failed"));
+    });
+
+    const fromIp = guestsPerIp.get(request.ip) ?? 0;
+    if (fromIp >= MAX_GUESTS_PER_IP) return closeSocket(socket, "too many guest connections");
+    guestsPerIp.set(request.ip, fromIp + 1);
+    conn.ip = request.ip;
+    run(room, async () => {
+      if (socket.readyState !== OPEN) return;
+      if (!room.isPublic) return closeSocket(socket, "not public"); // switched off while waiting
+      if (room.guests.size >= MAX_GUESTS_PER_ROOM) return closeSocket(socket, "too many guests");
+      room.guests.add(socket);
+      schedule(room);
+      changed(room, false);
+      sendState(room, socket, conn);
+    }).catch((err) => closeSocket(socket, err instanceof Evicted ? "retry" : "join failed"));
+  }
 
   app.post(
     "/api/rooms",
@@ -891,11 +877,12 @@ export function registerRooms(
     },
   );
 
-  app.get<{ Params: { slug: string } }>("/api/rooms/:slug", { preHandler: auth.requireUser }, async (request, reply) => {
+  app.get<{ Params: { slug: string } }>("/api/rooms/:slug", { onRequest: [auth.loadUser, guestLimit()] }, async (request, reply) => {
     const [row] = await db
-      .select({ slug: rooms.slug, name: rooms.name, isTest: rooms.isTest, status: rooms.status })
+      .select({ slug: rooms.slug, name: rooms.name, isTest: rooms.isTest, status: rooms.status, isPublic: rooms.isPublic })
       .from(rooms)
       .where(eq(rooms.slug, request.params.slug));
+    if (!request.user && !row?.isPublic) return reply.code(401).send({ error: "unauthorized" });
     if (!row) return reply.code(404).send({ error: "not_found" });
     const summary: RoomSummary = row;
     return summary;

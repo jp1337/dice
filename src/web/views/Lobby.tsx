@@ -1,11 +1,11 @@
-// Lobby (spec 10): who is here, who rolls, own nickname; for hosts and co-hosts settings, guest link,
+// Lobby (spec 10): who is here, who rolls, own nickname, the room link; for hosts and co-hosts settings, public switch,
 // simulated players (test rooms) and "Start".
 import { type FormEvent, useEffect, useId, useState } from "react";
 import { NICKNAME_MAX, SIX_MESSAGE_MAX } from "../../shared/constants.js";
 import type { ClientMessage, MeResponse, PatchMeRequest, RoomView } from "../../shared/contracts.js";
 import { Switch } from "../components/Toggles.js";
 import { type Derived, cleanText, nicknameError, nicknameResponseMessage, sixMessageError } from "../lib/room.js";
-import { ConfirmButton, CopyButton } from "./Controls.js";
+import { CopyButton } from "./Controls.js";
 import { Participants } from "./Participants.js";
 
 type Props = { view: RoomView; d: Derived; send: (message: ClientMessage) => void };
@@ -165,26 +165,23 @@ function Settings({ view, d, send }: Props) {
   );
 }
 
-export function GuestLink({ view, d, send }: Props) {
-  const { watchLinkActive, watchUrl, guestCount } = view.room;
+// The one link of a room (spec 4.8); hosts and co-hosts switch whether it works without a login.
+export function RoomLink({ view, d, send }: Props) {
+  const { slug, isPublic, guestCount } = view.room;
   return (
     <div className="stack">
-      <h3>Zuschauer-Link für Gäste ohne Discord</h3>
-      {watchLinkActive ? (
+      <span className="row">
+        <CopyButton text={`${location.origin}/r/${slug}`} label="Raum-Link kopieren" />
+      </span>
+      {d.showModeration && (
         <>
-          {watchUrl && <CopyButton text={watchUrl} label="Zuschauer-Link kopieren" />}
-          <p className="hint">Gäste gerade: {guestCount ?? 0}</p>
-          <span className="row">
-            <ConfirmButton label="Neuen Link erzeugen" question="Neuen Link erzeugen? Alle Gäste werden getrennt." disabled={!d.can.watchLink} onConfirm={() => send({ type: "set_watch_link", action: "regenerate" })} />
-            <ConfirmButton label="Link ausschalten" question="Link ausschalten? Alle Gäste werden getrennt." disabled={!d.can.watchLink} onConfirm={() => send({ type: "set_watch_link", action: "disable" })} />
-          </span>
+          <Switch on={isPublic} disabled={!d.can.setPublic} onChange={(on) => send({ type: "set_public", isPublic: on })} label="Öffentlich" />
+          <p className="hint">
+            {isPublic
+              ? `Jeder mit dem Link kann ohne Anmeldung zuschauen und sieht nur Anzeigenamen. Gäste gerade: ${guestCount ?? 0}`
+              : "Nur angemeldete Mitglieder des Discord-Servers sehen den Raum."}
+          </p>
         </>
-      ) : (
-        <span className="row">
-          <button type="button" disabled={!d.can.watchLink} onClick={() => send({ type: "set_watch_link", action: "enable" })}>
-            Zuschauer-Link einschalten
-          </button>
-        </span>
       )}
     </div>
   );
@@ -215,7 +212,6 @@ function SimulatedPlayers({ d, send }: Props) {
 
 export function Lobby(props: Props) {
   const { view, d, send } = props;
-  const roomLink = `${location.origin}/r/${view.room.slug}`;
   const playerCount = d.players.length;
   return (
     <div className="lobby">
@@ -233,7 +229,6 @@ export function Lobby(props: Props) {
           </span>
           {playerCount === 0 && <p className="hint">Es gibt noch keine Würfler.</p>}
           {view.room.isTest && <SimulatedPlayers {...props} />}
-          <GuestLink {...props} />
         </section>
       )}
 
@@ -242,11 +237,7 @@ export function Lobby(props: Props) {
           <span className="icon" aria-hidden="true">👥</span>
           Teilnehmer ({view.members.length}, davon {playerCount} Würfler)
         </h2>
-        {!d.isGuest && (
-          <span className="row">
-            <CopyButton text={roomLink} label="Raum-Link kopieren" />
-          </span>
-        )}
+        {!d.isGuest && <RoomLink {...props} />}
         <Participants {...props} />
       </section>
 

@@ -26,11 +26,11 @@ All six steps are done. Not yet verified on a live deployment: the Discord login
 | 3 | Rooms and lobby over WebSocket | done |
 | 4 | Game rules: turns, bonus die, 6 pauses the game | done |
 | 5 | Host tools, co-hosts, test rooms, cleanup of simulated players | done |
-| 6 | Animation, sound, reactions, guest link, link preview, design | done |
+| 6 | Animation, sound, reactions, public rooms, link preview, design | done |
 
 Works today: Discord login with server membership check, rooms with a lobby, the full game with
-bonus die and six pauses, every host tool, test rooms with simulated players, a read-only guest
-link, reactions, sound, light and dark theme. Proven behind nginx: 31 minutes idle WebSocket,
+bonus die and six pauses, every host tool, test rooms with simulated players, public rooms (read-only
+without login), reactions, sound, light and dark theme. Proven behind nginx: 31 minutes idle WebSocket,
 restart mid-game without a lost roll, 100 clients in one room ([acceptance](docs-tech/acceptance.md)).
 
 ## Quick start

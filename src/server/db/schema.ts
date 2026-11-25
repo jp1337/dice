@@ -48,7 +48,7 @@ export const rooms = pgTable("rooms", {
   isTest: boolean().notNull(),
   status: text({ enum: ["lobby", "running", "finished"] }).notNull().default("lobby"),
   settings: jsonb().$type<Settings>().notNull(),
-  watchToken: text().unique(), // null = guest link disabled (spec 4.8)
+  isPublic: boolean().notNull().default(true), // anyone with the room link may watch as a guest (spec 4.8)
   createdAt: now(),
   lastActivityAt: now(), // drives retention (spec 9.3)
 });

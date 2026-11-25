@@ -111,8 +111,7 @@ No router: `main.tsx` picks the page from the path (`lib/routes.ts`); every page
 | Path | View | Connects to |
 | --- | --- | --- |
 | `/` | `views/Start.tsx`: login, logged-in user, "Raum erstellen" for hosts | `GET /api/me`, `POST /api/rooms` |
-| `/r/:slug` | `views/RoomPage.tsx` → `Lobby`, `Game`, `Result` by game status | `GET /api/rooms/:slug` first (401 login, 404 not found), then `/ws/rooms/:slug` |
-| `/z/:token` | same screens, `viewer.kind === "guest"`: nothing that sends | `/ws/watch/:token`; `HEAD /z/:token` 404 = link off |
+| `/r/:slug` | `views/RoomPage.tsx` → `Lobby`, `Game`, `Result` by game status; a guest (public room, no session) gets the same screens without anything that sends | `GET /api/rooms/:slug` first (401 login, 404 not found), then `/ws/rooms/:slug` |
 
 | Module | Holds |
 | --- | --- |

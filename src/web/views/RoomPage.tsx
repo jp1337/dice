@@ -1,12 +1,12 @@
-// The room (/r/:slug) and the guest view (/z/:token): connection, status, error pages, then the screen
-// that fits the game status. Guests get the same screens without anything that sends (spec 4.8, 10).
+// The room (/r/:slug): connection, status, error pages, then the screen that fits the game status.
+// Without a login a public room shows the guest view: the same screens without anything that sends (spec 4.8, 10).
 import { useEffect, useState } from "react";
 import type { RoomSummary, RoomView } from "../../shared/contracts.js";
 import { SixBanner } from "../components/SixBanner.js";
 import { type ProbeResult, showErrorPage, statusLabel } from "../lib/connection.js";
 import { deriveRoom, finalSixOpen, sixBannerValues } from "../lib/room.js";
 import { rollBusy } from "../lib/roll.js";
-import { socketUrl } from "../lib/routes.js";
+import { loginHref, socketUrl } from "../lib/routes.js";
 import { useRoom } from "../lib/useRoom.js";
 import { Game } from "./Game.js";
 import { Lobby } from "./Lobby.js";
@@ -16,11 +16,6 @@ import { LoginPrompt } from "./Start.js";
 const probeRoom = (slug: string) => async (): Promise<ProbeResult> => {
   const res = await fetch(`/api/rooms/${encodeURIComponent(slug)}`);
   return res.status === 401 ? "login" : res.status === 404 ? "gone" : "ok";
-};
-// The server answers the guest page with 404 once the link is off or regenerated (spec 7).
-const probeGuest = (token: string) => async (): Promise<ProbeResult> => {
-  const res = await fetch(`/z/${encodeURIComponent(token)}`, { method: "HEAD" });
-  return res.status === 404 ? "gone" : "ok";
 };
 
 function NotFound({ title, text }: { title: string; text: string }) {
@@ -61,17 +56,6 @@ export function RoomPage({ slug }: { slug: string }) {
   }
   if (summary === "gone") return <NotFound title="Raum nicht gefunden" text="Diesen Raum gibt es nicht oder nicht mehr. Prüfe den Link oder frag beim Host nach." />;
   return <Live url={socketUrl(location, `/ws/rooms/${encodeURIComponent(slug)}`)} probe={probeRoom(slug)} title={summary?.name ?? "Raum"} gone="Diesen Raum gibt es nicht mehr." />;
-}
-
-export function GuestPage({ token }: { token: string }) {
-  return (
-    <Live
-      url={socketUrl(location, `/ws/watch/${encodeURIComponent(token)}`)}
-      probe={probeGuest(token)}
-      title="Zuschauen"
-      gone="Dieser Zuschauer-Link ist nicht mehr aktiv. Frag beim Host nach einem neuen."
-    />
-  );
 }
 
 function Live({ url, probe, title, gone }: { url: string; probe: () => Promise<ProbeResult>; title: string; gone: string }) {
@@ -163,8 +147,12 @@ function RoomScreen({ view, room, label }: { view: RoomView; room: ReturnType<ty
             {label}
           </span>
         </p>
-        {d.isGuest && <p className="note">Du schaust als Gast zu.</p>}
-        {view.room.watchLinkActive && !d.isGuest && <p className="note">Zuschauer-Link aktiv: Dein Anzeigename ist für Gäste sichtbar.</p>}
+        {d.isGuest && (
+          <p className="note">
+            Du schaust als Gast zu. Zum Mitmachen <a href={loginHref(location.pathname)}>mit Discord anmelden</a>.
+          </p>
+        )}
+        {view.room.isPublic && !d.isGuest && <p className="note">Öffentlicher Raum: Gäste ohne Anmeldung sehen deinen Anzeigenamen.</p>}
       </header>
       <p className="notice" role="alert">
         {room.notice?.text}
