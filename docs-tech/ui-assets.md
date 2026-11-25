@@ -11,7 +11,7 @@ compares pixels (`--check`).
 | --- | --- | --- |
 | `src/web/public/sounds/roll.wav` | `node scripts/generate-sounds.mjs` | 57 KB |
 | `src/web/public/sounds/six.wav` | same | 35 KB |
-| `src/web/public/og.png` (256×256) | `node scripts/generate-og-image.mjs` | 23 KB |
+| `src/web/public/og.png` (256×256) | `node scripts/generate-og-image.mjs` | 1 KB |
 
 - Sounds: modal synthesis, seeded, mono 16 bit 22.05 kHz WAV, peak −9 dBFS (quiet on purpose: voice
   channel). The script refuses a file over 60 KB.
@@ -20,10 +20,11 @@ compares pixels (`--check`).
 | --- | --- | --- |
 | Roll | Two resin dice: muffled clicks in the hand (0–0.27 s), then table hits with shrinking, irregular gaps, edge-then-face doubles, die-on-die clicks, rocking to rest. Each hit = half-sine contact pulse through damped resonators: die modes 2.6–6.2 kHz (own pitches per die), wood 170/280/1050 Hz. Softer hit, longer contact, duller | `ROLL_ANIMATION_MS` (test), ends before the six sound |
 | Six | Marimba arpeggio G–B–D–G, partials 1× and 3.9× (higher ones would alias), soft mallet attack | 0.8 s |
-- Preview image: drawn with signed distance functions, 4×4 supersampled, encoded by a minimal PNG
+- Preview image: pixel art like the app, two dice on a plank table under bunting, sky and hills, drawn
+  on a 64×64 grid in the colours of `style.css` and scaled ×4 without smoothing; encoded by a minimal PNG
   writer (`node:zlib`). Square and small: `twitter:card` is `summary`, so Discord shows it as a
   thumbnail beside `og:title` (spec 10.2: "kleines Bild"). No text in it.
-- `src/web/public/` is copied unchanged to `dist/web/`; `favicon.svg` and `theme-init.js` are hand-written.
+- `src/web/public/` is copied unchanged to `dist/web/`; `favicon.svg` (a 16×16 pixel die showing six, `shape-rendering="crispEdges"`) and `theme-init.js` are hand-written.
 - `src/web/fonts/PixelifySans.ttf` (77 KB, variable 400–700): Pixelify Sans by the Pixelify Sans
   Project Authors, SIL Open Font License 1.1 (`OFL.txt` beside it), unmodified, from
   `github.com/google/fonts/tree/main/ofl/pixelifysans`. `style.css` imports it relatively, so Vite hashes it into `/assets/` (cached for a year).

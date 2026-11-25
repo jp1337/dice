@@ -1,63 +1,83 @@
 // Draws the link preview image of spec 10.2: a small square PNG (Discord shows it as the thumbnail of a
-// "summary" card), two dice on a gold ribbon, nothing about any room. Pure Node, with a minimal PNG encoder on node:zlib. Deterministic pixels; the compressed bytes depend on the zlib build. Usage: node scripts/generate-og-image.mjs
+// "summary" card), two dice on a plank table under bunting and sky, nothing about any room. Pixel art in the
+// app's look: drawn on a 64×64 grid with the colours of src/web/style.css, scaled ×4 without smoothing.
+// Pure Node, with a minimal PNG encoder on node:zlib. Deterministic pixels; the compressed bytes depend on
+// the zlib build. Usage: node scripts/generate-og-image.mjs
 import { readFileSync, writeFileSync } from "node:fs";
 import { crc32, deflateSync, inflateSync } from "node:zlib";
 
-const W = 256;
-const H = 256;
+const GRID = 64;
+const SCALE = 4;
+const W = GRID * SCALE;
+const H = GRID * SCALE;
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-// The tokens of src/web/style.css: dark theme background, gold, the cream dice with teal and coral pips.
-const night = hex("#0e2629");
-const nightTop = hex("#1e4a4f");
-const gold = hex("#ffd23f");
-const cream = hex("#fff8e7");
-const creamEdge = hex("#e3d3a8");
-const teal = hex("#14615c");
-const coral = hex("#d45233");
-
-// Signed distances in pixels; coverage turns them into anti-aliased edges.
-const box = (x, y, hw, hh, r) => {
-  const qx = Math.abs(x) - hw + r;
-  const qy = Math.abs(y) - hh + r;
-  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
+// Tokens of src/web/style.css (light theme).
+const c = {
+  sky: hex("#79c0da"),
+  cloud: hex("#fff4d6"),
+  meadow: hex("#6aa84f"),
+  meadowDark: hex("#3d7424"),
+  plank: hex("#7d4a25"),
+  wood: hex("#8a5229"),
+  woodLight: hex("#b07040"),
+  woodDark: hex("#4e2a12"),
+  face: hex("#fff6df"),
+  faceShade: hex("#ead8ad"),
+  ink: hex("#4e2a12"),
+  berry: hex("#a8304a"),
+  pumpkin: hex("#e9792f"),
+  wheat: hex("#f2c14e"),
 };
-const coverage = (d) => Math.min(1, Math.max(0, 0.5 - d));
-const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 
-const PIPS = { 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] };
-const dice = [
-  { cx: 74, cy: 112, size: 84, angle: -0.2, value: 5, pip: teal },
-  { cx: 180, cy: 126, size: 84, angle: 0.15, value: 6, pip: coral },
-];
+const grid = Array.from({ length: GRID }, () => Array.from({ length: GRID }, () => c.sky));
+const rect = (x, y, w, h, colour) => {
+  for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (i >= 0 && j >= 0 && i < GRID && j < GRID) grid[j][i] = colour;
+};
 
-function shade(x, y) {
-  // Night sky, a little lighter at the top, with a warm glow behind the dice.
-  let c = mix(nightTop, night, y / H);
-  const glow = Math.exp(-(((x - 128) / 120) ** 2 + ((y - 120) / 100) ** 2));
-  c = mix(c, gold, 0.12 * glow);
-  // The ribbon a gift is tied with.
-  c = mix(c, gold, coverage(Math.abs(y - 182) - 5) * 0.9);
-  for (const d of dice) {
-    const h = d.size / 2;
-    // Soft shadow under the die.
-    const shadow = Math.exp(-(((x - d.cx - h * 0.1) / (h * 1.05)) ** 2 + ((y - d.cy - h * 1.05) / (h * 0.18)) ** 2));
-    c = mix(c, [0, 0, 0], 0.45 * shadow);
-    const cos = Math.cos(-d.angle);
-    const sin = Math.sin(-d.angle);
-    const px = (x - d.cx) * cos - (y - d.cy) * sin;
-    const py = (x - d.cx) * sin + (y - d.cy) * cos;
-    const edge = box(px, py, h, h, d.size * 0.16);
-    const body = coverage(edge);
-    if (body === 0) continue;
-    const face = mix(cream, creamEdge, Math.min(1, Math.max(0, (edge + h * 0.15) / (h * 0.15))) * 0.8 + (py / h + 1) * 0.08);
-    let die = face;
-    for (const [gx, gy] of PIPS[d.value]) {
-      die = mix(die, d.pip, coverage(Math.hypot(px - gx * h * 0.5, py - gy * h * 0.5) - d.size * 0.085));
-    }
-    c = mix(c, die, body);
-  }
-  return c;
+// Clouds.
+rect(8, 12, 10, 3, c.cloud);
+rect(10, 10, 5, 2, c.cloud);
+rect(44, 16, 12, 3, c.cloud);
+rect(47, 14, 6, 2, c.cloud);
+// Meadow behind the table, a darker crest.
+rect(0, 30, GRID, 10, c.meadow);
+rect(0, 30, GRID, 1, c.meadowDark);
+// Two low hills, stepped like pixel art.
+for (const [x, w] of [[2, 20], [36, 24]]) {
+  rect(x, 28, w, 2, c.meadow);
+  rect(x + 3, 26, w - 6, 2, c.meadow);
+  rect(x + 3, 25, w - 6, 1, c.meadowDark);
+  rect(x, 27, 3, 1, c.meadowDark);
+  rect(x + w - 3, 27, 3, 1, c.meadowDark);
 }
+// Plank table: boards with seams, a light top edge, grain.
+rect(0, 40, GRID, 24, c.plank);
+rect(0, 40, GRID, 1, c.woodLight);
+for (const y of [47, 55]) rect(0, y, GRID, 1, c.woodDark);
+for (const [x, y, w] of [[5, 43, 9], [30, 44, 12], [50, 42, 8], [14, 50, 10], [40, 51, 14], [3, 58, 12], [26, 59, 9], [48, 60, 11]]) rect(x, y, w, 1, c.wood);
+// Bunting: a string with pennants in wheat, pumpkin and berry.
+rect(0, 1, GRID, 1, c.woodDark);
+[c.wheat, c.pumpkin, c.berry].forEach((colour, k) => {
+  for (let x = k * 8; x < GRID; x += 24) {
+    rect(x + 1, 2, 5, 1, colour);
+    rect(x + 2, 3, 3, 1, colour);
+    rect(x + 3, 4, 1, 1, colour);
+  }
+});
+
+// A die: 17×17 with an outline and notched corners, a shaded bottom and right edge, square 3×3 pips.
+const PIPS = { 5: [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]], 6: [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]] };
+function die(x, y, value, pip) {
+  rect(x + 2, y + 17, 17, 2, c.woodDark); // shadow on the table
+  rect(x + 1, y, 15, 17, c.ink);
+  rect(x, y + 1, 17, 15, c.ink);
+  rect(x + 1, y + 1, 15, 15, c.face);
+  rect(x + 1, y + 15, 15, 1, c.faceShade);
+  rect(x + 15, y + 1, 1, 15, c.faceShade);
+  for (const [gx, gy] of PIPS[value]) rect(x + 3 + gx * 4, y + 3 + gy * 4, 3, 3, pip);
+}
+die(11, 27, 5, c.ink);
+die(35, 31, 6, c.berry);
 
 // Each row starts with filter type 2 (Up): the difference to the row above, which compresses well here.
 const rowBytes = W * 3 + 1;
@@ -65,12 +85,7 @@ const raw = Buffer.alloc(rowBytes * H);
 let prev = new Uint8Array(W * 3);
 for (let y = 0; y < H; y++) {
   const row = new Uint8Array(W * 3);
-  for (let x = 0; x < W; x++) {
-    // 4×4 supersampling: smooth edges at this small size.
-    const offsets = [0.125, 0.375, 0.625, 0.875];
-    const s = offsets.flatMap((dy) => offsets.map((dx) => shade(x + dx, y + dy)));
-    for (let ch = 0; ch < 3; ch++) row[x * 3 + ch] = Math.round(s.reduce((sum, c) => sum + c[ch], 0) / s.length);
-  }
+  for (let x = 0; x < W; x++) row.set(grid[Math.floor(y / SCALE)][Math.floor(x / SCALE)], x * 3);
   raw[y * rowBytes] = 2;
   for (let i = 0; i < row.length; i++) raw[y * rowBytes + 1 + i] = (row[i] - prev[i]) & 0xff;
   prev = row;
