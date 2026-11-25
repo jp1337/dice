@@ -115,6 +115,7 @@ export function turnList(view: RoomView, busy = false) {
     userId,
     name: name(userId),
     active: userId === active,
+    avatarUrl: byId.get(userId)?.avatarUrl ?? null,
     twoDice: view.game.bonusPending.includes(userId),
     connected: byId.get(userId)?.connected ?? false,
     isSimulated: byId.get(userId)?.isSimulated ?? false,
@@ -270,6 +271,7 @@ export function nicknameResponseMessage(status: number): string | null {
   if (status === 204) return null;
   if (status === 400) return "Diesen Spitznamen nimmt der Server nicht an.";
   if (status === 401) return "Deine Sitzung ist abgelaufen. Bitte melde dich neu an.";
+  if (status === 409) return "Diesen Namen trägt schon jemand in einem deiner Räume.";
   if (status === 429) return "Zu viele Änderungen. Bitte warte eine Minute.";
   return "Das hat nicht geklappt. Bitte versuche es noch einmal.";
 }

@@ -405,8 +405,8 @@ describe("lists", () => {
 
   it("turn order marks the active player, the 2-dice bonus and the connection", () => {
     expect(turnList(view)).toEqual([
-      { userId: BEN, name: "Ben", active: false, twoDice: true, connected: true, isSimulated: false },
-      { userId: ANNA, name: "Anna", active: true, twoDice: false, connected: true, isSimulated: false },
+      { userId: BEN, name: "Ben", active: false, avatarUrl: null, twoDice: true, connected: true, isSimulated: false },
+      { userId: ANNA, name: "Anna", active: true, avatarUrl: null, twoDice: false, connected: true, isSimulated: false },
     ]);
   });
 
@@ -417,6 +417,11 @@ describe("lists", () => {
     expect(turnList(rolling, true).find((t) => t.active)?.userId).toBe(BEN);
     expect(turnText(rolling, ANNA, false)).toBe("Du bist dran!"); // landed: now it is Anna's turn
     expect(turnList(rolling, false).find((t) => t.active)?.userId).toBe(ANNA);
+  });
+
+  it("turn order carries each player's profile picture", () => {
+    const withPicture = { ...view, members: view.members.map((m) => (m.userId === BEN ? { ...m, avatarUrl: "/avatars/ben/abc" } : m)) };
+    expect(turnList(withPicture).map((t) => t.avatarUrl)).toEqual(["/avatars/ben/abc", null]);
   });
 
   it("latecomers are everyone not rolling and without a place", () => {

@@ -3,6 +3,7 @@
 // Guests see the same without anything that sends.
 import { useEffect, useId, useState } from "react";
 import type { RoomView } from "../../shared/contracts.js";
+import { Avatar } from "../components/Avatar.js";
 import { Dice } from "../components/Dice.js";
 import { HowTo } from "../components/HowTo.js";
 import { FloatingReactions, ReactionBar } from "../components/Reactions.js";
@@ -108,7 +109,8 @@ function HostBar({ view, d, room }: Props) {
           onConfirm={() => seq !== null && send({ type: "undo", seq })}
         />
       </div>
-      {can.assignLastPlace && (
+      {/* The last player who is a host too has their own "Letzten Platz nehmen" on the stage. */}
+      {can.assignLastPlace && d.lastPlayer !== d.myId && (
         <ConfirmButton key={d.lastPlayer} label="Letzten Platz vergeben" question={`Letzten Platz an ${d.name(d.lastPlayer)} vergeben?`} onConfirm={() => send({ type: "assign_last_place" })} />
       )}
     </section>
@@ -194,7 +196,10 @@ function TurnOrder({ view, busy }: { view: RoomView; busy: boolean }) {
       <ol className="turns">
         {turnList(view, busy).map((t) => (
           <li key={t.userId} className={t.active ? "is-active" : ""} aria-current={t.active ? "step" : undefined}>
-            <span>{t.name}</span>
+            <span className="who">
+              <Avatar userId={t.userId} name={t.name} avatarUrl={t.avatarUrl} size="sm" />
+              {t.name}
+            </span>
             <span className="badges">
               {t.twoDice && <span className="badge badge-bonus">2 Würfel</span>}
               {t.isSimulated && <span className="badge badge-test">Testspieler</span>}
@@ -244,7 +249,7 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
                 </button>
               )}
               {d.can.claimLastPlace && (
-                <button type="button" disabled={locked} onClick={() => room.send({ type: "claim_last_place" })}>
+                <button type="button" className="big" disabled={locked} onClick={() => room.send({ type: "claim_last_place" })}>
                   Letzten Platz nehmen
                 </button>
               )}

@@ -1,6 +1,7 @@
 // The room (/r/:slug): connection, status, error pages, then the screen that fits the game status.
 // Without a login a public room shows the guest view: the same screens without anything that sends (spec 4.8, 10).
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { RoomSummary, RoomView } from "../../shared/contracts.js";
 import { SixBanner } from "../components/SixBanner.js";
 import { type ProbeResult, showErrorPage, statusLabel } from "../lib/connection.js";
@@ -119,6 +120,9 @@ function RoomScreen({ view, room, label }: { view: RoomView; room: ReturnType<ty
   const d = deriveRoom(view, online);
   const busy = rollBusy(room.roll);
   const [finalSixSeq, setFinalSixSeq] = useState<number | null>(null);
+  // The footer renders after the room page, so its slot exists only once both are mounted.
+  const [footerNote, setFooterNote] = useState<HTMLElement | null>(null);
+  useEffect(() => setFooterNote(document.getElementById("footer-note")), []);
   const finalSix = finalSixOpen(view, finalSixSeq);
   const { status } = view.game;
   // The game view stays while the last roll still tumbles, so the result never spoils the dice.
@@ -152,8 +156,8 @@ function RoomScreen({ view, room, label }: { view: RoomView; room: ReturnType<ty
             Du schaust als Gast zu. Zum Mitmachen <a href={loginHref(location.pathname)}>mit Discord anmelden</a>.
           </p>
         )}
-        {view.room.isPublic && !d.isGuest && <p className="note">Öffentlicher Raum: Gäste ohne Anmeldung sehen deinen Anzeigenamen.</p>}
       </header>
+      {footerNote && view.room.isPublic && !d.isGuest && createPortal("Öffentlicher Raum: Gäste ohne Anmeldung sehen deinen Anzeigenamen.", footerNote)}
       <p className="notice" role="alert">
         {room.notice?.text}
       </p>

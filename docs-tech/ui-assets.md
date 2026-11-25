@@ -32,8 +32,9 @@ ffmpeg -i dice-shake-2.ogg -i dice-throw-1.ogg -filter_complex "[0]atrim=0:0.65,
 - `src/web/fonts/PixelifySans.ttf` (77 KB, variable 400–700): Pixelify Sans by the Pixelify Sans
   Project Authors, SIL Open Font License 1.1 (`OFL.txt` beside it), unmodified, from
   `github.com/google/fonts/tree/main/ofl/pixelifysans`. `style.css` imports it relatively, so Vite hashes it into `/assets/` (cached for a year).
-- `src/web/fonts/Silkscreen-Bold.ttf` (30 KB): Silkscreen by the Silkscreen Project Authors, OFL 1.1
-  (`OFL-Silkscreen.txt`), unmodified, from `github.com/google/fonts/tree/main/ofl/silkscreen`; digits only.
+- `src/web/fonts/Jersey10-Regular.ttf` (78 KB): Jersey 10 by the Soft Type Project Authors, OFL 1.1 (`OFL-Jersey10.txt`), unmodified, from
+  `github.com/google/fonts/tree/main/ofl/jersey10`; digits only, `size-adjust: 145%`. Silkscreen was tried
+  first: its 4 reads as a blob.
 
 ## Look
 
@@ -55,7 +56,7 @@ brown, the call to action evergreen, title and links berry.
 | --- | --- |
 | Pixel frame | four hard `box-shadow` copies, no blur; the corners stay notched. Buttons swap `--face`, `--hi`, `--lo`, `--frame` |
 | Sign (`.ribbon`) | parchment in a plank frame on two ropes; needs an isolated parent (`.ribbon-wrap`, `.hero`) |
-| Headings | Pixelify Sans for `h1`–`h3`, `summary`, sign, turn; body stays the system face. Its 5 reads as an S, so digits come from Silkscreen Bold (`"Pixel Digits"`, `unicode-range` 0–9) |
+| Headings | Pixelify Sans for `h1`–`h3`, `summary`, sign, turn; body stays the system face. Its 5 reads as an S, so digits come from Jersey 10 (`"Pixel Digits"`, `unicode-range` 0–9) |
 | Motion | ≤ 500 ms except the dice (1.3 s) and confetti; stepped bob on the roll button; all off with reduced motion |
 
 ### Desktop shell
