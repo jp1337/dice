@@ -172,7 +172,7 @@ only) · `POST /api/rooms` (hosts), `GET /api/rooms/:slug` (without session: 401
 `rolled`, drops everything received.
 
 Server rules: every action is checked against host status, turn and game status; the client decides
-nothing. About 2 s after a roll no further roll is accepted (animation). JSON only, schema-validated, a few
+nothing. For 6.3 s after a roll no further roll is accepted: 1.3 s of tumbling dice, then a 5 s countdown everyone sees ("Nächster Wurf in 5 …"). JSON only, schema-validated, a few
 KB at most. The game never depends on one connection, a host's included.
 
 ## Proxy, security, no indexing

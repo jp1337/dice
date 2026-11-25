@@ -1,11 +1,11 @@
 // Pure logic behind the UI components, tested in test/web.test.ts. Components stay thin.
-import { REACTION_INTERVAL_MS, type reactionEmojis } from "../../shared/constants.js";
+import { REACTION_INTERVAL_MS, ROLL_ANIMATION_MS, type reactionEmojis } from "../../shared/constants.js";
 
 export type ReactionEmoji = (typeof reactionEmojis)[number];
 
 // The same for every client and shorter than the server's roll cooldown (ROLL_COOLDOWN_MS), so the
 // next roll never starts while a die still tumbles. style.css holds the same value as --roll-duration.
-export const ROLL_ANIMATION_MS = 1300;
+export { ROLL_ANIMATION_MS };
 export const FLOAT_MS = 2400; // style.css: --float-duration
 
 // Spec 4.4 R6: the host's six text. Plain string out, rendered as text by React, so a name like

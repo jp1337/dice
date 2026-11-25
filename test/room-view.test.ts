@@ -1,5 +1,6 @@
 // The logic behind the room views, without a DOM: routing, the WebSocket client (backoff, close codes,
 // reconnect), what each viewer may click, history and result texts, the roll animation timing.
+import { NEXT_ROLL_COUNTDOWN_MS, ROLL_ANIMATION_MS, ROLL_COOLDOWN_MS } from "../src/shared/constants.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultSettings } from "../src/shared/contracts.js";
 import type { GameEvent, MemberView, RoomView } from "../src/shared/contracts.js";
@@ -39,7 +40,7 @@ import {
   turnList,
   turnText,
 } from "../src/web/lib/room.js";
-import { initialRoll, rollBusy, rollLocked, rollStep, shownDice } from "../src/web/lib/roll.js";
+import { countdown, initialRoll, rollBusy, rollLocked, rollStep, shownDice } from "../src/web/lib/roll.js";
 import { loginHref, parseRoute, socketUrl } from "../src/web/lib/routes.js";
 
 // Fictitious ids and names only.
@@ -380,6 +381,19 @@ describe("what a viewer may click", () => {
     const d = deriveRoom(makeView({ game: running(), viewer: { kind: "guest" } }), true);
     expect(d.isGuest).toBe(true);
     expect(Object.values(d.can).some(Boolean)).toBe(false);
+  });
+});
+
+describe("next roll countdown", () => {
+  it("counts the seconds after the dice land, until the server takes the next roll", () => {
+    const t = 1_000_000;
+    const tumbling = rollStep(initialRoll, { type: "rolled", dice: [3], at: t });
+    expect(countdown(tumbling, t + 500)).toBe(0); // dice still in the air: no countdown yet
+    const landed = rollStep(tumbling, { type: "settled" });
+    expect(countdown(landed, t + ROLL_ANIMATION_MS)).toBe(NEXT_ROLL_COUNTDOWN_MS / 1000);
+    expect(countdown(landed, t + ROLL_COOLDOWN_MS - 1)).toBe(1);
+    expect(countdown(landed, t + ROLL_COOLDOWN_MS)).toBe(0);
+    expect(countdown(rollStep(landed, { type: "cooled" }), t + ROLL_ANIMATION_MS)).toBe(0);
   });
 });
 

@@ -596,6 +596,13 @@ label {
   text-shadow: 2px 2px 0 var(--wood-dark);
 }
 
+.countdown {
+  margin: 0 0 12px;
+  color: var(--wheat-light);
+  font-weight: 700;
+  text-shadow: 2px 2px 0 var(--wood-dark);
+}
+
 .last-gift {
   margin: 0 0 16px;
   color: var(--cream);

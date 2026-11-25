@@ -3,6 +3,7 @@
 // show anywhere else yet: no six banner, no result page. A new roll seq in a state marks the gap;
 // `rolled` starts the tumble; the dice landing ends it. The first state of every connection is the
 // baseline: rolls missed while away are not replayed.
+import { ROLL_COOLDOWN_MS } from "../../shared/constants.js";
 import type { RoomView } from "../../shared/contracts.js";
 
 export type RollState = {
@@ -12,17 +13,18 @@ export type RollState = {
   cooling: boolean; // within ROLL_COOLDOWN_MS of the last `rolled`: the server refuses the next roll
   rollKey: number; // the Dice component's trigger, one per `rolled`
   dice: number[] | null; // the values of the newest `rolled`
+  rolledAt: number | null; // when it arrived (Date.now()), for the countdown
 };
 
 export type RollAction =
   | { type: "state"; view: RoomView; first: boolean }
-  | { type: "rolled"; dice: number[] }
+  | { type: "rolled"; dice: number[]; at?: number }
   | { type: "settled" }
   | { type: "cooled" } // ROLL_COOLDOWN_MS after `rolled`
   | { type: "timeout" }; // `rolled` never came (ROLLED_WAIT_MS): show the state as it is
 
 export const ROLLED_WAIT_MS = 1500;
-export const initialRoll: RollState = { seenSeq: 0, waiting: false, tumbling: false, cooling: false, rollKey: 0, dice: null };
+export const initialRoll: RollState = { seenSeq: 0, waiting: false, tumbling: false, cooling: false, rollKey: 0, dice: null, rolledAt: null };
 
 // Rolls only, so the number means the same for hosts and everyone else. Undone rolls stay in the history.
 export const newestRollSeq = (view: RoomView) => view.game.history.findLast((e) => e.type === "rolled")?.seq ?? 0;
@@ -38,7 +40,7 @@ export function rollStep(state: RollState, action: RollAction): RollState {
       return seq > state.seenSeq ? { ...state, seenSeq: seq, waiting: true } : state;
     }
     case "rolled":
-      return { ...state, waiting: false, tumbling: true, cooling: true, rollKey: state.rollKey + 1, dice: action.dice };
+      return { ...state, waiting: false, tumbling: true, cooling: true, rollKey: state.rollKey + 1, dice: action.dice, rolledAt: action.at ?? null };
     case "settled":
       return { ...state, tumbling: false };
     case "cooled":
@@ -52,6 +54,12 @@ export function rollStep(state: RollState, action: RollAction): RollState {
 export const rollBusy = (state: RollState) => state.waiting || state.tumbling;
 // The roll buttons wait for the server's cooldown too.
 export const rollLocked = (state: RollState) => rollBusy(state) || state.cooling;
+
+// Whole seconds until the next roll is allowed, shown once the dice have landed; 0 = none to show.
+export function countdown(state: RollState, now: number) {
+  if (!state.cooling || rollBusy(state) || state.rolledAt === null) return 0;
+  return Math.max(0, Math.ceil((state.rolledAt + ROLL_COOLDOWN_MS - now) / 1000));
+}
 
 // What the dice show: the tumbling roll, or the game's last roll (which also follows an undo).
 export function shownDice(state: RollState, view: RoomView) {

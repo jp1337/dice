@@ -1,7 +1,7 @@
 // The running game (spec 10). Phone first, in the order a host needs it: whose turn and the dice, the
 // four everyday host tools, gifts and turn order, reactions, the rarer host tools folded away, history.
 // Guests see the same without anything that sends.
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { RoomView } from "../../shared/contracts.js";
 import { Dice } from "../components/Dice.js";
 import { HowTo } from "../components/HowTo.js";
@@ -10,7 +10,7 @@ import { ReactionsToggle, Switch } from "../components/Toggles.js";
 import { useFlag } from "../lib/hooks.js";
 import { HIDE_REACTIONS_KEY } from "../lib/prefs.js";
 import { type Derived, giftList, historyLines, lastGiftText, latecomers, pickOption, rollCaption, shownTurn, turnList, turnText } from "../lib/room.js";
-import { rollBusy, rollLocked, shownDice } from "../lib/roll.js";
+import { type RollState, countdown, rollBusy, rollLocked, shownDice } from "../lib/roll.js";
 import type { useRoom } from "../lib/useRoom.js";
 import { ConfirmButton } from "./Controls.js";
 import { RoomLink } from "./Lobby.js";
@@ -50,6 +50,20 @@ function PickAndAct({ label, options, action, confirm }: { label: string; option
       )}
     </span>
   );
+}
+
+// After the dice land, everyone sees how long until the next roll; the buttons are locked meanwhile.
+function NextRollCountdown({ roll }: { roll: RollState }) {
+  const [now, setNow] = useState(() => Date.now());
+  const ticking = roll.cooling && !rollBusy(roll);
+  useEffect(() => {
+    if (!ticking) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(timer);
+  }, [ticking, roll.rollKey]);
+  const left = countdown(roll, now);
+  return left > 0 ? <p className="countdown">Nächster Wurf in {left} …</p> : null;
 }
 
 // The everyday tools, two by two.
@@ -223,6 +237,7 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
           )}
           <Dice values={shownDice(room.roll, view)} rollKey={room.roll.rollKey} count={game.activeDiceCount} onSettled={onSettled} />
           <p className="roll-caption">{rollCaption(view, d.myId, busy)}</p>
+          {!game.pause && <NextRollCountdown roll={room.roll} />}
           <FloatingReactions items={room.floating} hidden={hideReactions} />
           {lastGift && <p className="last-gift">{lastGift}</p>}
           {(inTurn || d.can.claimLastPlace) && (
