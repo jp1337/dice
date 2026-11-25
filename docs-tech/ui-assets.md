@@ -9,12 +9,17 @@ compares pixels (`--check`).
 
 | File | Script | Size |
 | --- | --- | --- |
-| `src/web/public/sounds/roll.wav` | `node scripts/generate-sounds.mjs` | 26 KB |
-| `src/web/public/sounds/six.wav` | same | 39 KB |
+| `src/web/public/sounds/roll.wav` | `node scripts/generate-sounds.mjs` | 57 KB |
+| `src/web/public/sounds/six.wav` | same | 35 KB |
 | `src/web/public/og.png` (256×256) | `node scripts/generate-og-image.mjs` | 23 KB |
 
-- Sounds: synthesized (rattle: sine knocks plus filtered noise; six: G major chime), mono 16 bit 22.05 kHz
-  WAV, quiet on purpose (voice channel). The script refuses a file over 60 KB.
+- Sounds: modal synthesis, seeded, mono 16 bit 22.05 kHz WAV, peak −9 dBFS (quiet on purpose: voice
+  channel). The script refuses a file over 60 KB.
+
+| Sound | Made of | Length |
+| --- | --- | --- |
+| Roll | Two resin dice: muffled clicks in the hand (0–0.27 s), then table hits with shrinking, irregular gaps, edge-then-face doubles, die-on-die clicks, rocking to rest. Each hit = half-sine contact pulse through damped resonators: die modes 2.6–6.2 kHz (own pitches per die), wood 170/280/1050 Hz. Softer hit, longer contact, duller | `ROLL_ANIMATION_MS` (test), ends before the six sound |
+| Six | Marimba arpeggio G–B–D–G, partials 1× and 3.9× (higher ones would alias), soft mallet attack | 0.8 s |
 - Preview image: drawn with signed distance functions, 4×4 supersampled, encoded by a minimal PNG
   writer (`node:zlib`). Square and small: `twitter:card` is `summary`, so Discord shows it as a
   thumbnail beside `og:title` (spec 10.2: "kleines Bild"). No text in it.
