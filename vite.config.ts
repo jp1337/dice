@@ -23,5 +23,5 @@ export default defineConfig({
     },
   ],
   build: { outDir: "../../dist/web", emptyOutDir: true },
-  test: { root: ".", include: ["test/**/*.test.ts"] },
+  test: { root: ".", include: ["test/**/*.test.ts"], globalSetup: ["test/global-setup.ts"] },
 });
