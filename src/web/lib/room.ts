@@ -67,7 +67,7 @@ export function deriveRoom(view: RoomView, online: boolean) {
       pause: canModerate && running && !game.pause,
       continue: canModerate && running && game.pause !== null,
       skip: canModerate && running,
-      rollFor: canModerate && running && !game.pause && game.activeUserId !== null,
+      rollFor: canModerate && running && !game.pause && game.activeUserId !== null && !isActive, // own turn: the big button
       removePlayer: canModerate && running,
       addPlayer: canModerate && running,
       assignLastPlace: canModerate && lastPlayer !== null,
