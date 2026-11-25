@@ -37,19 +37,20 @@ ffmpeg -i dice-shake-2.ogg -i dice-throw-1.ogg -filter_complex "[0]atrim=0:0.65,
 
 ## Look
 
-Harvest festival in a small valley town: parchment panels in wooden frames, a plank table for the dice,
-pixel bevels on every control. Original work; no assets, names or UI frames from any game. All in
-`style.css` as plain custom properties. No orange anywhere, by wish of the event's host: wood is
-brown, the call to action evergreen, title and links berry.
+Winter festival in a small snowy valley: snow-paper panels in frosted timber frames, an ice-blue table
+for the dice, pixel bevels on every control, snowflakes in the sky by day, stars by night. Original work;
+no assets, names or UI frames from any game. All in `style.css` as plain custom properties. Wishes of the
+event's host: lots of blue (winter), no orange anywhere.
 
 | Colour | Used for |
 | --- | --- |
 | Holly `#3f7d2a` | the one call to action ("Würfeln", "Start", "Weiter"), the active turn token |
-| Wheat `#f2c14e` | your turn plaque, first place, the six sunburst with holly |
-| Wood `#7b5434` / `#4e2a12` | frames, the plank table, number tokens |
-| Parchment `#fbf0d4` | panels (light), signs and dice (both themes) |
-| Meadow `#3d7424` / berry `#a8304a` | switches on, connection / danger, notices |
-| Sky bands `#cbe7ef` → `#e2efcc` | page background; dark: night `#1b2033` with stars |
+| Wheat `#f2c14e` | your turn plaque, first place, the countdown |
+| Frosted timber `#3e5c86` / `#1f2f4d` | frames, the dice table, number tokens |
+| Snow paper `#f3f7fc` | panels (light), signs and dice (both themes) |
+| Ice blue `#2c63a0` / berry `#a8304a` | switches on / title, links, danger, notices |
+| Sky bands `#bcd8ee` → `#f2f7fc` | page background with snowflakes; dark: night `#0f1830` with stars |
+| Six sunburst | sky `#79c0da` and snow, night-blue vignette |
 
 | Pattern | How |
 | --- | --- |
@@ -78,15 +79,15 @@ text inside it would stretch the page.
 
 | Pair | Light | Dark |
 | --- | --- | --- |
-| `--fg` on `--bg` / `--bg-low` / `--surface` / `--field` | 10.8 / 11.6 / 12.4 / 13.5 | 13.1 / 11.8 / 11.9 / 13.4 |
-| `--fg` on `--tint` (buttons) | 10.7 | 9.1 |
-| `--muted` on `--bg` / `--surface` | 6.1 / 7.0 | 8.7 / 7.9 |
-| `--accent` on `--bg` / `--surface` (links, title) | 6.6 / 7.6 | 7.7 / 7.0 |
-| `--on-fill` on `--fill` (theme toggle) | 5.4 | 7.9 |
-| `--danger` on `--tint-berry` | 6.1 | 7.1 |
-| `--fg` on `--tint-wheat` / `--tint-sky` / `--tint-meadow` (badges) | 10.9 / 11.3 / 11.5 | 8.5 / 9.7 / 9.5 |
-| `--edge` on `--field` / `--surface` (input border) | 4.7 / 4.3 | 5.1 / 4.5 |
-| `--focus` on `--bg` / `--surface` | 5.1 / 5.8 | 10.2 / 9.2 |
+| `--fg` on `--bg` / `--bg-low` / `--surface` / `--field` | 9.7 / 13.3 / 13.3 / 14.3 | 15.3 / 12.5 / 12.9 / 14.5 |
+| `--fg` on `--tint` (buttons) | 11.5 | 9.9 |
+| `--muted` on `--bg` / `--surface` | 4.7 / 6.5 | 9.8 / 8.2 |
+| `--accent` on `--bg` / `--surface` (links, title) | 5.8 / 8.0 | 8.4 / 7.1 |
+| `--on-fill` on `--fill` (switches, theme toggle) | 6.2 | 9.1 |
+| `--danger` on `--tint-berry` | 6.1 | 7.0 |
+| `--fg` on `--tint-wheat` / `--tint-sky` / `--tint-meadow` (badges) | 11.2 / 11.2 / 11.9 | 9.2 / 10.2 / 10.4 |
+| `--edge` on `--field` / `--surface` (input border) | 4.0 / 3.7 | 6.2 / 5.6 |
+| `--focus` on `--bg` / `--surface` | 4.5 / 6.1 | 11.1 / 9.4 |
 
 Same in both themes:
 
@@ -94,10 +95,10 @@ Same in both themes:
 | --- | --- |
 | `--on-holly` on holly (primary button, turn token) | 4.8 |
 | `--on-wheat` on wheat | 8.7 |
-| Cream on wood / plank / wood-dark (table text, tokens) | 6.1 / 7.0 / 11.5 |
-| `--ink` on parchment (signs, six banner) | 12.4 |
+| Cream on wood / plank / wood-dark (table text, tokens) | 6.4 / 7.7 / 12.5 |
+| `--ink` on parchment (signs, six banner) | 13.3 |
 | White on berry (notice) / on bronze `#8d6e4f` | 6.6 / 4.7 |
-| `--ink` on silver `#c9c2b4` | 7.9 |
+| `--ink` on silver `#c9d2de` | 9.4 |
 
 The ratios come from the WCAG relative-luminance formula; recompute them when a token changes.
 

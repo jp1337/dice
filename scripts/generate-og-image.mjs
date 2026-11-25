@@ -13,17 +13,17 @@ const H = GRID * SCALE;
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 // Tokens of src/web/style.css (light theme).
 const c = {
-  sky: hex("#79c0da"),
-  cloud: hex("#fff4d6"),
-  meadow: hex("#6aa84f"),
-  meadowDark: hex("#3d7424"),
-  plank: hex("#6f4b2f"),
-  wood: hex("#7b5434"),
-  woodLight: hex("#9c7650"),
-  woodDark: hex("#4e2a12"),
-  face: hex("#fff6df"),
-  faceShade: hex("#ead8ad"),
-  ink: hex("#4e2a12"),
+  sky: hex("#bcd8ee"),
+  cloud: hex("#ffffff"),
+  snow: hex("#f2f7fc"),
+  snowShade: hex("#b9cde4"),
+  plank: hex("#34507a"),
+  wood: hex("#3e5c86"),
+  woodLight: hex("#6a88b0"),
+  woodDark: hex("#1f2f4d"),
+  face: hex("#fbfdff"),
+  faceShade: hex("#dbe7f5"),
+  ink: hex("#1f2f4d"),
   berry: hex("#a8304a"),
   holly: hex("#5a9a3e"),
   wheat: hex("#f2c14e"),
@@ -40,15 +40,15 @@ rect(10, 10, 5, 2, c.cloud);
 rect(44, 16, 12, 3, c.cloud);
 rect(47, 14, 6, 2, c.cloud);
 // Meadow behind the table, a darker crest.
-rect(0, 30, GRID, 10, c.meadow);
-rect(0, 30, GRID, 1, c.meadowDark);
-// Two low hills, stepped like pixel art.
+rect(0, 30, GRID, 10, c.snow);
+rect(0, 30, GRID, 1, c.snowShade);
+// Two low snowy hills, stepped like pixel art.
 for (const [x, w] of [[2, 20], [36, 24]]) {
-  rect(x, 28, w, 2, c.meadow);
-  rect(x + 3, 26, w - 6, 2, c.meadow);
-  rect(x + 3, 25, w - 6, 1, c.meadowDark);
-  rect(x, 27, 3, 1, c.meadowDark);
-  rect(x + w - 3, 27, 3, 1, c.meadowDark);
+  rect(x, 28, w, 2, c.snow);
+  rect(x + 3, 26, w - 6, 2, c.snow);
+  rect(x + 3, 25, w - 6, 1, c.snowShade);
+  rect(x, 27, 3, 1, c.snowShade);
+  rect(x + w - 3, 27, 3, 1, c.snowShade);
 }
 // Plank table: boards with seams, a light top edge, grain.
 rect(0, 40, GRID, 24, c.plank);

@@ -1,6 +1,6 @@
-/* Harvest festival in a small valley: parchment panels in chunky wooden frames, a plank table for the
+/* Winter festival in a small snowy valley: snow-paper panels in frosted timber frames, an ice-blue table for the
    dice, pixel bevels on every control, a pixel face (Pixelify Sans, digits from Silkscreen, both OFL) for headings only. Light is a
-   sunny morning, dark a lantern-lit evening. Dark from the system preference unless the toggle fixed
+   snowy morning, dark a winter night. Dark from the system preference unless the toggle fixed
    light, or from the toggle (data-theme on <html>, set before the first paint by theme-init.js). The dark
    values stand twice, identically (test/web.test.ts): the CSS light-dark function would say it once but needs Safari 17.5.
    Pixel frames are hard box-shadows (no blur, no images): four offset copies leave the corners notched.
@@ -26,38 +26,38 @@
 
 :root {
   color-scheme: light;
-  --bg: #cbe7ef; /* sky, in three bands down to the meadow */
-  --bg-mid: #d7ecea;
-  --bg-low: #e2efcc;
-  --star: transparent;
-  --surface: #fbf0d4; /* parchment */
-  --surface-2: #f6e6bd; /* every other row */
-  --paper-edge: #e3cb93;
-  --field: #fffaf0;
-  --fg: #3f2614;
-  --muted: #6b4a2f;
-  --line: #d9bd85; /* decoration only */
-  --edge: #8d6a45; /* borders that must be seen: inputs, 3:1 */
+  --bg: #bcd8ee; /* winter sky, in three bands down to the snow */
+  --bg-mid: #d6e7f5;
+  --bg-low: #f2f7fc;
+  --star: rgb(255 255 255 / 0.95); /* snowflakes */
+  --surface: #f3f7fc; /* snow paper */
+  --surface-2: #e6eef8; /* every other row */
+  --paper-edge: #b9cde4;
+  --field: #ffffff;
+  --fg: #1b2a45;
+  --muted: #435a7d;
+  --line: #c2d3e8; /* decoration only */
+  --edge: #6880a6; /* borders that must be seen: inputs, 3:1 */
   --accent: #8c2440; /* berry: links, title */
-  --fill: #3d7424; /* meadow green as a filled control, with --on-fill text */
-  --on-fill: #fffaf0;
-  --tint: #f3dfae; /* button face */
+  --fill: #2c63a0; /* ice blue as a filled control, with --on-fill text */
+  --on-fill: #ffffff;
+  --tint: #dbe7f5; /* button face */
   --tint-wheat: #f8e2a0;
-  --tint-berry: #f7d6d6;
-  --tint-sky: #d4ebf2;
-  --tint-meadow: #dcefc9;
-  --frame: #4e2a12; /* button and slot frames */
+  --tint-berry: #f7d6dc;
+  --tint-sky: #d3e6f7;
+  --tint-meadow: #dcefd6;
+  --frame: #1f2f4d; /* button and slot frames */
   --focus: #1d5f9e;
   --danger: #962033;
-  --shadow: rgb(46 25 8 / 0.28);
+  --shadow: rgb(20 32 60 / 0.28);
   --avatar-bg: 88% 0.06; /* oklch lightness and chroma; Avatar.css adds the hue */
   --avatar-fg: 32% 0.09;
 
   /* Materials and harvest colours, the same in both themes: wood, dice, signs, the six. */
-  --wood: #7b5434; /* brown, not orange: no orange anywhere (wish of the event's host) */
-  --wood-dark: #4e2a12;
-  --wood-light: #9c7650;
-  --plank: #6f4b2f;
+  --wood: #3e5c86; /* frosted timber: blue, the winter look (wish of the event's host); no orange anywhere */
+  --wood-dark: #1f2f4d;
+  --wood-light: #6a88b0;
+  --plank: #34507a;
   --holly: #3f7d2a; /* evergreen: the one thing to press */
   --holly-light: #5a9a3e;
   --holly-dark: #2b5a1b;
@@ -70,12 +70,12 @@
   --berry: #a8304a;
   --berry-light: #e0607a;
   --sky: #79c0da;
-  --cream: #fff4d6;
-  --parchment: #fbf0d4;
-  --ink: #3f2614;
-  --die-face: #fff6df;
-  --die-edge: #4e2a12;
-  --pip: #4e2a12;
+  --cream: #f4f8ff;
+  --parchment: #f3f7fc;
+  --ink: #1b2a45;
+  --die-face: #fbfdff;
+  --die-edge: #1f2f4d;
+  --pip: #1f2f4d;
   --pip-six: #a8304a;
 
   /* Kept equal to ROLL_ANIMATION_MS, REACTION_INTERVAL_MS and FLOAT_MS (test/web.test.ts). */
@@ -93,27 +93,27 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #1b2033;
-    --bg-mid: #1c2632;
-    --bg-low: #1d2c2a;
-    --star: rgb(255 244 214 / 0.55);
-    --surface: #33261b;
-    --surface-2: #3b2c1f;
-    --paper-edge: #5a4330;
-    --field: #271d15;
-    --fg: #f6e6c4;
-    --muted: #d4bb92;
-    --line: #6a5038;
-    --edge: #a88a63;
+    --bg: #0f1830;
+    --bg-mid: #13203a;
+    --bg-low: #1c2a44;
+    --star: rgb(255 255 255 / 0.6);
+    --surface: #1c2740;
+    --surface-2: #222f4b;
+    --paper-edge: #34466a;
+    --field: #141e34;
+    --fg: #e8f0fb;
+    --muted: #b2c2dc;
+    --line: #34466a;
+    --edge: #8aa0c4;
     --accent: #f29bab;
-    --fill: #8cc46c;
-    --on-fill: #1b2033;
-    --tint: #4a3725;
+    --fill: #8cc0ef;
+    --on-fill: #0f1830;
+    --tint: #2a3a5a;
     --tint-wheat: #4d3d17;
-    --tint-berry: #4d2228;
-    --tint-sky: #1f3a47;
-    --tint-meadow: #2a3d22;
-    --frame: #b09a78;
+    --tint-berry: #4d2234;
+    --tint-sky: #1c3a55;
+    --tint-meadow: #1f3d2c;
+    --frame: #9db3d6;
     --focus: #9fd3ff;
     --danger: #ffa3b0;
     --shadow: rgb(0 0 0 / 0.45);
@@ -124,27 +124,27 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #1b2033;
-  --bg-mid: #1c2632;
-  --bg-low: #1d2c2a;
-  --star: rgb(255 244 214 / 0.55);
-  --surface: #33261b;
-  --surface-2: #3b2c1f;
-  --paper-edge: #5a4330;
-  --field: #271d15;
-  --fg: #f6e6c4;
-  --muted: #d4bb92;
-  --line: #6a5038;
-  --edge: #a88a63;
+  --bg: #0f1830;
+  --bg-mid: #13203a;
+  --bg-low: #1c2a44;
+  --star: rgb(255 255 255 / 0.6);
+  --surface: #1c2740;
+  --surface-2: #222f4b;
+  --paper-edge: #34466a;
+  --field: #141e34;
+  --fg: #e8f0fb;
+  --muted: #b2c2dc;
+  --line: #34466a;
+  --edge: #8aa0c4;
   --accent: #f29bab;
-  --fill: #8cc46c;
-  --on-fill: #1b2033;
-  --tint: #4a3725;
+  --fill: #8cc0ef;
+  --on-fill: #0f1830;
+  --tint: #2a3a5a;
   --tint-wheat: #4d3d17;
-  --tint-berry: #4d2228;
-  --tint-sky: #1f3a47;
-  --tint-meadow: #2a3d22;
-  --frame: #b09a78;
+  --tint-berry: #4d2234;
+  --tint-sky: #1c3a55;
+  --tint-meadow: #1f3d2c;
+  --frame: #9db3d6;
   --focus: #9fd3ff;
   --danger: #ffa3b0;
   --shadow: rgb(0 0 0 / 0.45);
@@ -152,7 +152,7 @@
   --avatar-fg: 95% 0.03;
 }
 
-/* Sky in hard bands like a pixel-art backdrop; in the dark theme a few stars. */
+/* Sky in hard bands like a pixel-art backdrop; snowflakes by day, stars by night. */
 body {
   margin: 0;
   background:
