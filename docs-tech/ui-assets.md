@@ -26,11 +26,11 @@ compares pixels (`--check`).
 ffmpeg -i dice-shake-2.ogg -i dice-throw-1.ogg -filter_complex "[0]atrim=0:0.65,afade=t=out:st=0.5:d=0.15[s];[s][1]concat=n=2:v=0:a=1,silenceremove=start_periods=1:start_threshold=-50dB,aresample=22050,pan=mono|c0=0.5*c0+0.5*c1,afade=t=out:st=1.14:d=0.05,apad=whole_dur=1.25" -ac 1 -f f32le stage.raw
 # then: volume to a −9.1 dBFS peak, -c:a pcm_s16le -bitexact -map_metadata -1 (plain 44-byte header, the test reads it)
 ```
-- Preview image: pixel art like the app, two dice on a plank table under bunting, sky and hills, drawn
+- Preview image: pixel art like the app, two dice on a walnut table under icicles, snowy pines and sky, drawn
   on a 64×64 grid in the colours of `style.css` and scaled ×4 without smoothing; encoded by a minimal PNG
   writer (`node:zlib`). Square and small: `twitter:card` is `summary`, so Discord shows it as a
   thumbnail beside `og:title` (spec 10.2: "kleines Bild"). No text in it.
-- `src/web/public/` is copied unchanged to `dist/web/`; `favicon.svg` (a 16×16 pixel die showing six, `shape-rendering="crispEdges"`) and `theme-init.js` are hand-written.
+- `src/web/public/` is copied unchanged to `dist/web/`; `favicon.svg` (a 16×16 pixel die showing six in ink, snow and berry, `shape-rendering="crispEdges"`) and `theme-init.js` are hand-written.
 - `src/web/fonts/PixelifySans.ttf` (77 KB, variable 400–700): Pixelify Sans by the Pixelify Sans
   Project Authors, SIL Open Font License 1.1 (`OFL.txt` beside it), unmodified, from
   `github.com/google/fonts/tree/main/ofl/pixelifysans`. `style.css` imports it relatively, so Vite hashes it into `/assets/` (cached for a year).
@@ -40,26 +40,11 @@ ffmpeg -i dice-shake-2.ogg -i dice-throw-1.ogg -filter_complex "[0]atrim=0:0.65,
 
 ## Look
 
-Harvest festival in a small valley town: parchment panels in wooden frames, a plank table for the dice,
-pixel bevels on every control. Original work; no assets, names or UI frames from any game. All in
-`style.css` as plain custom properties. No orange anywhere, by wish of the event's host: wood is
-brown, the call to action evergreen, title and links berry.
-
-| Colour | Used for |
-| --- | --- |
-| Holly `#3f7d2a` | the one call to action ("Würfeln", "Start", "Weiter"), the active turn token |
-| Wheat `#f2c14e` | your turn plaque, first place, the six sunburst with holly |
-| Wood `#7b5434` / `#4e2a12` | frames, the plank table, number tokens |
-| Parchment `#fbf0d4` | panels (light), signs and dice (both themes) |
-| Meadow `#3d7424` / berry `#a8304a` | switches on, connection / danger, notices |
-| Sky bands `#cbe7ef` → `#e2efcc` | page background; dark: night `#1b2033` with stars |
-
-| Pattern | How |
-| --- | --- |
-| Pixel frame | four hard `box-shadow` copies, no blur; the corners stay notched. Buttons swap `--face`, `--hi`, `--lo`, `--frame` |
-| Sign (`.ribbon`) | parchment in a plank frame on two ropes; needs an isolated parent (`.ribbon-wrap`, `.hero`) |
-| Headings | Pixelify Sans for `h1`–`h3`, `summary`, sign, turn; body stays the system face. Its 5 reads as an S, so digits come from Jersey 10 (`"Pixel Digits"`, `unicode-range` 0–9) |
-| Motion | ≤ 500 ms except the dice (1.3 s) and confetti; stepped bob on the roll button; all off with reduced motion |
+The design concept, every colour token with its role, the type scale, the components and the
+rules live in [`DESIGN.md`](../DESIGN.md) (the DESIGN.md format). `test/design.test.ts` holds
+`style.css` to it: every token both ways and both themes, contrast of every component pair,
+no orange, no raw hex value outside the token blocks, the fonts, and the host's wishes. Change a
+colour in both files at once; the test says which one is behind.
 
 ### Desktop shell
 
@@ -76,33 +61,6 @@ size the page scrolls as before.
 On a phone the game's column wrappers are `display: contents` and CSS `order` restores the reading order;
 the DOM order already matches the focus order. Every scroller is `position: relative`, or the `.sr-only`
 text inside it would stretch the page.
-
-### Contrast (WCAG AA: text ≥ 4.5, borders and focus ≥ 3)
-
-| Pair | Light | Dark |
-| --- | --- | --- |
-| `--fg` on `--bg` / `--bg-low` / `--surface` / `--field` | 10.8 / 11.6 / 12.4 / 13.5 | 13.1 / 11.8 / 11.9 / 13.4 |
-| `--fg` on `--tint` (buttons) | 10.7 | 9.1 |
-| `--muted` on `--bg` / `--surface` | 6.1 / 7.0 | 8.7 / 7.9 |
-| `--accent` on `--bg` / `--surface` (links, title) | 6.6 / 7.6 | 7.7 / 7.0 |
-| `--on-fill` on `--fill` (theme toggle) | 5.4 | 7.9 |
-| `--danger` on `--tint-berry` | 6.1 | 7.1 |
-| `--fg` on `--tint-wheat` / `--tint-sky` / `--tint-meadow` (badges) | 10.9 / 11.3 / 11.5 | 8.5 / 9.7 / 9.5 |
-| `--edge` on `--field` / `--surface` (input border) | 4.7 / 4.3 | 5.1 / 4.5 |
-| `--focus` on `--bg` / `--surface` | 5.1 / 5.8 | 10.2 / 9.2 |
-
-Same in both themes:
-
-| Pair | Ratio |
-| --- | --- |
-| `--on-holly` on holly (primary button, turn token) | 4.8 |
-| `--on-wheat` on wheat | 8.7 |
-| Cream on wood / plank / wood-dark (table text, tokens) | 6.1 / 7.0 / 11.5 |
-| `--ink` on parchment (signs, six banner) | 12.4 |
-| White on berry (notice) / on bronze `#8d6e4f` | 6.6 / 4.7 |
-| `--ink` on silver `#c9c2b4` | 7.9 |
-
-The ratios come from the WCAG relative-luminance formula; recompute them when a token changes.
 
 ## Server side of the link preview
 

@@ -16,7 +16,7 @@
 }
 
 .reaction-bar button:hover:not([aria-disabled="true"]) {
-  --face: var(--tint-wheat);
+  --face: var(--tint-hover);
 }
 
 .reaction-bar button[aria-disabled="true"]:active {

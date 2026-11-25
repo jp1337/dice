@@ -1,10 +1,12 @@
-/* Harvest festival in a small valley: parchment panels in chunky wooden frames, a plank table for the
-   dice, pixel bevels on every control, a pixel face (Pixelify Sans, digits from Jersey 10, both OFL) for headings only. Light is a
-   sunny morning, dark a lantern-lit evening. Dark from the system preference unless the toggle fixed
+/* A snowed-in village at the year-end gathering: a snowfield under icicles, panels of snow paper in
+   evergreen frames, the dice on a warm cabin table, gold for what to press, berry for titles and links.
+   Pixel bevels on every control, a pixel face (Pixelify Sans, digits from Jersey 10, both OFL) for headings only.
+   Light is a clear winter morning, dark a moonlit night. No orange anywhere (wish of the event's host): the
+   wood is a low-chroma walnut, the gold leans to yellow. Dark from the system preference unless the toggle fixed
    light, or from the toggle (data-theme on <html>, set before the first paint by theme-init.js). The dark
    values stand twice, identically (test/web.test.ts): the CSS light-dark function would say it once but needs Safari 17.5.
    Pixel frames are hard box-shadows (no blur, no images): four offset copies leave the corners notched.
-   Text contrast of every pair: docs-tech/ui-assets.md. */
+   Colours, roles and contrast: DESIGN.md (test/design.test.ts holds this file to it). */
 @font-face {
   font-family: "Pixelify Sans";
   src: url("./fonts/PixelifySans.ttf") format("truetype");
@@ -28,57 +30,78 @@
 
 :root {
   color-scheme: light;
-  --bg: #cbe7ef; /* sky, in three bands down to the meadow */
-  --bg-mid: #d7ecea;
-  --bg-low: #e2efcc;
-  --star: transparent;
-  --surface: #fbf0d4; /* parchment */
-  --surface-2: #f6e6bd; /* every other row */
-  --paper-edge: #e3cb93;
-  --field: #fffaf0;
-  --fg: #3f2614;
-  --muted: #6b4a2f;
-  --line: #d9bd85; /* decoration only */
-  --edge: #8d6a45; /* borders that must be seen: inputs, 3:1 */
-  --accent: #8c2440; /* berry: links, title */
-  --fill: #3d7424; /* meadow green as a filled control, with --on-fill text */
-  --on-fill: #fffaf0;
-  --tint: #f3dfae; /* button face */
-  --tint-wheat: #f8e2a0;
-  --tint-berry: #f7d6d6;
-  --tint-sky: #d4ebf2;
-  --tint-meadow: #dcefc9;
-  --frame: #4e2a12; /* button and slot frames */
-  --focus: #1d5f9e;
-  --danger: #962033;
-  --shadow: rgb(46 25 8 / 0.28);
+  --bg: #9dbcd8; /* winter sky, two bands down to the horizon */
+  --bg-mid: #bdd2e6;
+  --bg-low: #dbe5ef; /* the snowfield */
+  --snow-shade: #c9d7e5; /* the shadow line along the horizon */
+  --fleck: #b3c3d6; /* specks in the snow */
+  --star: #ffffffe6; /* glints in the sky */
+  --moon: #ffffffbf; /* a pale winter sun */
+  --surface: #edf2f7; /* snow paper */
+  --surface-2: #e1e9f1; /* every other row */
+  --paper-edge: #bccbdc;
+  --field: #f6f8fb;
+  --fg: #1a2a40;
+  --muted: #3f5274;
+  --line: #bccbdc; /* decoration only */
+  --edge: #5a7498; /* borders that must be seen: inputs, 3:1 */
+  --accent: #1f5c9e; /* ice blue: links, the disclosure arrows */
+  --title: #17406f; /* the room name and the page titles */
+  --primary: #1f5c9e; /* the one thing to press: "Würfeln", "Start", "Weiter", your turn */
+  --primary-hover: #174a82; /* the whole face darkens on hover, not one edge */
+  --on-primary: #ffffff;
+  --turn-active: #d0e3f5; /* the active row in the turn order */
+  --turn-active-edge: #1f5c9e;
+  --fill: #2a68b0; /* ice blue as a filled control, with --on-fill text */
+  --on-fill: #ffffff;
+  --track-off: #c3cddb; /* a switch that is off */
+  --tint: #dde7f1; /* button face */
+  --tint-hover: #cdd9e7; /* a button face under the pointer */
+  --tint-wheat: #f6e6a8;
+  --tint-berry: #f3d6dd;
+  --tint-sky: #cfe2f4;
+  --tint-meadow: #d0e8dc;
+  --frame: #1b2a40; /* button and slot frames */
+  --focus: #a3233f;
+  --danger: #9a1f36;
+  --shadow: #28467838; /* shadows on snow are blue */
   --avatar-bg: 88% 0.06; /* oklch lightness and chroma; Avatar.css adds the hue */
   --avatar-fg: 32% 0.09;
 
-  /* Materials and harvest colours, the same in both themes: wood, dice, signs, the six. */
-  --wood: #7b5434; /* brown, not orange: no orange anywhere (wish of the event's host) */
-  --wood-dark: #4e2a12;
-  --wood-light: #9c7650;
-  --plank: #6f4b2f;
-  --holly: #3f7d2a; /* evergreen: the one thing to press */
-  --holly-light: #5a9a3e;
-  --holly-dark: #2b5a1b;
-  --on-holly: #fffaf0;
-  --wheat: #f2c14e;
-  --wheat-light: #f9dc8a;
-  --wheat-dark: #c9952a;
-  --on-wheat: #3a2405;
-  --meadow: #6aa84f;
+  /* Materials, the same in both themes: ice, evergreen, cabin wood, window gold, berries, dice. */
+  --outline: #1b2a40; /* night ink: pixel outlines */
+  --holly: #2a6a52; /* evergreen: panel frames, switches that are on */
+  --holly-light: #4b9273;
+  --holly-dark: #173f35;
+  --on-holly: #ffffff;
+  --wood: #6a4a40; /* cabin walnut: the dice table and the signs; oklch hue 38–45 at low chroma, brown, not orange */
+  --wood-dark: #3a2722;
+  --wood-light: #8a6a5e;
+  --plank: #5e4238;
+  --wheat: #f3d35c; /* window gold: first place, the countdown, the pause stripe; never a button */
+  --wheat-light: #fae7a0;
+  --wheat-dark: #b99a2c;
+  --on-wheat: #2e2508;
+  --meadow: #4b9273;
   --berry: #a8304a;
   --berry-light: #e0607a;
-  --sky: #79c0da;
-  --cream: #fff4d6;
-  --parchment: #fbf0d4;
-  --ink: #3f2614;
-  --die-face: #fff6df;
-  --die-edge: #4e2a12;
-  --pip: #4e2a12;
+  --on-berry: #ffffff;
+  --silver: #c9d2de; /* second place */
+  --sky: #8fc3ea; /* ice */
+  --cream: #fbf6ec;
+  --parchment: #fbf8f0;
+  --ink: #1b2a40;
+  --die-face: #fbfdff;
+  --die-edge: #1b2a40;
+  --pip: #1b2a40;
   --pip-six: #a8304a;
+
+  /* Pixel-art tiles, drawn by hand at 2 px per pixel (crisp, no smoothing). */
+  --icicles: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23f6faff' d='M0 0h48v1h-48zM0 1h48v1h-48zM0 2h48v1h-48zM0 3h48v1h-48zM2 4h8v1h-8zM17 4h6v1h-6zM30 4h9v1h-9zM43 4h4v1h-4z'/%3E%3Cpath fill='%23a9c8e8' d='M0 4h2v1h-2zM10 4h7v1h-7zM23 4h7v1h-7zM39 4h4v1h-4zM47 4h1v1h-1zM2 5h8v1h-8zM17 5h6v1h-6zM30 5h9v1h-9zM43 5h4v1h-4z'/%3E%3Cpath fill='%233b78c0' d='M12 5h1v1h-1zM16 5h1v1h-1zM24 5h1v1h-1zM28 5h1v1h-1zM0 6h1v1h-1zM4 6h1v1h-1zM6 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM16 6h1v1h-1zM18 6h1v1h-1zM22 6h1v1h-1zM24 6h1v1h-1zM28 6h1v1h-1zM30 6h1v1h-1zM34 6h1v1h-1zM36 6h1v1h-1zM40 6h1v1h-1zM42 6h1v1h-1zM46 6h1v1h-1zM0 7h1v1h-1zM4 7h1v1h-1zM6 7h1v1h-1zM10 7h1v1h-1zM12 7h1v1h-1zM16 7h1v1h-1zM18 7h1v1h-1zM22 7h1v1h-1zM25 7h1v1h-1zM27 7h1v1h-1zM30 7h1v1h-1zM34 7h1v1h-1zM36 7h1v1h-1zM40 7h1v1h-1zM42 7h1v1h-1zM46 7h1v1h-1zM0 8h1v1h-1zM4 8h1v1h-1zM6 8h1v1h-1zM10 8h1v1h-1zM12 8h1v1h-1zM16 8h1v1h-1zM18 8h1v1h-1zM22 8h1v1h-1zM26 8h1v1h-1zM30 8h1v1h-1zM34 8h1v1h-1zM36 8h1v1h-1zM40 8h1v1h-1zM42 8h1v1h-1zM46 8h1v1h-1zM0 9h1v1h-1zM4 9h1v1h-1zM7 9h1v1h-1zM9 9h1v1h-1zM12 9h1v1h-1zM16 9h1v1h-1zM19 9h1v1h-1zM21 9h1v1h-1zM30 9h1v1h-1zM34 9h1v1h-1zM37 9h1v1h-1zM39 9h1v1h-1zM42 9h1v1h-1zM46 9h1v1h-1zM0 10h1v1h-1zM4 10h1v1h-1zM8 10h1v1h-1zM13 10h1v1h-1zM15 10h1v1h-1zM19 10h1v1h-1zM21 10h1v1h-1zM30 10h1v1h-1zM34 10h1v1h-1zM37 10h1v1h-1zM39 10h1v1h-1zM43 10h1v1h-1zM45 10h1v1h-1zM1 11h1v1h-1zM3 11h1v1h-1zM13 11h1v1h-1zM15 11h1v1h-1zM20 11h1v1h-1zM31 11h1v1h-1zM33 11h1v1h-1zM38 11h1v1h-1zM43 11h1v1h-1zM45 11h1v1h-1zM1 12h1v1h-1zM3 12h1v1h-1zM13 12h1v1h-1zM15 12h1v1h-1zM31 12h1v1h-1zM33 12h1v1h-1zM43 12h1v1h-1zM45 12h1v1h-1zM1 13h1v1h-1zM3 13h1v1h-1zM13 13h1v1h-1zM15 13h1v1h-1zM31 13h1v1h-1zM33 13h1v1h-1zM44 13h1v1h-1zM2 14h1v1h-1zM13 14h1v1h-1zM15 14h1v1h-1zM31 14h1v1h-1zM33 14h1v1h-1zM14 15h1v1h-1zM32 15h1v1h-1z'/%3E%3Cpath fill='%23f2faff' d='M13 5h1v1h-1zM25 5h1v1h-1zM1 6h1v1h-1zM7 6h1v1h-1zM13 6h1v1h-1zM19 6h1v1h-1zM25 6h1v1h-1zM31 6h1v1h-1zM37 6h1v1h-1zM43 6h1v1h-1zM1 7h1v1h-1zM7 7h1v1h-1zM13 7h1v1h-1zM19 7h1v1h-1zM26 7h1v1h-1zM31 7h1v1h-1zM37 7h1v1h-1zM43 7h1v1h-1zM1 8h1v1h-1zM7 8h1v1h-1zM13 8h1v1h-1zM19 8h1v1h-1zM31 8h1v1h-1zM37 8h1v1h-1zM43 8h1v1h-1zM1 9h1v1h-1zM8 9h1v1h-1zM13 9h1v1h-1zM20 9h1v1h-1zM31 9h1v1h-1zM38 9h1v1h-1zM43 9h1v1h-1zM1 10h1v1h-1zM14 10h1v1h-1zM20 10h1v1h-1zM31 10h1v1h-1zM38 10h1v1h-1zM44 10h1v1h-1zM2 11h1v1h-1zM14 11h1v1h-1zM32 11h1v1h-1zM44 11h1v1h-1zM2 12h1v1h-1zM14 12h1v1h-1zM32 12h1v1h-1zM44 12h1v1h-1zM2 13h1v1h-1zM14 13h1v1h-1zM32 13h1v1h-1zM14 14h1v1h-1zM32 14h1v1h-1z'/%3E%3Cpath fill='%23bfe0f8' d='M14 5h1v1h-1zM26 5h1v1h-1zM2 6h1v1h-1zM8 6h1v1h-1zM14 6h1v1h-1zM20 6h1v1h-1zM26 6h1v1h-1zM32 6h1v1h-1zM38 6h1v1h-1zM44 6h1v1h-1zM2 7h1v1h-1zM8 7h1v1h-1zM14 7h1v1h-1zM20 7h1v1h-1zM32 7h1v1h-1zM38 7h1v1h-1zM44 7h1v1h-1zM2 8h1v1h-1zM8 8h1v1h-1zM14 8h1v1h-1zM20 8h1v1h-1zM32 8h1v1h-1zM38 8h1v1h-1zM44 8h1v1h-1zM2 9h1v1h-1zM14 9h1v1h-1zM32 9h1v1h-1zM44 9h1v1h-1zM2 10h1v1h-1zM32 10h1v1h-1z'/%3E%3Cpath fill='%237fb3e3' d='M15 5h1v1h-1zM27 5h1v1h-1zM3 6h1v1h-1zM9 6h1v1h-1zM15 6h1v1h-1zM21 6h1v1h-1zM27 6h1v1h-1zM33 6h1v1h-1zM39 6h1v1h-1zM45 6h1v1h-1zM3 7h1v1h-1zM9 7h1v1h-1zM15 7h1v1h-1zM21 7h1v1h-1zM33 7h1v1h-1zM39 7h1v1h-1zM45 7h1v1h-1zM3 8h1v1h-1zM9 8h1v1h-1zM15 8h1v1h-1zM21 8h1v1h-1zM33 8h1v1h-1zM39 8h1v1h-1zM45 8h1v1h-1zM3 9h1v1h-1zM15 9h1v1h-1zM33 9h1v1h-1zM45 9h1v1h-1zM3 10h1v1h-1zM33 10h1v1h-1z'/%3E%3C/svg%3E");
+  --pines: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 22' shape-rendering='crispEdges'%3E%3Cpath fill='%23f4f8fd' d='M36 3h1v1h-1zM35 5h2v1h-2zM6 7h1v1h-1zM46 7h1v1h-1zM80 7h1v1h-1zM35 8h2v1h-2zM5 9h2v1h-2zM34 9h2v1h-2zM45 9h2v1h-2zM79 9h2v1h-2zM15 11h1v1h-1zM70 11h1v1h-1zM5 12h2v1h-2zM34 12h4v1h-4zM45 12h2v1h-2zM79 12h2v1h-2zM4 13h2v1h-2zM14 13h2v1h-2zM33 13h2v1h-2zM44 13h2v1h-2zM69 13h2v1h-2zM78 13h2v1h-2zM4 16h4v1h-4zM14 16h2v1h-2zM33 16h6v1h-6zM44 16h4v1h-4zM69 16h2v1h-2zM78 16h4v1h-4zM3 17h2v1h-2zM13 17h2v1h-2zM32 17h2v1h-2zM43 17h2v1h-2zM68 17h2v1h-2zM77 17h2v1h-2z'/%3E%3Cpath fill='%23c4d8ee' d='M36 4h1v1h-1zM6 8h1v1h-1zM37 8h1v1h-1zM46 8h1v1h-1zM80 8h1v1h-1zM7 12h1v1h-1zM15 12h1v1h-1zM38 12h1v1h-1zM47 12h1v1h-1zM70 12h1v1h-1zM81 12h1v1h-1zM8 16h1v1h-1zM16 16h1v1h-1zM39 16h1v1h-1zM48 16h1v1h-1zM71 16h1v1h-1zM82 16h1v1h-1z'/%3E%3Cpath fill='%23163d36' d='M37 5h1v1h-1zM38 6h1v1h-1zM34 7h5v1h-5zM7 9h1v1h-1zM38 9h1v1h-1zM47 9h1v1h-1zM81 9h1v1h-1zM8 10h1v1h-1zM39 10h1v1h-1zM48 10h1v1h-1zM82 10h1v1h-1zM4 11h5v1h-5zM33 11h7v1h-7zM44 11h5v1h-5zM78 11h5v1h-5zM8 13h1v1h-1zM16 13h1v1h-1zM39 13h1v1h-1zM48 13h1v1h-1zM71 13h1v1h-1zM82 13h1v1h-1zM9 14h1v1h-1zM17 14h1v1h-1zM40 14h1v1h-1zM49 14h1v1h-1zM72 14h1v1h-1zM83 14h1v1h-1zM3 15h7v1h-7zM13 15h5v1h-5zM32 15h9v1h-9zM43 15h7v1h-7zM68 15h5v1h-5zM77 15h7v1h-7zM9 17h1v1h-1zM17 17h1v1h-1zM40 17h1v1h-1zM49 17h1v1h-1zM72 17h1v1h-1zM83 17h1v1h-1zM10 18h1v1h-1zM18 18h1v1h-1zM41 18h1v1h-1zM50 18h1v1h-1zM73 18h1v1h-1zM84 18h1v1h-1zM2 19h9v1h-9zM12 19h7v1h-7zM31 19h20v1h-20zM67 19h7v1h-7zM76 19h9v1h-9z'/%3E%3Cpath fill='%233f8468' d='M34 6h1v1h-1zM4 10h1v1h-1zM33 10h1v1h-1zM44 10h1v1h-1zM78 10h1v1h-1zM3 14h1v1h-1zM13 14h1v1h-1zM32 14h1v1h-1zM43 14h1v1h-1zM68 14h1v1h-1zM77 14h1v1h-1zM2 18h1v1h-1zM12 18h1v1h-1zM31 18h1v1h-1zM42 18h1v1h-1zM67 18h1v1h-1zM76 18h1v1h-1z'/%3E%3Cpath fill='%2325604f' d='M35 6h3v1h-3zM36 9h2v1h-2zM5 10h3v1h-3zM34 10h5v1h-5zM45 10h3v1h-3zM79 10h3v1h-3zM6 13h2v1h-2zM35 13h4v1h-4zM46 13h2v1h-2zM80 13h2v1h-2zM4 14h5v1h-5zM14 14h3v1h-3zM33 14h7v1h-7zM44 14h5v1h-5zM69 14h3v1h-3zM78 14h5v1h-5zM5 17h4v1h-4zM15 17h2v1h-2zM34 17h6v1h-6zM45 17h4v1h-4zM70 17h2v1h-2zM79 17h4v1h-4zM3 18h7v1h-7zM13 18h5v1h-5zM32 18h9v1h-9zM43 18h7v1h-7zM68 18h5v1h-5zM77 18h7v1h-7z'/%3E%3Cpath fill='%234a332b' d='M6 20h1v1h-1zM15 20h1v1h-1zM36 20h1v1h-1zM46 20h1v1h-1zM70 20h1v1h-1zM80 20h1v1h-1zM6 21h1v1h-1zM15 21h1v1h-1zM36 21h1v1h-1zM46 21h1v1h-1zM70 21h1v1h-1zM80 21h1v1h-1z'/%3E%3C/svg%3E");
+  --snow-small: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200' shape-rendering='crispEdges'%3E%3Cpath fill='%23ffffff' d='M84 6h2v1h-2zM84 7h2v1h-2zM12 18h2v1h-2zM12 19h2v1h-2zM150 40h2v1h-2zM150 41h2v1h-2zM160 88h2v1h-2zM160 89h2v1h-2zM40 92h2v1h-2zM40 93h2v1h-2zM118 120h2v1h-2zM118 121h2v1h-2zM10 140h2v1h-2zM10 141h2v1h-2zM180 150h2v1h-2zM180 151h2v1h-2zM66 168h2v1h-2zM66 169h2v1h-2zM100 190h2v1h-2zM100 191h2v1h-2z'/%3E%3Cpath fill='%23a9c1df' d='M86 7h1v1h-1zM85 8h1v1h-1zM14 19h1v1h-1zM13 20h1v1h-1zM152 41h1v1h-1zM151 42h1v1h-1zM162 89h1v1h-1zM161 90h1v1h-1zM42 93h1v1h-1zM41 94h1v1h-1zM120 121h1v1h-1zM119 122h1v1h-1zM12 141h1v1h-1zM11 142h1v1h-1zM182 151h1v1h-1zM181 152h1v1h-1zM68 169h1v1h-1zM67 170h1v1h-1zM102 191h1v1h-1zM101 192h1v1h-1z'/%3E%3C/svg%3E");
+  --snow-big: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 320' shape-rendering='crispEdges'%3E%3Cpath fill='%23ffffff' d='M201 20h1v1h-1zM200 21h3v1h-3zM201 22h1v1h-1zM31 40h1v1h-1zM30 41h3v1h-3zM31 42h1v1h-1zM121 150h1v1h-1zM120 151h3v1h-3zM121 152h1v1h-1zM271 200h1v1h-1zM270 201h3v1h-3zM271 202h1v1h-1zM61 260h1v1h-1zM60 261h3v1h-3zM61 262h1v1h-1zM181 290h1v1h-1zM180 291h3v1h-3zM181 292h1v1h-1z'/%3E%3Cpath fill='%23a9c1df' d='M202 22h1v1h-1zM201 23h1v1h-1zM32 42h1v1h-1zM31 43h1v1h-1zM122 152h1v1h-1zM121 153h1v1h-1zM272 202h1v1h-1zM271 203h1v1h-1zM62 262h1v1h-1zM61 263h1v1h-1zM182 292h1v1h-1zM181 293h1v1h-1z'/%3E%3C/svg%3E");
+  --horizon: 132px; /* where the sky meets the snowfield */
 
   /* Kept equal to ROLL_ANIMATION_MS, REACTION_INTERVAL_MS and FLOAT_MS (test/web.test.ts). */
   --roll-duration: 1300ms;
@@ -95,30 +118,41 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #1b2033;
-    --bg-mid: #1c2632;
-    --bg-low: #1d2c2a;
-    --star: rgb(255 244 214 / 0.55);
-    --surface: #33261b;
-    --surface-2: #3b2c1f;
-    --paper-edge: #5a4330;
-    --field: #271d15;
-    --fg: #f6e6c4;
-    --muted: #d4bb92;
-    --line: #6a5038;
-    --edge: #a88a63;
-    --accent: #f29bab;
-    --fill: #8cc46c;
-    --on-fill: #1b2033;
-    --tint: #4a3725;
-    --tint-wheat: #4d3d17;
-    --tint-berry: #4d2228;
-    --tint-sky: #1f3a47;
-    --tint-meadow: #2a3d22;
-    --frame: #b09a78;
-    --focus: #9fd3ff;
-    --danger: #ffa3b0;
-    --shadow: rgb(0 0 0 / 0.45);
+    --bg: #0a1430;
+    --bg-mid: #13244f;
+    --bg-low: #172440;
+    --snow-shade: #22345a;
+    --fleck: #31476e;
+    --star: #ffffffcc;
+    --moon: #eef3fb;
+    --surface: #16213a;
+    --surface-2: #1c2945;
+    --paper-edge: #30466b;
+    --field: #0e1729;
+    --fg: #eaf1fb;
+    --muted: #afbed7;
+    --line: #2f4468;
+    --edge: #8aa3c8;
+    --accent: #9ccaf2;
+    --title: #d6e6f8;
+    --primary: #9ccaf2;
+    --primary-hover: #bcdcf7;
+    --on-primary: #0a1430;
+    --turn-active: #1d3858;
+    --turn-active-edge: #9ccaf2;
+    --tint-hover: #2b3d5f;
+    --fill: #9ccaf2;
+    --on-fill: #0a1430;
+    --track-off: #3a4866;
+    --tint: #22324f;
+    --tint-wheat: #3a3522;
+    --tint-berry: #4b1e30;
+    --tint-sky: #1a3958;
+    --tint-meadow: #163a31;
+    --frame: #a9bddc;
+    --focus: #f4f8ff;
+    --danger: #ffa3b4;
+    --shadow: #00000073;
     --avatar-bg: 40% 0.09;
     --avatar-fg: 95% 0.03;
   }
@@ -126,42 +160,100 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #1b2033;
-  --bg-mid: #1c2632;
-  --bg-low: #1d2c2a;
-  --star: rgb(255 244 214 / 0.55);
-  --surface: #33261b;
-  --surface-2: #3b2c1f;
-  --paper-edge: #5a4330;
-  --field: #271d15;
-  --fg: #f6e6c4;
-  --muted: #d4bb92;
-  --line: #6a5038;
-  --edge: #a88a63;
-  --accent: #f29bab;
-  --fill: #8cc46c;
-  --on-fill: #1b2033;
-  --tint: #4a3725;
-  --tint-wheat: #4d3d17;
-  --tint-berry: #4d2228;
-  --tint-sky: #1f3a47;
-  --tint-meadow: #2a3d22;
-  --frame: #b09a78;
-  --focus: #9fd3ff;
-  --danger: #ffa3b0;
-  --shadow: rgb(0 0 0 / 0.45);
+  --bg: #0a1430;
+  --bg-mid: #13244f;
+  --bg-low: #172440;
+  --snow-shade: #22345a;
+  --fleck: #31476e;
+  --star: #ffffffcc;
+  --moon: #eef3fb;
+  --surface: #16213a;
+  --surface-2: #1c2945;
+  --paper-edge: #30466b;
+  --field: #0e1729;
+  --fg: #eaf1fb;
+  --muted: #afbed7;
+  --line: #2f4468;
+  --edge: #8aa3c8;
+  --accent: #9ccaf2;
+  --title: #d6e6f8;
+  --primary: #9ccaf2;
+  --primary-hover: #bcdcf7;
+  --on-primary: #0a1430;
+  --turn-active: #1d3858;
+  --turn-active-edge: #9ccaf2;
+  --tint-hover: #2b3d5f;
+  --fill: #9ccaf2;
+  --on-fill: #0a1430;
+  --track-off: #3a4866;
+  --tint: #22324f;
+  --tint-wheat: #3a3522;
+  --tint-berry: #4b1e30;
+  --tint-sky: #1a3958;
+  --tint-meadow: #163a31;
+  --frame: #a9bddc;
+  --focus: #f4f8ff;
+  --danger: #ffa3b4;
+  --shadow: #00000073;
   --avatar-bg: 40% 0.09;
   --avatar-fg: 95% 0.03;
 }
 
-/* Sky in hard bands like a pixel-art backdrop; in the dark theme a few stars. */
+/* A sky band with a row of snowy pines on the horizon, then the snowfield with blue-grey specks. Square
+   specks and stars are conic gradients (a 2 × 2 corner of each tile); the sky covers the specks above the
+   horizon. Not fixed: on a phone the sky scrolls away and the snow goes on. */
 body {
   margin: 0;
   background:
-    radial-gradient(circle, var(--star) 1px, transparent 1.5px) 13px 21px / 97px 61px,
-    radial-gradient(circle, var(--star) 1px, transparent 1.5px) 52px 7px / 151px 83px,
-    linear-gradient(var(--bg) 0 38%, var(--bg-mid) 38% 70%, var(--bg-low) 70%) fixed;
+    var(--pines) 0 calc(var(--horizon) - 42px) / 192px 44px repeat-x,
+    radial-gradient(circle at calc(100% - 52px) 62px, var(--moon) 0 14px, transparent 14.5px) 0 0 / 100% var(--horizon) no-repeat,
+    conic-gradient(from 270deg at 2px 2px, var(--star) 25%, transparent 0) 13px 41px / 97px var(--horizon) repeat-x,
+    conic-gradient(from 270deg at 2px 2px, var(--star) 25%, transparent 0) 52px 77px / 151px var(--horizon) repeat-x,
+    linear-gradient(var(--bg) 0 45%, var(--bg-mid) 45% 100%) 0 0 / 100% var(--horizon) no-repeat,
+    linear-gradient(var(--snow-shade), var(--snow-shade)) 0 var(--horizon) / 100% 4px no-repeat,
+    conic-gradient(from 270deg at 2px 2px, var(--fleck) 25%, transparent 0) 5px 9px / 41px 37px,
+    conic-gradient(from 270deg at 2px 2px, var(--fleck) 25%, transparent 0) 27px 23px / 67px 53px,
+    conic-gradient(from 270deg at 4px 2px, var(--fleck) 25%, transparent 0) 50px 3px / 113px 89px,
+    var(--bg-low);
   color: var(--fg);
+}
+
+/* Falling snow behind the content: two tiles of pixel flakes, each sliding down by exactly its own height so
+   the loop has no seam. Transform only, so it stays on the compositor. Still flakes with reduced motion. */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  inset: -400px 0 0;
+  background: var(--snow-small) 0 0 / 400px 400px;
+  pointer-events: none;
+  animation: snowfall 32s linear infinite;
+}
+
+body::after {
+  inset: -640px 0 0;
+  background: var(--snow-big) 120px 0 / 640px 640px;
+  animation: snowfall-big 26s linear infinite;
+}
+
+@keyframes snowfall {
+  to {
+    transform: translateY(400px);
+  }
+}
+
+@keyframes snowfall-big {
+  to {
+    transform: translateY(640px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  body::after {
+    animation: none;
+  }
 }
 
 #root,
@@ -172,18 +264,14 @@ body {
   padding: 0 16px;
 }
 
-/* Festival string across the top: square pixel pennants in holly, wheat and berry. */
+/* Icicles along the top edge of the window, hanging from a lip of snow. */
 #root::before,
 .page::before {
   content: "";
   flex-shrink: 0;
-  height: 20px;
-  margin: 0 -16px;
-  /* Each pennant: a 12 × 8 block with a 6 × 4 tip under it, one every 24 px in a 72 px repeat. */
-  background:
-    linear-gradient(var(--wood-dark), var(--wood-dark)) 0 3px / 100% 3px no-repeat,
-    linear-gradient(90deg, var(--holly-light) 12px, transparent 0, transparent 24px, var(--wheat) 0 36px, transparent 0 48px, var(--berry-light) 0 60px, transparent 0) 6px 6px / 72px 8px repeat-x,
-    linear-gradient(90deg, transparent 3px, var(--holly-light) 0 9px, transparent 0 27px, var(--wheat) 0 33px, transparent 0 51px, var(--berry-light) 0 57px, transparent 0) 6px 14px / 72px 4px repeat-x;
+  height: 32px;
+  margin: 0 -16px -8px; /* the longest tips hang into the space above the title */
+  background: var(--icicles) 0 0 / 96px 32px repeat-x;
 }
 
 main {
@@ -260,8 +348,8 @@ footer a {
 .button,
 button {
   --face: var(--tint);
-  --hi: rgb(255 255 255 / 0.5);
-  --lo: rgb(78 42 18 / 0.22);
+  --hi: #ffffff80;
+  --lo: var(--shadow);
   position: relative;
   isolation: isolate;
   display: inline-flex;
@@ -290,9 +378,10 @@ button {
   transition: transform 80ms steps(2);
 }
 
+/* Hover changes the whole face; the bevels stay, so nothing looks lit from one side. */
 .button:hover,
 button:hover:not(:disabled) {
-  --hi: rgb(255 255 255 / 0.8);
+  --face: var(--tint-hover);
 }
 
 .button:active,
@@ -306,19 +395,18 @@ button:disabled {
   opacity: 0.5;
 }
 
-/* Holly green: the one thing to press ("Würfeln", "Start", "Weiter"). */
+/* Ice blue: the one thing to press ("Würfeln", "Start", "Weiter"). */
 .primary {
-  --face: var(--holly);
-  --hi: var(--holly-light);
-  --lo: var(--holly-dark);
-  --frame: var(--wood-dark);
-  color: var(--on-holly);
+  --face: var(--primary);
+  --hi: #ffffff40;
+  --lo: #00000040;
+  color: var(--on-primary);
   font-weight: 800;
 }
 
 .button.primary:hover,
 .primary:hover:not(:disabled) {
-  --hi: var(--wheat-light);
+  --face: var(--primary-hover);
 }
 
 .danger {
