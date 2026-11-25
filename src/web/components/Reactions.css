@@ -6,14 +6,22 @@
 }
 
 .reaction-bar button {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   padding: 0;
   border-radius: 50%;
   border-color: var(--line);
-  background: var(--surface);
-  font-size: 1.5rem;
+  background: var(--field);
+  font-size: 1.6rem;
   line-height: 1;
+}
+
+.reaction-bar button:hover:not([aria-disabled="true"]) {
+  box-shadow: 0 4px 16px var(--glow-gold);
+}
+
+.reaction-bar button[aria-disabled="true"]:active {
+  transform: none;
 }
 
 .reaction-bar button[aria-disabled="true"] {
@@ -24,9 +32,9 @@
 /* Shrinks over the cooldown; empty otherwise. */
 .reaction-cooldown {
   flex-basis: 100%;
-  height: 3px;
+  height: 4px;
   border-radius: 2px;
-  background: var(--accent);
+  background: var(--gold-dark);
   transform: scaleX(0);
 }
 

@@ -1,0 +1,47 @@
+/* Twelve pieces fall three times, then the celebration is over. */
+.confetti {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.confetti i {
+  position: absolute;
+  top: -24px;
+  left: var(--x);
+  width: 10px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--c);
+  animation: confetti-fall var(--t) var(--d) linear 3 both;
+}
+
+.confetti i:nth-child(3n) { width: 12px; height: 12px; border-radius: 50%; }
+.confetti i:nth-child(4n + 1) { width: 14px; height: 7px; }
+
+.confetti i:nth-child(1) { --x: 6%; --c: var(--gold); --t: 3.4s; --d: 0s; --r: 540deg; }
+.confetti i:nth-child(2) { --x: 15%; --c: var(--teal-light); --t: 4.1s; --d: 0.4s; --r: -420deg; }
+.confetti i:nth-child(3) { --x: 24%; --c: var(--cream); --t: 3.7s; --d: 1.1s; --r: 380deg; }
+.confetti i:nth-child(4) { --x: 33%; --c: var(--sky); --t: 4.4s; --d: 0.2s; --r: -600deg; }
+.confetti i:nth-child(5) { --x: 42%; --c: var(--gold-light); --t: 3.2s; --d: 0.8s; --r: 460deg; }
+.confetti i:nth-child(6) { --x: 51%; --c: var(--teal); --t: 4s; --d: 1.5s; --r: -380deg; }
+.confetti i:nth-child(7) { --x: 60%; --c: var(--cream); --t: 3.5s; --d: 0.1s; --r: 640deg; }
+.confetti i:nth-child(8) { --x: 69%; --c: var(--gold); --t: 4.5s; --d: 0.6s; --r: -500deg; }
+.confetti i:nth-child(9) { --x: 77%; --c: var(--sky); --t: 3.3s; --d: 1.3s; --r: 420deg; }
+.confetti i:nth-child(10) { --x: 85%; --c: var(--teal-light); --t: 3.9s; --d: 0.3s; --r: -560deg; }
+.confetti i:nth-child(11) { --x: 92%; --c: var(--coral-light); --t: 4.2s; --d: 1s; --r: 500deg; }
+.confetti i:nth-child(12) { --x: 97%; --c: var(--gold-dark); --t: 3.6s; --d: 1.8s; --r: -440deg; }
+
+@keyframes confetti-fall {
+  to {
+    transform: translate(-30px, calc(100vh + 48px)) rotate(var(--r));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confetti {
+    display: none;
+  }
+}

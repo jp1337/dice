@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { DieFace } from "./components/Dice.js";
 import { SoundToggle, ThemeToggle } from "./components/Toggles.js";
 import { parseRoute } from "./lib/routes.js";
 import { GuestPage, RoomPage } from "./views/RoomPage.js";
@@ -12,10 +13,16 @@ function App() {
     <>
       <main>
         {route.page === "start" && (
-          <>
-            <h1>Würfel</h1>
+          <div className="start">
+            <header className="hero">
+              <div className="hero-dice">
+                <DieFace value={5} />
+                <DieFace value={6} />
+              </div>
+              <h1 className="ribbon">Würfel</h1>
+            </header>
             <StartPage />
-          </>
+          </div>
         )}
         {route.page === "room" && <RoomPage slug={route.slug} />}
         {route.page === "guest" && <GuestPage token={route.token} />}

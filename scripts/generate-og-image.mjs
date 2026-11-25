@@ -6,14 +6,14 @@ import { crc32, deflateSync } from "node:zlib";
 const W = 256;
 const H = 256;
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-// The dark theme tokens of src/web/style.css.
-const night = hex("#0f1d27");
-const nightTop = hex("#18303f");
-const gold = hex("#e2b85a");
-const ivory = hex("#fbf6ea");
-const ivoryEdge = hex("#ddd3bd");
-const ink = hex("#1b2a36");
-const cranberry = hex("#b3263e");
+// The tokens of src/web/style.css: dark theme background, gold, the cream dice with teal and coral pips.
+const night = hex("#0e2629");
+const nightTop = hex("#1e4a4f");
+const gold = hex("#ffd23f");
+const cream = hex("#fff8e7");
+const creamEdge = hex("#e3d3a8");
+const teal = hex("#14615c");
+const coral = hex("#d45233");
 
 // Signed distances in pixels; coverage turns them into anti-aliased edges.
 const box = (x, y, hw, hh, r) => {
@@ -26,8 +26,8 @@ const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 
 const PIPS = { 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] };
 const dice = [
-  { cx: 74, cy: 112, size: 84, angle: -0.2, value: 5, pip: ink },
-  { cx: 180, cy: 126, size: 84, angle: 0.15, value: 6, pip: cranberry },
+  { cx: 74, cy: 112, size: 84, angle: -0.2, value: 5, pip: teal },
+  { cx: 180, cy: 126, size: 84, angle: 0.15, value: 6, pip: coral },
 ];
 
 function shade(x, y) {
@@ -49,7 +49,7 @@ function shade(x, y) {
     const edge = box(px, py, h, h, d.size * 0.16);
     const body = coverage(edge);
     if (body === 0) continue;
-    const face = mix(ivory, ivoryEdge, Math.min(1, Math.max(0, (edge + h * 0.15) / (h * 0.15))) * 0.8 + (py / h + 1) * 0.08);
+    const face = mix(cream, creamEdge, Math.min(1, Math.max(0, (edge + h * 0.15) / (h * 0.15))) * 0.8 + (py / h + 1) * 0.08);
     let die = face;
     for (const [gx, gy] of PIPS[d.value]) {
       die = mix(die, d.pip, coverage(Math.hypot(px - gx * h * 0.5, py - gy * h * 0.5) - d.size * 0.085));

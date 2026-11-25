@@ -121,7 +121,10 @@ export function History({ view, d }: { view: RoomView; d: Derived }) {
   const lines = historyLines(view, d.showModeration && moderation);
   return (
     <section className="stack" aria-labelledby="history">
-      <h2 id="history">Verlauf</h2>
+      <h2 id="history">
+        <span className="icon" aria-hidden="true">📜</span>
+        Verlauf
+      </h2>
       {d.showModeration && <Switch on={moderation} onChange={setModeration} label="Moderationsverlauf zeigen" />}
       {lines.length === 0 ? (
         <p className="hint">Noch nichts passiert.</p>
@@ -143,7 +146,10 @@ export function GiftOrder({ view }: { view: RoomView }) {
   const gifts = giftList(view);
   return (
     <section className="stack" aria-labelledby="gifts">
-      <h2 id="gifts">Geschenk-Reihenfolge</h2>
+      <h2 id="gifts">
+        <span className="icon" aria-hidden="true">🎁</span>
+        Geschenk-Reihenfolge
+      </h2>
       {gifts.length === 0 ? (
         <p className="hint">Noch hat niemand eine 6.</p>
       ) : (
@@ -160,14 +166,19 @@ export function GiftOrder({ view }: { view: RoomView }) {
 function TurnOrder({ view }: { view: RoomView }) {
   return (
     <section className="stack" aria-labelledby="order">
-      <h2 id="order">Zugreihenfolge (Runde {view.game.round})</h2>
+      <h2 id="order">
+        <span className="icon" aria-hidden="true">🎲</span>
+        Zugreihenfolge (Runde {view.game.round})
+      </h2>
       <ol className="turns">
         {turnList(view).map((t) => (
           <li key={t.userId} className={t.active ? "is-active" : ""} aria-current={t.active ? "step" : undefined}>
             <span>{t.name}</span>
-            {t.twoDice && <span className="badge badge-bonus">2 Würfel</span>}
-            {t.isSimulated && <span className="badge badge-test">Testspieler</span>}
-            <span className={`badge conn-${t.connected ? "ok" : "lost"}`}>{t.connected ? "verbunden" : "getrennt"}</span>
+            <span className="badges">
+              {t.twoDice && <span className="badge badge-bonus">2 Würfel</span>}
+              {t.isSimulated && <span className="badge badge-test">Testspieler</span>}
+              <span className={`badge conn-${t.connected ? "ok" : "lost"}`}>{t.connected ? "verbunden" : "getrennt"}</span>
+            </span>
           </li>
         ))}
       </ol>

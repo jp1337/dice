@@ -208,7 +208,10 @@ export function Lobby(props: Props) {
     <div className="lobby">
       {d.showModeration && (
         <section className="card stack" aria-labelledby="lobby-host">
-          <h2 id="lobby-host">Spiel starten</h2>
+          <h2 id="lobby-host">
+            <span className="icon" aria-hidden="true">🎉</span>
+            Spiel starten
+          </h2>
           <p>Beim Start lost der Server die Reihenfolge aus allen Würflern aus.</p>
           <span className="row">
             <button type="button" className="primary big" disabled={!d.can.start} onClick={() => send({ type: "start" })}>
@@ -223,6 +226,7 @@ export function Lobby(props: Props) {
 
       <section className="stack" aria-labelledby="lobby-people">
         <h2 id="lobby-people">
+          <span className="icon" aria-hidden="true">👥</span>
           Teilnehmer ({view.members.length}, davon {playerCount} Würfler)
         </h2>
         {!d.isGuest && (
@@ -237,7 +241,10 @@ export function Lobby(props: Props) {
 
       {d.me && (
         <section className="card stack" aria-labelledby="lobby-me">
-          <h2 id="lobby-me">Du</h2>
+          <h2 id="lobby-me">
+            <span className="icon" aria-hidden="true">🙂</span>
+            Du
+          </h2>
           <Switch
             on={d.me.participation === "player"}
             disabled={!d.can.setOwnParticipation}
