@@ -65,6 +65,6 @@ docker compose exec -T postgres psql -U dice dice < dice-2026-12-01.sql   # rest
 
 ## 6. Logs
 
-One JSON line per request on stdout: time, client IP, method, path without query string, status, user ID.
+One JSON line per request on stdout: time, shortened client IP, method, path without query string, status, user ID.
 Rejected logins get their own line. No tokens, no cookies.
 Limit how long your server keeps them: [data-and-deletion.md](data-and-deletion.md#logs).

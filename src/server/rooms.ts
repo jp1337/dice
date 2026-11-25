@@ -28,6 +28,7 @@ import {
 import { reduce } from "../shared/game/reduce.js";
 import type { LiveRooms } from "./cleanup.js";
 import type { Config } from "./config.js";
+import { logIp } from "./log-ip.js";
 import { gameEvents, roomMembers, rooms, users } from "./db/schema.js";
 import { CommandError, type NewEvent, handleGameCommand } from "./game-commands.js";
 
@@ -836,7 +837,7 @@ export function registerRooms(
       const conn: Conn = { userId: null, sessionId: "", expiresAt: Infinity, alive: true, version: -1 };
       conns.set(socket, conn);
       const log = request.log;
-      log.info({ roomId: room.id, ip: request.ip }, "guest connected");
+      log.info({ roomId: room.id, ip: logIp(request.ip) }, "guest connected");
 
       socket.on("pong", () => (conn.alive = true));
       socket.on("message", () => undefined); // read-only: whatever a guest sends is dropped

@@ -49,14 +49,19 @@ DELETE FROM users WHERE id = '<id from step 1>';
 | --- | --- | --- |
 | `rooms.created_by`, `game_events.actor_user_id` | No: `NULL` | Nothing to do |
 | The user ID inside `game_events.payload` (turn order, rolls) | A random UUID that no longer points to anyone | Delete the rooms: `DELETE FROM rooms WHERE slug = '<slug>';` removes members and events of everyone in it |
-| Logs on the server | IP address and user ID | Your log retention, below |
+| Logs on the server | Shortened IP address and user ID | Your log retention, below |
+| Database backups | Everything above, as it was | Gone when the backup expires: deletion reaches backups only then (`PRIVACY_BACKUP_DAYS`) |
 
 Deleting is not a ban: whoever logs in again gets a new row.
 
 ## Logs
 
 Container, nginx and CrowdSec logs live outside the app. Limit how long the server keeps them, and keep
-the privacy notice in line with what you set.
+the privacy notice in line with what you set (`PRIVACY_LOG_DAYS`).
+
+The app logs client addresses shortened: IPv4 to `/16` (`198.51.0.0`), IPv6 to `/48` (`2001:db8:abcd::`).
+The full address stays in memory, for rate limits only. The privacy notice says logs hold only
+shortened addresses, so shorten them in nginx too, or do not log them there.
 
 | Source | Where to limit it |
 | --- | --- |

@@ -6,6 +6,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { MeResponse } from "../shared/contracts.js";
 import type { Config } from "./config.js";
 import { sessions, users } from "./db/schema.js";
+import { logIp } from "./log-ip.js";
 import { AUTHORIZE_URL, type DiscordProfile, LoginError, SCOPES, downloadAvatar, exchangeAndCheck } from "./discord.js";
 
 // __Host-: the browser only accepts it with Secure, Path=/ and no Domain, so a sibling subdomain cannot plant one.
@@ -159,8 +160,8 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
     reply.clearCookie(STATE_COOKIE, { ...cookieBase, path: "/auth" });
 
     const fail = (status: number, reason: string) => {
-      if (status === 403) request.log.warn({ ip: request.ip }, "login rejected: not a guild member");
-      else request.log.warn({ ip: request.ip, reason }, "login failed");
+      if (status === 403) request.log.warn({ ip: logIp(request.ip) }, "login rejected: not a guild member");
+      else request.log.warn({ ip: logIp(request.ip), reason }, "login failed");
       const [title, text] = messages[status] ?? messages[500]!;
       return reply.code(status).type(HTML).send(errorPage(title, text, retry));
     };

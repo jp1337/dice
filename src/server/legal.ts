@@ -43,9 +43,9 @@ export function impressumHtml(legal: Legal | null) {
   return page("Impressum", `<p>Angaben gemäß § 5 DDG</p>\n${contact(legal)}${note}`);
 }
 
-export const PRIVACY_UPDATED = "24. November 2026";
+export const PRIVACY_UPDATED = "25. November 2026";
 
-export type PrivacyServices = { cloudflare: boolean; crowdsec: boolean; retentionDays?: number };
+export type PrivacyServices = { cloudflare: boolean; crowdsec: boolean; retentionDays?: number; logDays?: number; backupDays?: number };
 
 // Vendor facts checked against (2026-11-24):
 // CrowdSec: https://docs.crowdsec.net/docs/next/central_api/intro (signal meta-data: scenario, timestamp, machine ID, offending IP)
@@ -80,12 +80,12 @@ ${legal ? contact(legal) : notConfigured}
 <li>Raumteilnahme: Rolle, Würfler oder Zuschauer, Platz in der Zugreihenfolge</li>
 <li>Würfe und Spielereignisse im Verlauf des Raums, auch Eingriffe von Hosts</li>
 <li>Sitzungs-Cookie für die Anmeldung</li>
-<li>IP-Adresse in den Protokollen des Servers, zusammen mit Zeit, aufgerufener Adresse, Statuscode und Nutzer-ID</li>
+<li>IP-Adresse in den Protokollen des Servers, nur gekürzt (bei IPv4 die ersten beiden Blöcke, bei IPv6 die ersten drei Blöcke), zusammen mit Zeit, aufgerufener Adresse, Statuscode und Nutzer-ID</li>
 </ul>
 <p>Eine E-Mail-Adresse wird nicht gespeichert. Die Zugangsschlüssel von Discord werden nach der Anmeldung verworfen.</p>
 
 <h2>Zweck</h2>
-<p>Die Daten dienen der Durchführung des Würfelspiels und dem Schutz vor Missbrauch. Die IP-Adresse wird nur für die Protokolle und für die Begrenzung zu vieler Anfragen verwendet.</p>
+<p>Die Daten dienen der Durchführung des Würfelspiels und dem Schutz vor Missbrauch. Die vollständige IP-Adresse verwendet die App nur im Arbeitsspeicher, um zu viele Anfragen zu begrenzen. In die Protokolle schreibt sie die IP-Adresse nur gekürzt.</p>
 
 <h2>Rechtsgrundlage</h2>
 <p><strong>Vom Betreiber zu ergänzen: Rechtsgrundlage für die Spieldaten, die Protokolle und die Schutzdienste.</strong></p>
@@ -119,7 +119,8 @@ ${protection(services)}
 <li>abgelaufene Sitzungen: Sie gelten ab Ablauf nicht mehr und werden beim nächsten täglichen Lauf gelöscht</li>
 </ul>
 <p>Beim Abmelden löscht die App die Sitzung sofort.</p>
-<p>Die Protokolle des Servers liegen außerhalb der App. Ihre Speicherdauer begrenzt der Betreiber auf dem Server.</p>
+<p>Die Protokolle des Servers liegen außerhalb der App. ${services.logDays ? `Server-Protokolle werden höchstens ${services.logDays} Tage aufbewahrt.` : "Ihre Speicherdauer begrenzt der Betreiber auf dem Server."}</p>
+<p>Die Datenbank wird regelmäßig gesichert. ${services.backupDays ? `Datenbank-Sicherungen werden höchstens ${services.backupDays} Tage aufbewahrt` : "Die Speicherdauer der Sicherungen begrenzt der Betreiber"}; eine Löschung wirkt in Sicherungen erst nach Ablauf dieser Frist.</p>
 
 <h2>Rechte der Betroffenen</h2>
 <p>Nach der Datenschutz-Grundverordnung (DSGVO) besteht das Recht auf</p>

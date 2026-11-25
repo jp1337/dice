@@ -63,6 +63,9 @@ const envSchema = z
     // Only switch sections of the privacy notice on and off (spec 9.2).
     PRIVACY_CLOUDFLARE: flag(false),
     PRIVACY_CROWDSEC: flag(true),
+    // Retention of the operator's logs and database backups, named on the privacy notice when set.
+    PRIVACY_LOG_DAYS: optional(z.coerce.number().int().min(1)),
+    PRIVACY_BACKUP_DAYS: optional(z.coerce.number().int().min(1)),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== "test") {
@@ -110,7 +113,7 @@ export function parseConfig(env: Record<string, string | undefined>) {
     trustedProxies: e.TRUSTED_PROXIES,
     legal,
     retentionDays: e.RETENTION_DAYS,
-    privacyServices: { cloudflare: e.PRIVACY_CLOUDFLARE, crowdsec: e.PRIVACY_CROWDSEC },
+    privacyServices: { cloudflare: e.PRIVACY_CLOUDFLARE, crowdsec: e.PRIVACY_CROWDSEC, logDays: e.PRIVACY_LOG_DAYS, backupDays: e.PRIVACY_BACKUP_DAYS },
   };
 }
 
