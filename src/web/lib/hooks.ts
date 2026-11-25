@@ -41,6 +41,7 @@ export function migrateMuted(store: Pick<typeof prefs, "get" | "set"> = prefs) {
   if (store.get(MUTED_KEY) !== "1") return;
   store.set(SOUND_OFF_KEYS.roll, "1");
   store.set(SOUND_OFF_KEYS.six, "1");
+  store.set(SOUND_OFF_KEYS.turn, "1");
   store.set(MUTED_KEY, null);
 }
 
@@ -48,6 +49,7 @@ export function migrateMuted(store: Pick<typeof prefs, "get" | "set"> = prefs) {
 export function useSound() {
   const [rollOff, setRollOff] = useFlag(SOUND_OFF_KEYS.roll);
   const [sixOff, setSixOff] = useFlag(SOUND_OFF_KEYS.six);
+  const [turnOff, setTurnOff] = useFlag(SOUND_OFF_KEYS.turn);
   useEffect(() => {
     migrateMuted();
     player ??= createSoundPlayer(
@@ -56,6 +58,6 @@ export function useSound() {
       navigator.userActivation?.hasBeenActive ?? false,
     );
   }, []);
-  const play = useCallback((name: SoundName) => player?.play(name, name === "roll" ? rollOff : sixOff) ?? false, [rollOff, sixOff]);
-  return { play, rollOff, setRollOff, sixOff, setSixOff };
+  const play = useCallback((name: SoundName) => player?.play(name, { roll: rollOff, six: sixOff, turn: turnOff }[name]) ?? false, [rollOff, sixOff, turnOff]);
+  return { play, rollOff, setRollOff, sixOff, setSixOff, turnOff, setTurnOff };
 }

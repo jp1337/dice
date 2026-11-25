@@ -10,6 +10,7 @@ compares pixels (`--check`).
 | File | Script | Size |
 | --- | --- | --- |
 | `src/web/public/sounds/six.wav` | `node scripts/generate-sounds.mjs` | 35 KB |
+| `src/web/public/sounds/turn.wav` | same | 31 KB |
 | `src/web/public/og.png` (256×256) | `node scripts/generate-og-image.mjs` | 1 KB |
 
 - Both sounds: mono 16 bit 22.05 kHz WAV, peak −9 dBFS (quiet on purpose: voice channel), under 60 KB,
@@ -18,6 +19,7 @@ compares pixels (`--check`).
 | Sound | Made of | Length |
 | --- | --- | --- |
 | Six | Synthesized: marimba arpeggio G–B–D–G, partials 1× and 3.9× (higher ones would alias), soft mallet attack | 0.8 s |
+| Turn | Synthesized: two glockenspiel strikes A5, E6 (partials 1×, 2.76×, 5.4×), played to whoever is up once the dice have landed and the game is not paused | 0.7 s |
 | Roll | Recorded, not generated (synthesized dice sounded like clinking glass): Kenney "Casino Audio" 1.1, CC0, from `opengameart.org/content/54-casino-sound-effects-cards-dice-chips`. First 0.65 s of `dice-shake-2.ogg` (fade out from 0.5 s), then `dice-throw-1.ogg`; command below | 1.25 s |
 
 ```sh
@@ -138,8 +140,8 @@ directly or through `contracts.ts`. Values for the browser live in `src/shared/c
 | `ReactionBar` `{onReact, disabled?}` | Client cooldown 0.5 s, mirrors the server; emojis rise left and right of the dice, never across them |
 | `useFloatingReactions()` → `{items, add}`, `FloatingReactions` `{items, hidden?}` | `add(msg.emojis)`; place in a `.reaction-stage` element |
 | `Avatar` `{userId, name, avatarUrl, size?}` | Initials on a colour from the user id when there is no image |
-| `ThemeToggle`, `SoundToggles` (Würfel-Ton, Gewinner-Ton), `Switch` | Per-browser settings; reactions have no personal switch, hosts switch them for the room |
-| `useSound()` → `{play, rollOff, setRollOff, sixOff, setSixOff}` | `play("roll" \| "six")`, silent until the first gesture; each sound muted on its own (`SOUND_OFF_KEYS`), the old `dice.muted` carried over once |
+| `ThemeToggle`, `SoundToggles` (Würfel-Ton, Gewinner-Ton, Dran-Ton), `Switch` | Per-browser settings; reactions have no personal switch, hosts switch them for the room |
+| `useSound()` → `{play, rollOff, setRollOff, sixOff, setSixOff, turnOff, setTurnOff}` | `play("roll" \| "six" \| "turn")`, silent until the first gesture; each sound muted on its own (`SOUND_OFF_KEYS`), the old `dice.muted` carried over once |
 | `useFlag(key)`, `useReducedMotion()` | Shared preference store, motion setting |
 
 Logic sits in `src/web/lib/` (plain functions, tested without a DOM); components only render.
