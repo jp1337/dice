@@ -831,7 +831,7 @@ export function registerRooms(
 
   app.get<{ Params: { token: string } }>(
     "/ws/watch/:token",
-    { websocket: true, config: { rateLimit: { max: GUEST_CONNECTS_PER_MINUTE, timeWindow: "1 minute" } }, preHandler: [sameOrigin, findWatchRoom] },
+    { websocket: true, onRequest: app.rateLimit({ max: GUEST_CONNECTS_PER_MINUTE, timeWindow: "1 minute" }), preHandler: [sameOrigin, findWatchRoom] },
     (socket: Socket, request) => {
       const room = roomOf.get(request)!;
       const conn: Conn = { userId: null, sessionId: "", expiresAt: Infinity, alive: true, version: -1 };
@@ -872,7 +872,7 @@ export function registerRooms(
 
   app.post(
     "/api/rooms",
-    { config: { rateLimit: { max: CREATE_ROOM_LIMIT_PER_MINUTE, timeWindow: "1 minute" } }, preHandler: [sameOrigin, auth.requireUser] },
+    { onRequest: app.rateLimit({ max: CREATE_ROOM_LIMIT_PER_MINUTE, timeWindow: "1 minute" }), preHandler: [sameOrigin, auth.requireUser] },
     async (request, reply) => {
       if (!isHostId(request.user!.discordId)) return reply.code(403).send({ error: "forbidden" });
       const body = createRoomRequestSchema.safeParse(request.body);
@@ -904,7 +904,7 @@ export function registerRooms(
   // Each change reaches every room the user is in, so it is limited like room creation.
   app.patch(
     "/api/me",
-    { config: { rateLimit: { max: NICKNAME_LIMIT_PER_MINUTE, timeWindow: "1 minute" } }, preHandler: [sameOrigin, auth.requireUser] },
+    { onRequest: app.rateLimit({ max: NICKNAME_LIMIT_PER_MINUTE, timeWindow: "1 minute" }), preHandler: [sameOrigin, auth.requireUser] },
     async (request, reply) => {
       const body = patchMeRequestSchema.safeParse(request.body);
       if (!body.success) return reply.code(400).send({ error: "invalid_nickname" });

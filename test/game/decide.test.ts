@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { UserId } from "../../src/shared/contracts.js";
+import { defaultSettings, type UserId } from "../../src/shared/contracts.js";
 import { decide, gameCommandTypes, shuffle, type GameCommand } from "../../src/shared/game/decide.js";
 import { initialGameState } from "../../src/shared/game/reduce.js";
 import { A, B, C, D, Game, HOST, log, scripted, seeded, users } from "./helpers.js";
@@ -231,11 +231,22 @@ describe("undo", () => {
   it("two undo commands decided against the same state take back one roll", () => {
     const g = running().roll(2).roll(3);
     const state = g.state;
-    const ctx = { actorUserId: HOST, actorIsHost: true, players: [], randomInt: seeded(1) };
+    const ctx = { actorUserId: HOST, actorIsHost: true, players: [], randomInt: seeded(1), settings: g.settings };
     for (const r of [decide(state, { type: "undo" }, ctx), decide(state, { type: "undo" }, ctx)])
       if ("events" in r) g.events.push(...log([...g.events, ...r.events]).slice(-1));
     expect(g.events.filter((x) => x.type === "undone")).toHaveLength(2);
     expect(g.state).toMatchObject({ undoneSeqs: [3], activeUserId: B, lastRoll: { userId: A } });
+  });
+
+  // B, the last player, rolls a 3 and then takes the last place. Taking back the 3 left the game over,
+  // while the button promised "Das Spiel geht dann weiter". The 6 before it does reopen the game.
+  it("in a finished game, only takes back a roll the game ended on", () => {
+    const claimed = () => running([A, B]).roll(6).do(HOST, { type: "continue" }).roll(3).do(B, { type: "claim_last_place" });
+    expect(errorOf(claimed().try(HOST, { type: "undo" }))).toBe("undo_no_effect");
+    const assigned = running([A, B]).roll(6).do(HOST, { type: "continue" }).roll(3).do(HOST, { type: "assign_last_place" });
+    expect(errorOf(assigned.try(HOST, { type: "undo" }))).toBe("undo_no_effect");
+    const sixLast = running([A, B]).roll(6).do(HOST, { type: "continue" }).do(B, { type: "claim_last_place" });
+    expect(sixLast.do(HOST, { type: "undo" }).state).toMatchObject({ status: "running", activeUserId: A, giftOrder: [] });
   });
 
   it("works on a game finished by the rules, not after end", () => {
@@ -259,7 +270,7 @@ describe("end and reset", () => {
 
 it("decide is pure: the same input gives the same output and the state is untouched", () => {
   const state = initialGameState();
-  const ctx = { actorUserId: HOST, actorIsHost: true, players: users(5) as UserId[] };
+  const ctx = { actorUserId: HOST, actorIsHost: true, players: users(5) as UserId[], settings: defaultSettings };
   const a = decide(state, { type: "start" }, { ...ctx, randomInt: seeded(7) });
   const b = decide(state, { type: "start" }, { ...ctx, randomInt: seeded(7) });
   expect(a).toEqual(b);

@@ -11,9 +11,9 @@ every push to `main`. Workflow permissions: `contents: read`; only `publish` get
 | `docker` | The image builds | yes |
 | `secrets-and-personal-data` | gitleaks over the full history; the denylist over file names, contents, history, commit messages and authors ([personal-data.md](personal-data.md)) | yes |
 | `CodeQL` | GitHub's default code scanning setup, no workflow file | yes |
-| `publish` | Push to `main` only, after all of the above: `ghcr.io/jp1337/dice:sha-<commit>` and `:latest` | |
+| `publish` | Push to `main` only, after the jobs above except CodeQL (default setup cannot be a `needs`; it ran on the pull request): `ghcr.io/jp1337/dice:sha-<commit>` and `:latest` | |
 
-Pull-request runs cancel their predecessors; runs on `main` never do, so no publish is skipped.
+Pull-request runs cancel their predecessors. Runs on `main` never cancel a running one, but GitHub keeps only one waiting run per group: three pushes within one run drop the middle run, so that commit gets no `sha-` tag. `latest` and the next commit's tag still come.
 
 ## Deployment
 

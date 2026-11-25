@@ -11,6 +11,14 @@ describe("parseConfig", () => {
     expect(config.trustedProxies).toEqual([]);
   });
 
+  // config.ts promises that `KEY=` means "not set"; these three refused to start instead.
+  it("treats empty PORT, RETENTION_DAYS and NODE_ENV as not set", () => {
+    const config = parseConfig({ ...baseEnv, PORT: "", RETENTION_DAYS: " ", NODE_ENV: "" });
+    expect(config.port).toBe(3000);
+    expect(config.retentionDays).toBe(90);
+    expect(config.nodeEnv).toBe("development");
+  });
+
   it("fails without DISCORD_GUILD_ID", () => {
     const env = { ...baseEnv, DISCORD_GUILD_ID: undefined };
     expect(() => parseConfig(env)).toThrow(/DISCORD_GUILD_ID/);

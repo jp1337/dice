@@ -2,8 +2,10 @@
 
 ## Generated files
 
-Both scripts are pure Node, deterministic (same output bytes on every run) and the only source of
-their files. Change the script, run it, commit script and output together.
+Both scripts are pure Node, deterministic and the only source of their files. Change the script, run it,
+commit script and output together; CI fails otherwise. The WAVs are byte-identical everywhere; the PNG's
+pixels are, its compressed bytes depend on the zlib build (zlib-ng locally, Node's own in CI), so CI
+compares pixels (`--check`).
 
 | File | Script | Size |
 | --- | --- | --- |

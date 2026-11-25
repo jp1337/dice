@@ -96,4 +96,13 @@ describe("configuration", () => {
     const missing = [...names].filter((name) => !page.includes(`\`${name}\``));
     expect(missing).toEqual([]);
   });
+
+  // docs-tech/architecture.md promised this test fails without the .env.example line; it only read the file.
+  it("every variable of config.ts has a line in .env.example, except the test-only Discord endpoints", () => {
+    const example = read(".env.example");
+    const missing = [...read("src/server/config.ts").matchAll(/^\s+([A-Z][A-Z0-9_]+):/gm)]
+      .map((m) => m[1]!)
+      .filter((name) => !["DISCORD_API_BASE", "DISCORD_CDN_BASE"].includes(name) && !new RegExp(`^#?\\s*${name}=`, "m").test(example));
+    expect(missing).toEqual([]);
+  });
 });

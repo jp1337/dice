@@ -13,10 +13,10 @@ import { CommandError } from "../src/server/game-commands.js";
 import { MAX_SOCKETS_PER_USER, MAX_STRIKES, MESSAGE_BURST, type Member, NICKNAME_LIMIT_PER_MINUTE, checkSettingsChange, roomView } from "../src/server/rooms.js";
 import { type GameEvent, MAX_CLIENT_MESSAGE_BYTES, NICKNAME_MAX, type RoomView, defaultSettings } from "../src/shared/contracts.js";
 import { initialGameState } from "../src/shared/game/reduce.js";
-import { baseEnv, makeApp } from "./helpers.js";
+import { baseEnv, makeApp, ownDatabase } from "./helpers.js";
 import { Client, HOST_ID, ORIGIN, type User, env, makeUser as makeUserIn, newDiscordId, until } from "./ws.js";
 
-const dbUrl = process.env.TEST_DATABASE_URL;
+const dbUrl = await ownDatabase();
 
 type App = Awaited<ReturnType<typeof makeApp>>["app"];
 
@@ -637,6 +637,8 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       const client = await connect(slug, user);
       await pool.query("update rooms set last_activity_at = now() - interval '400 days' where id = $1", [roomId]);
       await pool.query("update users set last_login_at = now() - interval '400 days' where id = $1", [user.id]);
+      // A login 400 days ago has no valid session left; a valid one keeps the user (cleanup.ts).
+      await pool.query("update sessions set expires_at = now() - interval '1 second' where user_id = $1", [user.id]);
       await runCleanup(pool, 90, app.live);
       expect(await roomIdOf(slug)).toBe(roomId);
       await client.close();

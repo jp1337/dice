@@ -107,8 +107,8 @@ ${legal ? contact(legal) : notConfigured}
 <p>Avatar-Bilder holt der Server selbst bei Discord ab und liefert sie aus. Der Browser nimmt nur während der Anmeldung Kontakt zu Discord auf.</p>
 
 <h2>Wer was sieht</h2>
-<p>Angemeldete Personen in einem Raum sehen von den anderen Teilnehmern Anzeigename oder Spitzname, Avatar, Rolle, Verbindungsstatus und Würfe. Hosts sehen zusätzlich den Discord-Namen und können Spitznamen zurücksetzen.</p>
-<p>Ein Host kann für einen Raum einen Zuschauer-Link einschalten. Dann sehen auch Personen ohne Anmeldung den Spielverlauf mit den Anzeigenamen der Würfler, aber ohne Avatare, Discord-IDs und Benutzernamen. Solange der Link aktiv ist, zeigt der Raum einen Hinweis.</p>
+<p>Angemeldete Personen in einem Raum sehen von den anderen Teilnehmern Anzeigename oder Spitzname, Avatar, Rolle, Verbindungsstatus und Würfe. Hosts sehen zusätzlich den Discord-Namen. Hosts und Co-Hosts können Spitznamen zurücksetzen.</p>
+<p>Ein Host kann für einen Raum einen Zuschauer-Link einschalten. Dann sehen auch Personen ohne Anmeldung den Spielverlauf mit den Anzeigenamen der Würfler und aller, die darin vorkommen (etwa ein Host, der für jemanden würfelt), aber ohne Avatare, Discord-IDs und Benutzernamen. Solange der Link aktiv ist, zeigt der Raum einen Hinweis.</p>
 <p>Emoji-Reaktionen erscheinen ohne Namen bei allen im Raum und werden nicht gespeichert.</p>
 
 <h2>Cookies und lokaler Speicher</h2>

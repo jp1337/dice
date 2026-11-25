@@ -3,7 +3,7 @@ name: dice
 services:
   app:
     # Local use and reference only. Production pins ghcr.io/jp1337/dice:sha-<commit>@sha256:... in its own
-    # deployment configuration; CI publishes that tag for every commit on main after all checks pass.
+    # deployment configuration; CI publishes that tag for commits on main after the checks pass.
     image: ghcr.io/jp1337/dice:latest
     build: .
     restart: unless-stopped

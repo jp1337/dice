@@ -2,13 +2,12 @@
 
 Everything comes from environment variables, in compose from `.env` (template: [`.env.example`](../.env.example)).
 The app checks them at start and exits with a list of what is wrong.
-Login, `SESSION_SECRET`, `DISCORD_CLIENT_*` and `PRIVACY_*` take effect with step 2 (Discord login).
 
 ## App
 
 | Variable | Required | Default | Meaning |
 | --- | --- | --- | --- |
-| `NODE_ENV` | no | `development` | `production` makes `LEGAL_*` required. `.env.example` sets it |
+| `NODE_ENV` | no | `development` | `production` makes `LEGAL_NAME`, `LEGAL_ADDRESS` and `LEGAL_EMAIL` required. `.env.example` sets it |
 | `BASE_URL` | yes | | Public address, e.g. `https://dice.example.org`: https (http only outside production), no path, query or credentials. Builds the login redirect, the CSP and the WebSocket origin check |
 | `PORT` | no | `3000` | Port on `127.0.0.1` that compose publishes. Inside the container always 3000 |
 

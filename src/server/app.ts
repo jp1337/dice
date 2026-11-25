@@ -65,12 +65,16 @@ export function serializeError(err: Error & { query?: unknown; params?: unknown;
   };
 }
 
+// Without the query string, which may carry codes or tokens, and without the guest token in the path:
+// "/z/<token>" in a log is the key to watch the room. Logged as "/z/:token" and "/ws/watch/:token".
+const logPath = (url: string) => url.split("?")[0]!.replace(/^\/(z|ws\/watch)\/[^/]+/, "/$1/:token");
+
 function logRequest(request: FastifyRequest, reply: FastifyReply) {
   request.log.info(
     {
       ip: logIp(request.ip),
       method: request.method,
-      path: request.url.split("?")[0], // query strings may carry codes or tokens
+      path: logPath(request.url),
       status: reply.statusCode,
       userId: request.user?.id ?? null, // set by routes that resolve the session
       ms: Math.round(reply.elapsedTime),
@@ -128,7 +132,7 @@ export async function buildApp(config: Config, deps: Deps) {
       // req: Fastify's own lines (all switched off above) would carry the full address and the query string.
       serializers: {
         err: serializeError as (err: Error) => { type: string; message: string; stack: string },
-        req: (request: FastifyRequest) => ({ method: request.method, url: request.url.split("?")[0], remoteAddress: logIp(request.ip) }),
+        req: (request: FastifyRequest) => ({ method: request.method, url: logPath(request.url), remoteAddress: logIp(request.ip) }),
       },
       ...(deps.logStream && { stream: deps.logStream }),
     },
@@ -180,7 +184,9 @@ export async function buildApp(config: Config, deps: Deps) {
     return reply.code(status).send({ error: STATUS_CODES[status] ?? "Error" });
   });
 
-  // Per client IP (request.ip honours TRUSTED_PROXIES). Routes opt in with config.rateLimit.
+  // Per client IP (request.ip honours TRUSTED_PROXIES). Routes opt in with onRequest: app.rateLimit(...),
+  // not config.rateLimit: the plugin gives every route its own counter, and Fastify copies each GET into
+  // a HEAD route, so config.rateLimit gave HEAD a second, separate budget. The hook is shared by both.
   await app.register(fastifyRateLimit, { global: false });
   // Signs the short-lived login state cookie; key derived from SESSION_SECRET, separate from session ids.
   await app.register(fastifyCookie, { secret: createHmac("sha256", config.sessionSecret).update("cookie-signing").digest() });
@@ -189,7 +195,7 @@ export async function buildApp(config: Config, deps: Deps) {
 
   // /healthz is public and touches the database, so it is limited (CodeQL js/missing-rate-limiting).
   // Generous enough for the container healthcheck and the deploy poll, which share one source address.
-  app.get("/healthz", { config: { rateLimit: { max: HEALTHZ_LIMIT_PER_MINUTE, timeWindow: "1 minute" } } }, async (request, reply) => {
+  app.get("/healthz", { onRequest: app.rateLimit({ max: HEALTHZ_LIMIT_PER_MINUTE, timeWindow: "1 minute" }) }, async (request, reply) => {
     try {
       await deps.pool.query("select 1");
       return reply.type(TEXT).send("ok");
@@ -207,7 +213,7 @@ export async function buildApp(config: Config, deps: Deps) {
   for (const url of SPA_ROUTES) {
     const watch = url === WATCH_ROUTE;
     // The guest page is public and touches the database, so it is limited like the guest socket.
-    const options = watch ? { config: { rateLimit: { max: GUEST_CONNECTS_PER_MINUTE, timeWindow: "1 minute" } } } : {};
+    const options = watch ? { onRequest: app.rateLimit({ max: GUEST_CONNECTS_PER_MINUTE, timeWindow: "1 minute" }) } : {};
     app.get<{ Params: { token: string } }>(url, options, async (request, reply) => {
       if (spaHtml === null || (watch && !(await watchLinkActive(request.params.token)))) return reply.callNotFound();
       return reply.type(HTML).send(spaHtml);

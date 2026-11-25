@@ -82,7 +82,7 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
   const sessionId = (token: string) => sessionIdFor(config.sessionSecret, token);
   const redirectUri = new URL("/auth/callback", config.baseUrl).href;
   const cookieBase = { httpOnly: true, secure: true, sameSite: "lax" } as const;
-  const loginLimit = { rateLimit: { max: LOGIN_LIMIT_PER_MINUTE, timeWindow: "1 minute" } };
+  const loginLimit = () => ({ onRequest: app.rateLimit({ max: LOGIN_LIMIT_PER_MINUTE, timeWindow: "1 minute" }) });
 
   app.decorateRequest("user", null);
   app.decorateRequest("session", null);
@@ -107,7 +107,7 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
     if (!request.user) return reply.code(401).send({ error: "unauthorized" });
   }
 
-  app.get<{ Querystring: { next?: string } }>("/auth/login", { config: loginLimit }, (request, reply) => {
+  app.get<{ Querystring: { next?: string } }>("/auth/login", loginLimit(), (request, reply) => {
     const state = randomBytes(32).toString("base64url");
     // The target survives the round trip in the signed cookie, never in the URL sent to Discord.
     // The issue time is signed too: the callback enforces the 10 minutes even if a client keeps the cookie longer.
@@ -149,7 +149,7 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
     }
   }
 
-  app.get<{ Querystring: Record<string, string | undefined> }>("/auth/callback", { config: loginLimit }, async (request, reply) => {
+  app.get<{ Querystring: Record<string, string | string[] | undefined> }>("/auth/callback", loginLimit(), async (request, reply) => {
     const raw = request.cookies[STATE_COOKIE];
     const unsigned = raw ? request.unsignCookie(raw) : null;
     const [, signedState = "", issuedAt = "0", signedNext] = (unsigned?.valid && unsigned.value?.match(/^([\w-]+):(\d+):(.*)$/s)) || [];
@@ -166,7 +166,9 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
       return reply.code(status).type(HTML).send(errorPage(title, text, retry));
     };
 
-    const { code, state, error } = request.query;
+    // A repeated parameter arrives as an array (hashing that threw: a 500 instead of this page): only a
+    // single value counts.
+    const [code, state, error] = [request.query.code, request.query.state, request.query.error].map((v) => (typeof v === "string" ? v : undefined));
     if (error) return fail(error === "access_denied" ? 401 : 400, `discord: ${error === "access_denied" ? error : "error"}`);
     if (!expected) return fail(400, "state cookie missing or invalid");
     // Digests: equal length whatever the input, so timingSafeEqual never throws (e.g. on non-ASCII).
@@ -235,7 +237,7 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
 
   app.get<{ Params: { userId: string; hash: string } }>("/avatars/:userId/:hash", { preHandler: requireUser }, async (request, reply) => {
     const { userId, hash } = request.params;
-    if (!/^[0-9a-f-]{36}$/.test(userId)) return reply.code(404).send({ error: "not_found" });
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(userId)) return reply.code(404).send({ error: "not_found" });
     const [row] = await db
       .select({ hash: users.avatarHash, image: users.avatarImage, type: users.avatarContentType })
       .from(users)

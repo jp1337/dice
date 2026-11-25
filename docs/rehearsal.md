@@ -13,7 +13,7 @@ A host can play a whole game alone before the event, with simulated players.
 | | Test room |
 | --- | --- |
 | Simulated players | Roll by themselves about 3 seconds after their turn comes, with the same rules and host tools as everyone. A six pauses the game for them too: press „Weiter“ |
-| Last player | A simulated last player keeps rolling until a six; it never takes the last place itself |
+| Last player | A simulated last player keeps rolling until a six; it never takes the last place itself. With the last place given automatically (setting), it gets it at once |
 | When they roll | Only while someone has the room open (a member or a guest) |
 | Normal rooms | Refuse simulated players |
 

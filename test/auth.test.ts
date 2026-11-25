@@ -70,6 +70,14 @@ describe("without a database", () => {
     expect(res.headers["cache-control"]).toBe("no-store");
   });
 
+  // "?state=a&state=b" made state an array, and hashing it threw: a 500 in JSON instead of the error page.
+  it("rejects a repeated state parameter with the error page", async () => {
+    const { state, cookie } = await startLogin(app);
+    const res = await app.inject({ url: `/auth/callback?code=c&state=${state}&state=${state}`, cookies: { [STATE_COOKIE]: cookie.value } });
+    expect(res.statusCode).toBe(400);
+    expect(res.headers["content-type"]).toContain("text/html");
+  });
+
   it("rejects a callback without the state cookie (e.g. opened in another browser)", async () => {
     const res = await app.inject({ url: "/auth/callback?code=c&state=s" });
     expect(res.statusCode).toBe(400);
@@ -363,6 +371,8 @@ describe.skipIf(!dbUrl)("login against a fake Discord", () => {
       expect(stale.statusCode).toBe(404);
       expect(stale.headers["cache-control"]).toBe("no-store");
       expect((await app.inject({ url: `/avatars/nope/${hash("a")}`, cookies: { [SESSION_COOKIE]: token! } })).statusCode).toBe(404);
+      // 36 characters of hex and dashes, but no UUID: PostgreSQL refused it, and that was a 500.
+      expect((await app.inject({ url: `/avatars/${"-".repeat(36)}/${hash("a")}`, cookies: { [SESSION_COOKIE]: token! } })).statusCode).toBe(404);
     });
 
     it("prefers the server avatar and fetches animated ones as static PNG", async () => {

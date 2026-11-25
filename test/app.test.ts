@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { connect, type AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { HEALTHZ_LIMIT_PER_MINUTE, serializeError } from "../src/server/app.js";
+import { LOGIN_LIMIT_PER_MINUTE } from "../src/server/auth.js";
+import { GUEST_CONNECTS_PER_MINUTE } from "../src/server/rooms.js";
 import { legalEnv, makeApp } from "./helpers.js";
 
 const ROBOTS = "noindex, nofollow, noarchive, nosnippet, noimageindex";
@@ -68,6 +70,18 @@ describe("every kind of response", () => {
     expect(conf).toMatch(new RegExp(`^ {4}access_log \\S+ ${name};$`, "m"));
     // The map shortens IPv4 to /16 and IPv6 to /48, the same as src/server/log-ip.ts.
     expect(conf).toMatch(/^map \$remote_addr \$dice_ip \{$/m);
+    // A guest link is the token in the path: $uri as it is would log the key to the room.
+    expect(line).not.toMatch(/\$uri\b/);
+    expect(line).toContain("$dice_uri");
+    expect(conf).toMatch(/^map \$uri \$dice_uri \{$/m);
+  });
+
+  it.each([`/z/${"a".repeat(22)}`, `/ws/watch/${"a".repeat(22)}`])("never logs the guest token of %s", async (url) => {
+    logs.length = 0;
+    await app.inject({ url });
+    const line = logs.find((l) => l.msg === "request");
+    expect(line?.path).toMatch(/^\/(z|ws\/watch)\/:token$/);
+    expect(JSON.stringify(logs)).not.toContain("a".repeat(22));
   });
 
   it("also on errors", async () => {
@@ -239,6 +253,23 @@ describe("rate limiting", () => {
       expect(res.statusCode).toBe(429);
       expectHeaders(res.headers);
       expect(res.headers["cache-control"]).toBe("no-store");
+    } finally {
+      await limited.close();
+    }
+  });
+
+  // Fastify adds a HEAD route beside every GET. The plugin gave each route its own counter, so HEAD had a
+  // second budget, and HEAD /auth/callback runs the whole login.
+  it.each([
+    ["/healthz", HEALTHZ_LIMIT_PER_MINUTE],
+    ["/auth/login", LOGIN_LIMIT_PER_MINUTE],
+    ["/auth/callback", LOGIN_LIMIT_PER_MINUTE],
+    [`/z/${"a".repeat(22)}`, GUEST_CONNECTS_PER_MINUTE],
+  ])("HEAD %s shares the budget of GET", async (url, max) => {
+    const { app: limited } = await makeApp({ DISCORD_API_BASE: "http://127.0.0.1:1" });
+    try {
+      for (let i = 0; i < max; i++) expect((await limited.inject({ url })).statusCode).not.toBe(429);
+      expect((await limited.inject({ method: "HEAD", url })).statusCode).toBe(429);
     } finally {
       await limited.close();
     }

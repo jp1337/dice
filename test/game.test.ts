@@ -11,10 +11,10 @@ import { CommandError, type GameCommandContext, handleGameCommand } from "../src
 import { MAX_GUESTS_PER_IP, MAX_GUESTS_PER_ROOM, MAX_SIMULATED_PLAYERS } from "../src/server/rooms.js";
 import { type GameEvent, type Participation, type RoomView, type Settings, defaultSettings } from "../src/shared/contracts.js";
 import { reduce } from "../src/shared/game/reduce.js";
-import { makeApp } from "./helpers.js";
+import { makeApp, ownDatabase } from "./helpers.js";
 import { Client, HOST2_ID, HOST_ID, ORIGIN, type User, env, makeUser as makeUserIn, until } from "./ws.js";
 
-const dbUrl = process.env.TEST_DATABASE_URL;
+const dbUrl = await ownDatabase();
 // The shared app has no roll cooldown (it has its own tests and app) and fast simulated players.
 const BOT_DELAY = 30; // injected instead of SIMULATED_ROLL_DELAY_MS
 // Dice come from crypto.randomInt unless a test queues values: a test that must not see a 6 says so.
@@ -50,7 +50,7 @@ describe("handleGameCommand: what decide cannot see", () => {
   const [A, B, S] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
   const ctx = (members: [string, Participation][], over: Partial<GameCommandContext> = {}): GameCommandContext => ({
     actor: { userId: A, canModerate: true },
-    room: { game: reduce([], defaultSettings), members: new Map(members.map(([id, participation]) => [id, { participation }])), lastRollAt: 0 },
+    room: { game: reduce([], defaultSettings), settings: defaultSettings, members: new Map(members.map(([id, participation]) => [id, { participation }])), lastRollAt: 0 },
     rollCooldownMs: 2000,
     now: 10_000,
     randomInt,

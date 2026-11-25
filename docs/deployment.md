@@ -35,14 +35,14 @@ Start from [nginx.example.conf](nginx.example.conf). What the app needs from any
 | `proxy_read_timeout` well above 25 s | The app pings every 25 s; shorter timeouts drop idle players |
 | `X-Forwarded-For`, `X-Forwarded-Proto` | Client IP for logs and rate limits |
 | `TRUSTED_PROXIES` = the address the proxy connects from | Otherwise those headers are ignored. Compose default: `172.31.250.1` |
-| `X-Robots-Tag` and the security headers on the proxy's own error pages | 400, 413 and 502 come from nginx, not the app; the example's `map` + `add_header` fills them in only there |
+| `X-Robots-Tag` and the security headers on the proxy's own error pages | nginx answers malformed URLs (400), bodies over its limit (413) and 502 during a restart itself; the example's `map` + `add_header` fills them in only there |
 
 Behind Cloudflare: let nginx restore the client address (`set_real_ip_from` with Cloudflare's ranges,
 `real_ip_header CF-Connecting-IP`) and set `PRIVACY_CLOUDFLARE=true`.
 
 ## 4. Images and updates
 
-CI publishes after all checks pass on `main`:
+CI publishes after the checks pass on `main` (CodeQL ran on the pull request):
 
 | Tag | Points to |
 | --- | --- |
@@ -65,6 +65,6 @@ docker compose exec -T postgres psql -U dice dice < dice-2026-12-01.sql   # rest
 
 ## 6. Logs
 
-One JSON line per request on stdout: time, shortened client IP, method, path without query string, status, user ID.
+One JSON line per request on stdout: time, shortened client IP, method, path without query string or guest token, status, user ID.
 Rejected logins get their own line. No tokens, no cookies.
 Limit how long your server keeps them: [data-and-deletion.md](data-and-deletion.md#logs).

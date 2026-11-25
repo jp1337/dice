@@ -1,6 +1,7 @@
 // Validates a game command against the state and the actor's rights (spec 4.6, 7) and returns the events
 // to append. Pure: randomness comes in through ctx.randomInt (the server passes crypto.randomInt).
-import type { ClientMessage, EventPayload, EventType, GameState, UserId } from "../contracts.js";
+import type { ClientMessage, EventPayload, EventType, GameEvent, GameState, Settings, UserId } from "../contracts.js";
+import { reduce } from "./reduce.js";
 
 export const gameCommandTypes = [
   "start",
@@ -29,6 +30,7 @@ export interface DecideContext {
   actorIsHost: boolean; // host or co-host of this room
   players: readonly UserId[]; // members with participation "player"; used by start
   randomInt: (min: number, maxExclusive: number) => number;
+  settings: Settings; // the room's; an undo is checked by replaying the game without the roll
 }
 
 export type DecideResult = { events: NewEvent[] } | { error: { code: string; message: string } };
@@ -44,6 +46,15 @@ export function shuffle<T>(items: readonly T[], randomInt: DecideContext["random
     [a[i], a[j]] = [a[j] as T, a[i] as T];
   }
   return a;
+}
+
+// A finished game runs again without that roll, or the undo does nothing. A last player who rolled a 3 and
+// then took the last place: taking back the 3 left the game over, while the button promised "Das Spiel geht
+// dann weiter". Shared with the client, which shows the button only when this holds.
+export function undoReopens(state: GameState, settings: Settings, seq: number) {
+  if (state.status !== "finished") return true;
+  const undone = { type: "undone", actorUserId: null, payload: { seq }, seq: (state.history.at(-1)?.seq ?? 0) + 1, createdAt: "" } as GameEvent;
+  return reduce([...state.history, undone], settings).status !== "finished";
 }
 
 export function decide(state: GameState, command: GameCommand, ctx: DecideContext): DecideResult {
@@ -75,6 +86,7 @@ export function decide(state: GameState, command: GameCommand, ctx: DecideContex
     if (command.seq !== undefined && command.seq !== target?.seq)
       return fail("undo_stale", "Dieser Wurf ist schon zurückgenommen oder nicht mehr der letzte.");
     if (!target) return fail("nothing_to_undo", "Es gibt keinen Wurf zum Zurücknehmen.");
+    if (!undoReopens(state, ctx.settings, target.seq)) return fail("undo_no_effect", "Ohne diesen Wurf wäre das Spiel trotzdem vorbei.");
     return ev("undone", { seq: target.seq });
   }
 

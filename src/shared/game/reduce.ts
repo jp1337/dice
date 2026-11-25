@@ -92,6 +92,7 @@ export function reduce(events: readonly GameEvent[], settings: Settings): GameSt
   // removed player never holds a place.
   const givePlace = (uid: UserId) => {
     s.gifts.push(uid);
+    s.bonus.delete(uid); // nobody with a place rolls again
     removeAt(s.order.indexOf(uid));
   };
   // Called after every change to a running game: R5 auto and the end of the game.
