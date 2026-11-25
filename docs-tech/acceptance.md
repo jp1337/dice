@@ -53,7 +53,7 @@ Order 1, 2, 3, 4, 6, 5: the restart would cut the idle socket.
 | 5 | restart 0.4 s, all 3 back with identical state after 2.2 s, nginx 502s meanwhile labelled |
 | 6 | first state for all 100 after 1.6 s, all see 101 members after 1.9 s; broadcast p50 27 ms, p95 32 ms, max 33 ms |
 
-Full run (31 min idle): pending.
+Full run, 2026-11-25: check 4 PASS, open after 31 min idle, 74 server pings (≥ 73 expected), round trip answered. The other five PASS too (load p95 30 ms); that run predates the shutdown fix, so its restart took 10.4 s.
 
 ## Found by the harness
 
