@@ -35,7 +35,7 @@ jobs:
       - name: Generated files match their sources
         run: |
           npx drizzle-kit generate
-          node scripts/generate-og-image.mjs
+          node scripts/generate-og-image.mjs --check # pixels: PNG bytes differ between zlib builds
           node scripts/generate-sounds.mjs
           git add --intent-to-add --all
           git diff --exit-code --stat

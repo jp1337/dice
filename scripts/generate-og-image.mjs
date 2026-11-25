@@ -1,7 +1,7 @@
 // Draws the link preview image of spec 10.2: a small square PNG (Discord shows it as the thumbnail of a
-// "summary" card), two dice on a gold ribbon, nothing about any room. Pure Node, with a minimal PNG encoder on node:zlib. Deterministic. Usage: node scripts/generate-og-image.mjs
-import { writeFileSync } from "node:fs";
-import { crc32, deflateSync } from "node:zlib";
+// "summary" card), two dice on a gold ribbon, nothing about any room. Pure Node, with a minimal PNG encoder on node:zlib. Deterministic pixels; the compressed bytes depend on the zlib build. Usage: node scripts/generate-og-image.mjs
+import { readFileSync, writeFileSync } from "node:fs";
+import { crc32, deflateSync, inflateSync } from "node:zlib";
 
 const W = 256;
 const H = 256;
@@ -95,5 +95,23 @@ const png = Buffer.concat([
   chunk("IDAT", deflateSync(raw, { level: 9 })),
   chunk("IEND", Buffer.alloc(0)),
 ]);
-writeFileSync(new URL("../src/web/public/og.png", import.meta.url), png);
+const target = new URL("../src/web/public/og.png", import.meta.url);
+
+// --check (CI): deflate output differs between zlib builds (Node's own in CI, zlib-ng in some distributions'
+// Node), so the same pixels give other bytes. Compares header and pixels instead, which every zlib inflates
+// alike; exits 1 if the committed image is not what this script draws.
+if (process.argv.includes("--check")) {
+  const file = readFileSync(target);
+  const chunks = { IHDR: [], IDAT: [] };
+  for (let at = 8; at < file.length; ) {
+    const length = file.readUInt32BE(at);
+    const type = file.toString("latin1", at + 4, at + 8);
+    chunks[type]?.push(file.subarray(at + 8, at + 8 + length));
+    at += 12 + length;
+  }
+  const same = Buffer.concat(chunks.IHDR).equals(header) && inflateSync(Buffer.concat(chunks.IDAT)).equals(raw);
+  console.log(same ? "og.png: matches the script" : "og.png: differs from what the script draws; run it and commit the result");
+  process.exit(same ? 0 : 1);
+}
+writeFileSync(target, png);
 console.log(`og.png: ${png.length} bytes`);
