@@ -35,6 +35,7 @@ Start from [nginx.example.conf](nginx.example.conf). What the app needs from any
 | `proxy_read_timeout` well above 25 s | The app pings every 25 s; shorter timeouts drop idle players |
 | `X-Forwarded-For`, `X-Forwarded-Proto` | Client IP for logs and rate limits |
 | `TRUSTED_PROXIES` = the address the proxy connects from | Otherwise those headers are ignored. Compose default: `172.31.250.1` |
+| `X-Robots-Tag` and the security headers on the proxy's own error pages | 400, 413 and 502 come from nginx, not the app; the example's `map` + `add_header` fills them in only there |
 
 Behind Cloudflare: let nginx restore the client address (`set_real_ip_from` with Cloudflare's ranges,
 `real_ip_header CF-Connecting-IP`) and set `PRIVACY_CLOUDFLARE=true`.

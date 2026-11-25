@@ -10,6 +10,7 @@ A page in doubt: would a stranger running dice need it? Yes → `docs/`. Only th
 | [spec.md](spec.md) | What to build: rules, roles, events, interfaces, security, retention, tests, steps |
 | [architecture.md](architecture.md) | Source layout, request path, contracts and event log, rules for changing them |
 | [testing.md](testing.md) | Running the tests, PostgreSQL in podman, the fake Discord |
+| [acceptance.md](acceptance.md) | Acceptance harness: app behind real nginx, idle WebSocket, restart, 100 clients |
 | [ci.md](ci.md) | CI jobs, required checks, image publishing, repository settings set by hand |
 | [ui-assets.md](ui-assets.md) | Generated sounds and preview image, CSP rules for the web code, the UI building blocks |
 | [dependencies.md](dependencies.md) | Renovate policy |

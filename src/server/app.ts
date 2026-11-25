@@ -21,6 +21,7 @@ import { GUEST_CONNECTS_PER_MINUTE, SIMULATED_ROLL_DELAY_MS, registerRooms } fro
 import { robotsTxt } from "./robots.js";
 
 export const HEALTHZ_LIMIT_PER_MINUTE = 120;
+export const SHUTDOWN_GRACE_MS = 2000; // for WebSocket close handshakes; docker stops after 10 s
 
 export type Deps = {
   pool: Pool;
@@ -213,7 +214,21 @@ export async function buildApp(config: Config, deps: Deps) {
   });
 
   // Larger client messages close the connection (1009) before they are buffered or parsed.
-  await app.register(fastifyWebsocket, { options: { maxPayload: MAX_CLIENT_MESSAGE_BYTES } });
+  // On shutdown every client is told to reconnect (1012). One that never answers the close handshake would
+  // otherwise hold the process for ws's 30 s close timeout, past the container's 10 s stop timeout.
+  await app.register(fastifyWebsocket, {
+    options: { maxPayload: MAX_CLIENT_MESSAGE_BYTES },
+    preClose: async () => {
+      const server = app.websocketServer;
+      const closed = new Promise((resolve) => server.close(resolve));
+      for (const client of server.clients) client.close(1012, "Der Server startet neu. Bitte verbinde dich neu.");
+      const cutOff = setTimeout(() => {
+        for (const client of server.clients) client.terminate();
+      }, SHUTDOWN_GRACE_MS);
+      await closed;
+      clearTimeout(cutOff);
+    },
+  });
   registerRooms(app, config, db, auth, {
     pingIntervalMs: deps.pingIntervalMs ?? PING_INTERVAL_MS,
     rollCooldownMs: deps.rollCooldownMs ?? ROLL_COOLDOWN_MS,

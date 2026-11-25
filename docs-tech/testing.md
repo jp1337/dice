@@ -21,6 +21,8 @@ podman stop dice-test-pg
 
 Tests migrate the database themselves and must survive running twice against the same one.
 
+Behind real nginx, idle for 31 minutes, restarts and 100 clients: [acceptance.md](acceptance.md) (not in CI).
+
 ## Files
 
 | File | Covers |
