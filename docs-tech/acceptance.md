@@ -37,12 +37,12 @@ Order 1, 2, 3, 4, 6, 5: the restart would cut the idle socket.
 | 2 | Spec 8.3, 8.4: headers on every response | `X-Robots-Tag`, CSP, `nosniff`, `Referrer-Policy` on `/`, `/r/<slug>`, legal pages, `robots.txt`, `/healthz`, an asset, 404s, `/%zz`, 401 |
 | 3 | Spec 8.2: client IP | the log shows the probe client's address for a request through nginx, through nginx with a forged `X-Forwarded-For`, and straight to the app port with one |
 | 4 | Spec 8.1, 16: idle WebSocket | open after the idle time with only server pings, ≥ one ping per 25 s, then one round trip |
-| 5 | Spec 4.9, 16: restart mid-session | `podman restart` under 3 clients; they reconnect by themselves (growing delay, jitter) and get the identical state; nginx's 502s meanwhile carry `X-Robots-Tag`. Rolls as well once the game commands (step 5) exist |
+| 5 | Spec 4.9, 16: restart mid-game | 3 connected clients + 4 offline players, real rolls until a gift place exists, then `podman restart`. Clients reconnect by themselves (growing delay, jitter) and get the identical state (events, gift order, co-host). A roll right after the restart, inside 2 s of the last, is refused with `cooldown`. Two more rolls follow, event seqs without gaps. nginx's 502s meanwhile carry `X-Robots-Tag` |
 | 6 | Spec 16: 100 clients | 100 sockets join one room; time until all see all; one host broadcast to all, p95 under 1 s |
 
 ## Last results
 
-2026-11-25, `--quick`, rootless podman 6.1, nginx 1.31.6, all PASS:
+2026-11-25, `--quick` on main with the game commands, rootless podman 6.1, nginx 1.31.6, all PASS:
 
 | # | Numbers |
 | --- | --- |
@@ -50,10 +50,10 @@ Order 1, 2, 3, 4, 6, 5: the restart would cut the idle socket.
 | 2 | all 4 headers on 11 responses (200, 404, 400 from nginx, 401) |
 | 3 | logged the client's address all 3 times; nginx's and the forged one never |
 | 4 | open after 3 min, 7 server pings, round trip answered |
-| 5 | restart 0.4 s, all 3 back with identical state after 2.2 s, nginx 502s meanwhile labelled |
-| 6 | first state for all 100 after 1.6 s, all see 101 members after 1.9 s; broadcast p50 27 ms, p95 32 ms, max 33 ms |
+| 5 | restart 0.4 s; all 3 back with identical state (6 events, 3 rolls, 1 gift place) after 2.5 s; a roll 976 ms after the last refused with `cooldown`; 2 more rolls, seqs 1..8 without gaps |
+| 6 | first state for all 100 after 1.5 s, all see 101 members after 1.8 s; broadcast p50 18 ms, p95 22 ms, max 23 ms |
 
-Full run, 2026-11-25: check 4 PASS, open after 31 min idle, 74 server pings (≥ 73 expected), round trip answered. The other five PASS too (load p95 30 ms); that run predates the shutdown fix, so its restart took 10.4 s.
+Full run, 2026-11-25: check 4 PASS, open after 31 min idle, 74 server pings (≥ 73 expected), round trip answered. The other five PASS too (load p95 30 ms); that run predates the shutdown fix (restart 10.4 s) and the game commands (no rolls in check 5).
 
 ## Found by the harness
 

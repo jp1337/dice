@@ -13,7 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import WebSocket from "ws"; // shortcut: transitive dependency of @fastify/websocket; Node's own WebSocket cannot set Host/SNI or a CA
 import { SESSION_COOKIE, sessionIdFor } from "../../src/server/auth.ts";
-import { PING_INTERVAL_MS } from "../../src/shared/constants.ts";
+import { PING_INTERVAL_MS, ROLL_COOLDOWN_MS } from "../../src/shared/constants.ts";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}`));
@@ -388,6 +388,68 @@ async function load() {
   return { ok, reason: `${LOAD_CLIENTS} clients: first state for all after ${ms(firstMax)}, all see ${total} connected members after ${ms(allMax)} (presence is batched up to 2 s); broadcast p50 ${ms(p50)}, p95 ${ms(p95)}, max ${ms(max)}` };
 }
 
+// Sends a message and waits for done(); throws on an error answer.
+async function command(client, message, done) {
+  const seen = client.messages.length;
+  client.ws.send(JSON.stringify(message));
+  const error = () => client.messages.slice(seen).find((m) => m.type === "error");
+  await until(() => done() || error(), 10_000, `${message.type} to take effect`);
+  if (!done()) throw new Error(`${message.type}: ${error().code}`);
+}
+
+// n real rolls: from the active player's own socket if connected, else the host rolls for them.
+// A six pauses the game until the host continues; the cooldown is waited out.
+async function rolls(sessions, n) {
+  const host = () => sessions[0].client;
+  const count = () => host().state.game.history.filter((e) => e.type === "rolled").length;
+  const target = count() + n;
+  while (count() < target) {
+    const game = host().state.game;
+    if (game.status !== "running") throw new Error(`game ${game.status} after ${count()} rolls`);
+    if (game.pause === "six") {
+      await command(host(), { type: "continue" }, () => host().state.game.pause === null);
+      continue;
+    }
+    const own = sessions.find((s) => s.user.id === game.activeUserId)?.client;
+    const [client, message] = own ? [own, { type: "roll" }] : [host(), { type: "roll_for", userId: game.activeUserId }];
+    const before = count();
+    const seen = client.messages.length;
+    client.ws.send(JSON.stringify(message));
+    const error = () => client.messages.slice(seen).find((m) => m.type === "error");
+    await until(() => count() > before || error(), 10_000, "a roll");
+    if (error()?.code === "cooldown") await sleep(250);
+    else if (error()) throw new Error(`${message.type}: ${error().code}`);
+  }
+  const turn = (s) => JSON.stringify([s.client.state.game.lastRoll, s.client.state.game.activeUserId, s.client.state.game.giftOrder]);
+  await until(() => sessions.every((s) => turn(s) === turn(sessions[0])), 5_000, "the last roll to reach everyone");
+}
+
+// Right after the restart a fresh host socket rolls as soon as the app is back. Within 2 s of the last roll
+// it must be refused with "cooldown"; a roll accepted inside the window means the cooldown was lost.
+async function probeCooldown(slug, lastRollAt) {
+  for (;;) {
+    const client = connect(users.host, slug);
+    await until(() => client.state || client.closed, 5_000, "the app to accept a socket").catch(() => {});
+    if (!client.state) {
+      client.ws.terminate();
+      await sleep(50);
+      continue;
+    }
+    const game = client.state.game;
+    if (game.pause === "six") return { after: 0, problem: "cooldown not probed: the last roll was a six" };
+    const after = Date.now() - lastRollAt;
+    const seen = client.messages.length;
+    client.ws.send(JSON.stringify({ type: "roll_for", userId: game.activeUserId }));
+    const answer = () => client.messages.slice(seen).find((m) => m.type === "error" || m.type === "state");
+    await until(answer, 5_000, "an answer to the probe");
+    client.ws.close();
+    const code = answer().type === "error" ? answer().code : null;
+    if (code === "cooldown") return { after, code };
+    const why = after >= ROLL_COOLDOWN_MS ? `the app was back only ${after} ms after the last roll` : `answered ${code ?? "with a roll"}, expected cooldown`;
+    return { after, code, accepted: code === null, problem: `cooldown not shown after the restart: ${why}` };
+  }
+}
+
 // 5. Restart the app container under 3 connected clients: they come back by themselves, nothing is lost.
 async function restart() {
   const slug = await createRoom("Neustart");
@@ -411,24 +473,20 @@ async function restart() {
   for (const s of sessions) s.first = s.client;
   const loops = sessions.map(loop);
 
-  // Something to lose: a co-host (an event and a member row), then mid-game a roll (spec 16).
+  // Four more players who leave again before the start: the host rolls for them (roll_for).
+  const offline = users.load.slice(1, 5).map((u) => connect(u, slug));
+  await until(() => offline.every((c) => c.state), 15_000, "the offline players to join");
+  for (const c of offline) c.ws.close();
+
+  // Something to lose: a co-host (an event and a member row) and real rolls mid-game (spec 16).
   const host = sessions[0].client;
   const cohost = users.restart[0].id;
-  host.ws.send(JSON.stringify({ type: "set_cohost", userId: cohost, isCohost: true }));
-  await until(() => sessions.every((s) => s.client.state.members.find((m) => m.userId === cohost)?.isCohost), 10_000, "the co-host to reach everyone");
-  host.ws.send(JSON.stringify({ type: "start" }));
-  const error = () => host.messages.find((m) => m.type === "error");
-  await until(() => host.state.room.status === "running" || error(), 10_000, "the game to start");
-  let lost = "a co-host";
-  if (host.state.room.status === "running") {
-    host.ws.send(JSON.stringify({ type: "roll_for" }));
-    await until(() => sessions.every((s) => s.client.state.game.history.some((e) => e.type === "rolled")) || error(), 10_000, "the roll to reach everyone");
-    if (error()) throw new Error(`roll_for: ${error().code}`);
-    lost = "a co-host and a roll mid-game";
-  } else if (error().code !== "not_implemented") {
-    throw new Error(`start: ${error().code}`);
-  } // else: the game commands (step 5) do not exist yet; the check rolls as soon as they do
-  await sleep(500); // let any follow-up state arrive before the snapshot
+  await command(host, { type: "set_cohost", userId: cohost, isCohost: true }, () => sessions.every((s) => s.client.state.members.find((m) => m.userId === cohost)?.isCohost));
+  await command(host, { type: "start" }, () => host.state.room.status === "running");
+  await rolls(sessions, 3);
+  while (host.state.game.giftOrder.length === 0) await rolls(sessions, 1); // a six, so the gift order is not empty
+  while (host.state.game.pause === "six") await rolls(sessions, 1); // the cooldown probe needs a game that is not paused
+  const lastRoll = host.state.game.history.findLast((e) => e.type === "rolled");
   const comparable = (state) => ({ ...state, members: state.members.map(({ connected: _, ...m }) => m) });
   const before = sessions.map((s) => comparable(s.client.state));
 
@@ -437,13 +495,22 @@ async function restart() {
   const code = await new Promise((resolve) => spawn("podman", ["restart", "-t", "10", names.app], { stdio: "ignore" }).on("exit", resolve));
   if (code !== 0) throw new Error(`podman restart exited with ${code}`);
   const restartedAfter = performance.now() - t0;
+  // The 2 s roll cooldown must survive the restart: a fresh host socket asks for the next roll at once.
+  const probe = await probeCooldown(slug, Date.parse(lastRoll.createdAt));
   await until(() => sessions.every((s) => s.client !== s.first && s.client.state && !s.client.closed) && all(), 120_000, "all 3 clients back with a state");
   const backAfter = performance.now() - t0;
+  await sleep(500); // presence after the reconnects is batched
+  const after = sessions.map((s) => comparable(s.client.state));
+
+  // The game goes on where it stopped: two more rolls, numbered without a gap.
+  await rolls(sessions, 2);
+  const history = sessions[0].client.state.game.history; // the host's: every event
+  const seqs = history.map((e) => e.seq);
+  const rolled = (h) => h.filter((e) => e.type === "rolled").length;
+  const gapless = seqs.every((seq, i) => seq === i + 1) && rolled(history) === rolled(before[0].game.history) + 2 + (probe.accepted ? 1 : 0);
   for (const s of sessions) s.stop = true;
   for (const s of sessions) s.client.ws.close();
   await Promise.all(loops);
-
-  const after = sessions.map((s) => comparable(s.client.state));
   const differ = sessions.flatMap((s, i) => {
     const paths = differences(before[i], after[i]);
     return paths.length > 0 ? [`${s.user.name} at ${paths.slice(0, 3).join(", ")}`] : [];
@@ -453,10 +520,12 @@ async function restart() {
   const unlabelled = refused.filter((r) => !r.robots);
   const problems = [
     ...(differ.length > 0 ? [`state differs for ${differ.join(", ")}`] : []),
+    ...(probe.problem ? [probe.problem] : []),
+    ...(gapless ? [] : [`events after the restart: seqs ${seqs.join(",")}, ${rolled(history)} rolls`]),
     ...(unlabelled.length > 0 ? [`${unlabelled.length} nginx error responses without X-Robots-Tag (status ${unlabelled[0].status})`] : []),
   ];
   const statuses = [...new Set(refused.map((r) => r.status))].join("/") || "none";
-  const reason = `restart took ${ms(restartedAfter)}, all 3 back with identical state (${lost}; ${sessions[0].client.state.game.history.length} events, game ${sessions[0].client.state.room.status}) after ${ms(backAfter)}; ${sessions.reduce((n, s) => n + s.attempts, 0)} reconnect attempts, refused meanwhile: ${statuses}`;
+  const reason = `restart took ${ms(restartedAfter)}, all 3 back with identical state (${before[0].game.history.length} events, ${rolled(before[0].game.history)} rolls, ${before[0].game.giftOrder.length} gift places, co-host) after ${ms(backAfter)}; a roll ${probe.after} ms after the last one: ${probe.code ?? "not refused"}; then 2 more rolls, seqs 1..${seqs.at(-1)} without gaps; ${sessions.reduce((n, s) => n + s.attempts, 0)} reconnect attempts, refused meanwhile: ${statuses}`;
   return problems.length > 0 ? { ok: false, reason: `${problems.join("; ")} (${reason})` } : { ok: true, reason };
 }
 
