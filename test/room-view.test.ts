@@ -40,7 +40,7 @@ import {
   turnList,
   turnText,
 } from "../src/web/lib/room.js";
-import { countdown, initialRoll, rollBusy, rollLocked, rollStep, shownDice } from "../src/web/lib/roll.js";
+import { countdown, displayedView, initialRoll, rollBusy, rollLocked, rollStep, shownDice } from "../src/web/lib/roll.js";
 import { loginHref, parseRoute, socketUrl } from "../src/web/lib/routes.js";
 
 // Fictitious ids and names only.
@@ -305,7 +305,7 @@ describe("what a viewer may click", () => {
   it("the active player rolls, except during a pause, and reacts like everyone", () => {
     const d = deriveRoom(makeView({ game: running() }), true);
     expect(d).toMatchObject({ isActive: true });
-    expect(turnText(makeView({ game: running() }), ANNA, false)).toBe("Du bist dran!");
+    expect(turnText(makeView({ game: running() }), ANNA)).toBe("Du bist dran!");
     expect(d.can).toMatchObject({ roll: true, react: true, claimLastPlace: false, setOwnParticipation: false });
     expect(deriveRoom(makeView({ game: running({ pause: "host" }) }), true).can.roll).toBe(false);
     expect(deriveRoom(makeView({ game: running() }), false).can.roll).toBe(false); // offline
@@ -314,7 +314,7 @@ describe("what a viewer may click", () => {
   it("everyone else sees whose turn it is and may react, unless the room switched reactions off", () => {
     const view = makeView({ game: running(), viewer: { kind: "member", userId: BEN, isHost: false, canModerate: false } });
     expect(deriveRoom(view, true)).toMatchObject({ can: { roll: false, react: true } });
-    expect(turnText(view, BEN, false)).toBe("Am Zug: Anna");
+    expect(turnText(view, BEN)).toBe("Am Zug: Anna");
     expect(deriveRoom({ ...view, room: { ...view.room, settings: { ...defaultSettings, reactions: false } } }, true).can.react).toBe(false);
   });
 
@@ -410,13 +410,22 @@ describe("lists", () => {
     ]);
   });
 
-  it("while the dice tumble, the turn stays with whoever rolled, not the next player", () => {
-    // The server already moved the turn on to Anna; Ben's roll is still in the air.
-    const rolling = { ...view, game: { ...view.game, lastRoll: { userId: BEN, dice: [3, 4] } } };
-    expect(turnText(rolling, ANNA, true)).toBe("Am Zug: Ben");
-    expect(turnList(rolling, true).find((t) => t.active)?.userId).toBe(BEN);
-    expect(turnText(rolling, ANNA, false)).toBe("Du bist dran!"); // landed: now it is Anna's turn
-    expect(turnList(rolling, false).find((t) => t.active)?.userId).toBe(ANNA);
+  it("while the dice tumble, every panel keeps the view from before the roll", () => {
+    // Ben is up; then a state brings his six: a place, Anna's turn, a history line. Then `rolled`.
+    const before = makeView({ game: running({ activeUserId: BEN, history: [ev("game_started", { order: [ANNA, BEN] })] }) });
+    const six = ev("rolled", { userId: BEN, dice: [6] }, BEN);
+    const after = makeView({ game: running({ turnOrder: [ANNA], activeUserId: ANNA, giftOrder: [BEN], lastRoll: { userId: BEN, dice: [6] }, history: [...before.game.history, six] }) });
+    let roll = rollStep(initialRoll, { type: "state", view: before, first: true });
+    roll = rollStep(roll, { type: "state", view: after, first: false });
+    expect(displayedView(roll, after)).toBe(before); // waiting for `rolled`
+    roll = rollStep(roll, { type: "rolled", dice: [6] });
+    const shown = displayedView(roll, after);
+    expect(turnText(shown, ANNA)).toBe("Am Zug: Ben");
+    expect(giftList(shown)).toEqual([]);
+    expect(historyLines(shown, false)).toHaveLength(historyLines(before, false).length);
+    roll = rollStep(roll, { type: "settled" });
+    expect(displayedView(roll, after)).toBe(after); // landed: the result everywhere
+    expect(turnText(displayedView(roll, after), ANNA)).toBe("Du bist dran!");
   });
 
   it("turn order carries each player's profile picture", () => {

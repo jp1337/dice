@@ -135,7 +135,7 @@ directly or through `contracts.ts`. Values for the browser live in `src/shared/c
 | `HowTo` `{settings, open?}` | "So wird gewürfelt": the rules in four lines, worded after the room settings; everyone sees it (lobby: open for non-hosts; game: folded) |
 | `Confetti` | 12 square CSS pieces, `position: fixed`, three falls; hidden with reduced motion |
 | `SixBanner` `{template, name, platz, children?}` | Native modal `<dialog>`: the browser keeps the page behind inert; Escape does nothing; `children` = the host's "Weiter" button |
-| `ReactionBar` `{onReact, disabled?}` | Client cooldown 2 s, mirrors the server |
+| `ReactionBar` `{onReact, disabled?}` | Client cooldown 0.5 s, mirrors the server; emojis rise left and right of the dice, never across them |
 | `useFloatingReactions()` → `{items, add}`, `FloatingReactions` `{items, hidden?}` | `add(msg.emojis)`; place in a `.reaction-stage` element |
 | `Avatar` `{userId, name, avatarUrl, size?}` | Initials on a colour from the user id when there is no image |
 | `ThemeToggle`, `SoundToggles` (Würfel-Ton, Gewinner-Ton), `Switch` | Per-browser settings; reactions have no personal switch, hosts switch them for the room |

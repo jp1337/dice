@@ -657,7 +657,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       players.get(active)!.send({ type: "react", emoji: "🎉" });
       ch.send({ type: "react", emoji: "🎉" });
       other!.send({ type: "react", emoji: "🎉" });
-      other!.send({ type: "react", emoji: "😂" }); // within 2 s: refused
+      other!.send({ type: "react", emoji: "😂" }); // within the cooldown: refused
       await until(() => expect(other!.errors).toEqual(["reaction_too_fast"]));
       // Counted per emoji, however the two land in bundles (usually one).
       for (const c of [ch, guest, other!]) {

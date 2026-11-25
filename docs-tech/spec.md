@@ -114,8 +114,8 @@ connected/disconnected; a disconnected active player is flagged to hosts. Still 
   rooms. Shown: nickname, else server nickname, else global Discord name. Hosts also see the Discord name
   and can reset a nickname.
 - Reactions: six fixed emojis, by anyone logged in (the active player too), flying over the dice without
-  names, never stored. 1 per 2 s per person, enforced by the server, which batches bursts. Only hosts and
-  co-hosts switch them on and off, for the whole room (lobby and game); players have no switch. Respect
+  names, never stored. 1 per 0.5 s per person (made for spamming), enforced by the server, which batches bursts. Only hosts and
+  co-hosts switch them on and off, for the whole room (lobby settings, in the game under "Weitere Host-Werkzeuge"); players have no switch. Respect
   reduced motion.
 
 ## Authentication

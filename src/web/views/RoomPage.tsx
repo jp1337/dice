@@ -6,7 +6,7 @@ import type { RoomSummary, RoomView } from "../../shared/contracts.js";
 import { SixBanner } from "../components/SixBanner.js";
 import { type ProbeResult, showErrorPage, statusLabel } from "../lib/connection.js";
 import { deriveRoom, finalSixOpen, sixBannerValues } from "../lib/room.js";
-import { rollBusy } from "../lib/roll.js";
+import { SIX_BANNER_DELAY_MS, rollBusy } from "../lib/roll.js";
 import { loginHref, socketUrl } from "../lib/routes.js";
 import { useRoom } from "../lib/useRoom.js";
 import { Game } from "./Game.js";
@@ -138,7 +138,15 @@ function RoomScreen({ view, room, label }: { view: RoomView; room: ReturnType<ty
     }
   };
   const six = sixBannerValues(view);
-  const showSix = !busy && six !== null && (view.game.pause === "six" || finalSix);
+  // The six banner waits a moment after the dice land, so everyone sees the six itself first.
+  const sixDue = !busy && six !== null && (view.game.pause === "six" || finalSix);
+  const [sixShown, setSixShown] = useState(false);
+  useEffect(() => {
+    if (!sixDue) return setSixShown(false);
+    const timer = setTimeout(() => setSixShown(true), SIX_BANNER_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [sixDue]);
+  const showSix = sixDue && sixShown;
 
   return (
     <>
