@@ -31,12 +31,10 @@ ffmpeg -i dice-shake-2.ogg -i dice-throw-1.ogg -filter_complex "[0]atrim=0:0.65,
   writer (`node:zlib`). Square and small: `twitter:card` is `summary`, so Discord shows it as a
   thumbnail beside `og:title` (spec 10.2: "kleines Bild"). No text in it.
 - `src/web/public/` is copied unchanged to `dist/web/`; `favicon.svg` (a 16×16 pixel die showing six in ink, snow and berry, `shape-rendering="crispEdges"`) and `theme-init.js` are hand-written.
-- `src/web/fonts/PixelifySans.ttf` (77 KB, variable 400–700): Pixelify Sans by the Pixelify Sans
-  Project Authors, SIL Open Font License 1.1 (`OFL.txt` beside it), unmodified, from
-  `github.com/google/fonts/tree/main/ofl/pixelifysans`. `style.css` imports it relatively, so Vite hashes it into `/assets/` (cached for a year).
-- `src/web/fonts/Jersey10-Regular.ttf` (78 KB): Jersey 10 by the Soft Type Project Authors, OFL 1.1 (`OFL-Jersey10.txt`), unmodified, from
-  `github.com/google/fonts/tree/main/ofl/jersey10`; digits only, `size-adjust: 145%`. Silkscreen was tried
-  first: its 4 reads as a blob.
+- `src/web/fonts/Jersey10-Regular.ttf` (78 KB): Jersey 10 by the Soft Type Project Authors, OFL 1.1
+  (`OFL-Jersey10.txt`), unmodified, from `github.com/google/fonts/tree/main/ofl/jersey10`; the one
+  pixel face (`"Pixel"`, `size-adjust: 130%`). Pixelify Sans (Z like B, 5 like S) and Silkscreen
+  (4 a blob) were tried first. `style.css` imports it relatively, so Vite hashes it into `/assets/`.
 
 ## Look
 

@@ -1,31 +1,21 @@
 /* A snowed-in village at the year-end gathering: a snowfield under icicles, panels of snow paper in
    evergreen frames, the dice on a warm cabin table, gold for what to press, berry for titles and links.
-   Pixel bevels on every control, a pixel face (Pixelify Sans, digits from Jersey 10, both OFL) for headings only.
+   Pixel bevels on every control, a pixel face (Jersey 10, OFL) for headings only.
    Light is a clear winter morning, dark a moonlit night. No orange anywhere (wish of the event's host): the
    wood is a low-chroma walnut, the gold leans to yellow. Dark from the system preference unless the toggle fixed
    light, or from the toggle (data-theme on <html>, set before the first paint by theme-init.js). The dark
    values stand twice, identically (test/web.test.ts): the CSS light-dark function would say it once but needs Safari 17.5.
    Pixel frames are hard box-shadows (no blur, no images): four offset copies leave the corners notched.
    Colours, roles and contrast: DESIGN.md (test/design.test.ts holds this file to it). */
+/* The pixel face: Jersey 10 (OFL), for the room name, headings, the turn and signs. Chosen for
+   legibility: its Z is no B, its 5 no S, its 4 no blob (the test line in DESIGN.md, Typography).
+   It is small for its size, hence size-adjust; the weight range keeps the browser from faking bold. */
 @font-face {
-  font-family: "Pixelify Sans";
-  src: url("./fonts/PixelifySans.ttf") format("truetype");
-  font-weight: 400 700;
-  font-display: swap;
-  /* Not the digits: its 5 reads as an S, and "Geschenk Nr. 5" must be unmistakable. */
-  unicode-range: U+0000-002F, U+003A-10FFFF;
-}
-
-/* The digits of the pixel face: Jersey 10 (OFL), the same pixel look with a 4 and a 5 that read at
-   a glance (Silkscreen's 4 was a blob). It is small for its size, so scaled up to the cap height. The
-   weight range keeps the browser from faking a bolder one. */
-@font-face {
-  font-family: "Pixel Digits";
+  font-family: "Pixel";
   src: url("./fonts/Jersey10-Regular.ttf") format("truetype");
   font-weight: 400 700;
-  size-adjust: 145%;
+  size-adjust: 130%;
   font-display: swap;
-  unicode-range: U+0030-0039;
 }
 
 :root {
@@ -109,7 +99,7 @@
   --float-duration: 2400ms;
   --bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-  --font-pixel: "Pixel Digits", "Pixelify Sans", ui-rounded, system-ui, sans-serif;
+  --font-pixel: "Pixel", ui-rounded, system-ui, sans-serif;
   font-family: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   font-weight: 500;
   line-height: 1.5;
