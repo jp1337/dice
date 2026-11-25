@@ -196,7 +196,7 @@ describe.skipIf(!dbUrl)("login against a fake Discord", () => {
     const body = await me(app, token);
     expect(body.statusCode).toBe(200);
     expect(body.headers["cache-control"]).toBe("no-store");
-    expect(body.json()).toEqual({ userId: row!.id, displayName: "Erika vom Server", avatarUrl: null, isHost: false });
+    expect(body.json()).toEqual({ userId: row!.id, displayName: "Erika vom Server", nickname: null, avatarUrl: null, isHost: false });
 
     const callbackLine = logs.find((l) => l.msg === "request" && l.path === "/auth/callback");
     expect(callbackLine?.userId).toBe(row!.id);

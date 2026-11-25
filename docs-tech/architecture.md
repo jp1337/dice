@@ -14,12 +14,12 @@ instance.
 | `src/server/app.ts` | Fastify: headers on every response, one JSON log line per request, rate limits, `/healthz`, legal pages, static files |
 | `src/server/config.ts` | `parseConfig(env)`, pure, every variable validated |
 | `src/server/auth.ts`, `discord.ts` | Step 2: OAuth flow, sessions, `/api/me`, avatars |
-| `src/server/rooms.ts` | Step 3: `POST /api/rooms`, `GET /api/rooms/:slug`, `PATCH /api/me`, WebSocket `/ws/rooms/:slug`; rooms with connections in memory, one queue per room (database, then memory, then broadcast), `state` rendered once per audience (`roomView`) |
-| `src/server/game-commands.ts` | The seam for step 4: `handleGameCommand(ctx, command)` gets every game message, already validated and serialized; `ctx.append(events)` persists and broadcasts |
+| `src/server/rooms.ts` | `POST /api/rooms`, `GET /api/rooms/:slug`, `PATCH /api/me`, WebSockets `/ws/rooms/:slug` and `/ws/watch/:token` (guests); rooms with connections in memory, one queue per room (database, then memory, then `state` once per audience, then `rolled`); simulated players' timers, reaction bundles, guest limits |
+| `src/server/game-commands.ts` | `handleGameCommand(ctx, command)`: `decide` plus what it cannot see (membership of the target, the roll cooldown); returns the events and a participation change, `rooms.ts` commits them. Real and simulated rolls take this path |
 | `src/server/legal.ts`, `robots.ts` | Imprint and privacy notice HTML; `robots.txt` from a sourced crawler list |
 | `src/server/db/schema.ts`, `migrate.ts` | Drizzle schema; migrations applied at start |
 | `drizzle/` | Generated SQL migrations and their snapshots |
-| `src/web/` | React SPA, Vite root; built to `dist/web` and served by the app. `components/` render, `lib/` holds their logic, `public/` is copied as is ([ui-assets.md](ui-assets.md)) |
+| `src/web/` | React SPA, Vite root; built to `dist/web` and served by the app. `views/` are the pages, `components/` the building blocks, `lib/` holds their logic, `public/` is copied as is ([ui-assets.md](ui-assets.md)) |
 | `test/` | Vitest; see [testing.md](testing.md) |
 
 ## Rules for changing things

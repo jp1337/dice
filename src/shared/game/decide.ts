@@ -83,6 +83,9 @@ export function decide(state: GameState, command: GameCommand, ctx: DecideContex
   if (state.status === "finished" || !state.activeUserId) return fail("game_over", "Das Spiel ist vorbei.");
   const active = state.activeUserId;
   const lastPlayer = state.turnOrder.length === 1 ? active : null; // R5
+  // skip and roll_for name the player the host saw: a late click must not hit whoever is next.
+  if ((command.type === "skip" || command.type === "roll_for") && command.userId !== active)
+    return fail("turn_changed", "Inzwischen ist jemand anderes dran.");
 
   switch (command.type) {
     case "roll":

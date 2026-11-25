@@ -1,0 +1,440 @@
+/* Pages: start, lobby, game, result. Mobile first; two or three columns only where there is room. */
+main {
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+h1 {
+  margin: 16px 0 8px;
+  overflow-wrap: anywhere;
+}
+
+h2 {
+  font-size: 1.2rem;
+  margin: 0;
+}
+
+h3 {
+  font-size: 1rem;
+  margin: 8px 0 0;
+}
+
+/* 44 px touch targets (WCAG 2.5.5) */
+button,
+.button,
+input[type="text"],
+input[type="number"],
+select {
+  min-height: 44px;
+  box-sizing: border-box;
+}
+
+input[type="text"],
+input[type="number"],
+select,
+textarea {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--fg);
+  max-width: 100%;
+}
+
+input[type="text"],
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+input[type="number"] {
+  width: 6em;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+}
+
+.primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.big {
+  font-size: 1.25rem;
+  padding: 12px 32px;
+  min-width: 12rem;
+}
+
+.danger {
+  border-color: var(--danger);
+  color: inherit;
+  font-weight: 600;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inline-form .row input[type="text"] {
+  flex: 1 1 12rem;
+  width: auto;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.check input {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+legend {
+  font-weight: 600;
+  padding: 0;
+}
+
+.hint {
+  color: var(--muted);
+  margin: 0;
+}
+
+.form-error {
+  color: var(--danger);
+  font-weight: 600;
+  margin: 0;
+}
+
+.form-error:empty,
+.notice:empty {
+  display: none;
+}
+
+.form-ok {
+  color: var(--muted);
+}
+
+/* Server errors (role="alert"), stays in place above the content. */
+.notice {
+  position: sticky;
+  top: 8px;
+  z-index: 2;
+  margin: 8px 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--six-bg);
+  color: var(--six-fg);
+  font-weight: 600;
+}
+
+.note,
+.warning,
+.pause {
+  margin: 4px 0;
+  padding: 8px 12px;
+  border-left: 4px solid var(--accent);
+  background: var(--surface);
+}
+
+.warning {
+  border-left-color: var(--danger);
+}
+
+.connecting {
+  color: var(--muted);
+}
+
+/* Badges: role, host, test, connection. Text always says it; colour only adds. */
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.badge-test {
+  background: var(--gold);
+  color: var(--pip);
+  border-color: var(--gold);
+  font-weight: 700;
+}
+
+.badge-host,
+.badge-bonus {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.conn-ok {
+  border-color: var(--line);
+}
+
+.conn-lost {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.room-header {
+  margin-bottom: 8px;
+}
+
+/* Participants */
+.people {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.person {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.person-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.person-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.person-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.person-tools button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+
+.confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.confirm-question {
+  font-weight: 600;
+}
+
+.copy {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.copy-fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-basis: 100%;
+}
+
+/* Game */
+.stage {
+  text-align: center;
+  padding: 8px 0 16px;
+}
+
+.turn {
+  font-size: clamp(1.3rem, 5vw, 2rem);
+  font-weight: 700;
+  margin: 8px 0;
+  min-height: 1.5em;
+}
+
+.turn.is-me {
+  color: var(--accent);
+}
+
+.stage .actions {
+  justify-content: center;
+}
+
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+.columns {
+  display: grid;
+  gap: 24px;
+  margin: 16px 0;
+}
+
+@media (min-width: 760px) {
+  .columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lobby {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0 24px;
+    align-items: start;
+  }
+}
+
+.turns,
+.gifts {
+  margin: 0;
+  padding-left: 1.6em;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.turns li {
+  padding: 2px 4px;
+}
+
+.turns li > * + * {
+  margin-left: 6px;
+}
+
+.turns .is-active {
+  font-weight: 700;
+  border-left: 4px solid var(--accent);
+}
+
+.gifts li {
+  font-weight: 600;
+}
+
+.history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
+.history time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.history .is-moderation {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.history .is-undone .badge {
+  margin-left: 6px;
+}
+
+details > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.result .gifts {
+  font-size: 1.2rem;
+}
+
+/* The four everyday host tools, two by two, also on a phone. */
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.grid2 > button {
+  width: 100%;
+}
+
+.last-gift {
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+
+.switch-state {
+  color: var(--muted);
+}
+
+/* An empty live region stays in the tree (so it is announced when it fills) but takes no room. */
+.pause:empty {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.grid2 > .confirm {
+  grid-column: 1 / -1;
+}

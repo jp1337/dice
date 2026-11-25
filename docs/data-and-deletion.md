@@ -4,12 +4,13 @@
 
 | Table | Personal data | Deleted |
 | --- | --- | --- |
-| `users` | Discord ID, username, display name, own nickname, avatar image, last login. No e-mail | No room membership left and last login older than `RETENTION_DAYS` |
+| `users` | Discord ID, username, display name, own nickname, avatar image, last login. No e-mail. Simulated players of test rooms ("Testspieler 1") are rows without any of it | No room membership left and last login older than `RETENTION_DAYS`; simulated players with their test room |
 | `sessions` | Hash of the session token, expiry | After 7 days, and with the user |
 | `rooms` | Room name, who created it | `RETENTION_DAYS` after the last activity in the room |
 | `room_members` | Who is in which room, as player or spectator, co-host | With the room or the user |
 | `game_events` | Who rolled what and when, host actions | With the room |
 
+Emoji reactions and guests of the guest link are never stored.
 Discord tokens are dropped right after the login check. The browser never loads anything from Discord
 except the login page; the app fetches and serves avatars itself.
 
@@ -21,6 +22,7 @@ The app deletes at startup and then once a day (`RETENTION_DAYS`, default 90):
 | --- | --- |
 | Sessions | Expired ones (they stop working at expiry; logout deletes immediately) |
 | Rooms, with members and events | `RETENTION_DAYS` after the last activity in the room |
+| Simulated players | Together with their test room |
 | Users | In no room any more and last login older than `RETENTION_DAYS` |
 
 Each run logs only counts.

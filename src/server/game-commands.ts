@@ -1,12 +1,10 @@
-// The seam where the game rules plug into the rooms (step 4): every client message that is not a
-// lobby or moderation message arrives here, already validated and serialized per room.
-import type { ClientMessage, EventPayload, EventType, GameEvent, GameState, Participation, ServerMessage, Settings, UserId } from "../shared/contracts.js";
+// Where the game rules plug into the rooms: every game command (decide.ts) arrives here, already
+// validated and serialized per room. Checks what decide cannot see (room membership, the roll
+// cooldown) and returns what rooms.ts commits. Simulated players go through here too.
+import type { GameState, Participation, UserId } from "../shared/contracts.js";
+import { type GameCommand, type NewEvent, decide } from "../shared/game/decide.js";
 
-// Handled by rooms.ts itself.
-export type LobbyCommand = Extract<ClientMessage, { type: "set_participation" | "update_settings" | "set_cohost" | "reset_nickname" }>;
-export type GameCommand = Exclude<ClientMessage, LobbyCommand>;
-
-export type NewEvent = { [T in EventType]: { type: T; actorUserId: UserId | null; payload: EventPayload<T> } }[EventType];
+export type { GameCommand, NewEvent };
 
 // Answered to the sender only, as { type: "error", code, message }.
 export class CommandError extends Error {
@@ -19,21 +17,36 @@ export class CommandError extends Error {
 }
 
 export type GameCommandContext = {
-  actor: { userId: UserId; isHost: boolean; canModerate: boolean };
+  actor: { userId: UserId; canModerate: boolean }; // canModerate: host or co-host of this room
   room: {
-    isTest: boolean;
-    settings: Settings;
     game: GameState; // reduce(events, settings), never stale
-    events: readonly GameEvent[];
-    members: ReadonlyMap<UserId, { participation: Participation; isSimulated: boolean }>;
+    members: ReadonlyMap<UserId, { participation: Participation }>;
+    lastRollAt: number; // epoch ms of the last accepted roll, 0 if none
   };
-  // Appends the events (seq = last + 1), recomputes the state with reduce, then broadcasts `state`.
-  // Throws, writing nothing, if reduce rejects the new events.
-  append: (events: NewEvent[]) => Promise<void>;
-  // Sends one message to every socket in the room, e.g. `rolled` for the animation or `reactions`.
-  broadcast: (message: Exclude<ServerMessage, { type: "state" | "error" }>) => void;
+  rollCooldownMs: number;
+  now: number;
+  randomInt: (min: number, maxExclusive: number) => number; // crypto.randomInt in production
 };
 
-export async function handleGameCommand(_ctx: GameCommandContext, _command: GameCommand): Promise<void> {
-  throw new CommandError("not_implemented", "Diese Aktion gibt es noch nicht.");
+export type GameCommandResult = {
+  events: NewEvent[];
+  participation?: { userId: UserId; participation: Participation }; // remove_player and add_player
+};
+
+export function handleGameCommand(ctx: GameCommandContext, command: GameCommand): GameCommandResult {
+  const { room } = ctx;
+  const players = [...room.members].flatMap(([userId, m]) => (m.participation === "player" ? [userId] : []));
+  const result = decide(room.game, command, { actorUserId: ctx.actor.userId, actorIsHost: ctx.actor.canModerate, players, randomInt: ctx.randomInt });
+  if ("error" in result) throw new CommandError(result.error.code, result.error.message);
+  // Spec 7: no roll for about 2 s after a roll, so the animation runs through for everyone.
+  if (result.events.some((e) => e.type === "rolled") && ctx.now < room.lastRollAt + ctx.rollCooldownMs)
+    throw new CommandError("cooldown", "Der Würfel rollt noch. Bitte warte einen Moment.");
+  if (command.type !== "remove_player" && command.type !== "add_player") return { events: result.events };
+
+  const target = room.members.get(command.userId);
+  if (!target) throw new CommandError("unknown_member", "Diese Person ist nicht in diesem Raum.");
+  // Spec 4.2: latecomers are spectators until added; spec 4.9: removed players come back as spectators.
+  if (command.type === "add_player" && target.participation !== "spectator")
+    throw new CommandError("not_spectator", "Nur Zuschauer lassen sich als Nachzügler anhängen.");
+  return { events: result.events, participation: { userId: command.userId, participation: command.type === "add_player" ? "player" : "spectator" } };
 }

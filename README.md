@@ -17,14 +17,14 @@ moderator can talk instead of keeping score.
 
 ## Status
 
-Step 2 of 6. Not usable for a game yet.
+Steps 1 to 4 done: a complete game runs over WebSocket. Steps 5 and 6 are in progress.
 
 | Step | | State |
 | --- | --- | --- |
 | 1 | Skeleton: container, database, migrations, `/healthz`, CI, image | done |
 | 2 | Discord login, sessions, hosts, imprint, privacy notice, daily cleanup | done |
-| 3 | Rooms and lobby over WebSocket | open |
-| 4 | Game rules: turns, bonus die, 6 pauses the game | open |
+| 3 | Rooms and lobby over WebSocket | done |
+| 4 | Game rules: turns, bonus die, 6 pauses the game | done |
 | 5 | Host tools, co-hosts, test rooms, cleanup of simulated players | open |
 | 6 | Animation, sound, reactions, guest link, link preview | open |
 
@@ -51,6 +51,7 @@ Before the first login, register the redirect URL in the Discord Developer Porta
 | Every environment variable | [docs/configuration.md](docs/configuration.md) |
 | What is stored, how long, deleting one person by hand, log retention | [docs/data-and-deletion.md](docs/data-and-deletion.md) |
 | nginx with WebSockets | [docs/nginx.example.conf](docs/nginx.example.conf) |
+| Rehearsing alone with simulated players | [docs/rehearsal.md](docs/rehearsal.md) |
 
 ## Built with
 

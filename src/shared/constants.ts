@@ -11,3 +11,12 @@ export const ROLL_COOLDOWN_MS = 2000;
 export const REACTION_INTERVAL_MS = 2000;
 export const PING_INTERVAL_MS = 25_000;
 export const ROOM_NAME_MAX = 60;
+export const SIX_MESSAGE_MAX = 200;
+
+// Free text other people see (contracts.ts visibleText): the browser checks the same rule before sending.
+export const INVISIBLE_TEXT = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\u115F\u1160\u2800\u3164\uFFA0]|(?! )\p{Z}|\p{M}{3}/u;
+export const VISIBLE_CHAR = /[\p{L}\p{N}\p{S}\p{P}]/u;
+// The one format character allowed: a zero width joiner inside an emoji sequence (family, rainbow flag),
+// between two pictographs; the first may carry a variation selector or a skin tone.
+export const EMOJI_JOINER = /(?<=\p{Extended_Pictographic}[\uFE0F\p{Emoji_Modifier}]?)\u200D(?=\p{Extended_Pictographic})/gu;
+export const isVisibleText = (text: string) => !INVISIBLE_TEXT.test(text.replace(EMOJI_JOINER, "")) && VISIBLE_CHAR.test(text);

@@ -1,7 +1,7 @@
 // Shared contracts between server, game logic and web client.
 // Every message crossing the network is defined here as a zod schema; types are inferred from it.
 import { z } from "zod";
-import { NICKNAME_MAX, ROOM_NAME_MAX, reactionEmojis } from "./constants.js";
+import { NICKNAME_MAX, ROOM_NAME_MAX, SIX_MESSAGE_MAX, isVisibleText, reactionEmojis } from "./constants.js";
 
 // zod-free values live in constants.ts so the browser bundle can import them without zod.
 export * from "./constants.js";
@@ -13,8 +13,8 @@ const die = z.int().min(1).max(6);
 
 // Free text other people see (nicknames, room names, the six banner), so nobody can look blank or like
 // someone else: NFC, trimmed; no control, format, surrogate, private-use or unassigned characters, no
-// space but U+0020, no blank fillers, at most two combining marks on a character, something visible.
-const invisible = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\u115F\u1160\u2800\u3164\uFFA0]|(?! )\p{Z}|\p{M}{3}/u;
+// space but U+0020, no blank fillers, at most two combining marks on a character, something visible
+// (isVisibleText in constants.ts).
 const visibleText = (max: number) =>
   z
     .string()
@@ -24,7 +24,7 @@ const visibleText = (max: number) =>
         .string()
         .min(1)
         .max(max)
-        .refine((text) => !invisible.test(text) && /[\p{L}\p{N}\p{S}\p{P}]/u.test(text)),
+        .refine(isVisibleText),
     );
 
 // ---------------------------------------------------------------------------------------------
@@ -35,7 +35,7 @@ const visibleText = (max: number) =>
 export const settingsSchema = z.object({
   bonusChains: z.boolean(), // R3
   lastPlayer: z.enum(["choice", "auto"]), // R5
-  sixMessage: visibleText(200), // R6
+  sixMessage: visibleText(SIX_MESSAGE_MAX), // R6
   reactions: z.boolean(),
 });
 export type Settings = z.infer<typeof settingsSchema>;
@@ -104,7 +104,7 @@ export type GameEvent = {
   [T in EventType]: {
     seq: number;
     type: T;
-    actorUserId: UserId | null; // null for server-driven events (simulated players)
+    actorUserId: UserId | null; // null once the acting user is deleted; a simulated player's roll names the player
     payload: EventPayload<T>;
     createdAt: string; // ISO 8601
   };
@@ -155,8 +155,9 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
   msg("start", {}),
   msg("pause", {}),
   msg("continue", {}),
-  msg("skip", {}),
-  msg("roll_for", {}),
+  // userId: the player the host saw as active; a stale one is refused (two hosts clicking at once).
+  msg("skip", { userId }),
+  msg("roll_for", { userId }),
   msg("remove_player", { userId }),
   msg("add_player", { userId }),
   msg("assign_last_place", {}),
@@ -178,6 +179,7 @@ export interface MemberView {
   userId: UserId;
   displayName: string; // nickname > server nickname > global name (spec 4.10)
   discordName?: string; // hosts only
+  hasNickname?: boolean; // hosts and co-hosts only: an own nickname is set, so it can be reset
   avatarUrl: string | null; // null = initials placeholder; always null for guests
   participation: Participation;
   isHost: boolean;
@@ -216,6 +218,7 @@ export type ServerMessage =
 export interface MeResponse {
   userId: UserId;
   displayName: string; // nickname > server nickname > global name (spec 4.10)
+  nickname: string | null; // the own nickname, null = the Discord name is shown
   avatarUrl: string | null; // /avatars/:userId/:hash, null = initials placeholder
   isHost: boolean; // listed in HOST_DISCORD_IDS; only hosts may create rooms
 }

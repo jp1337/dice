@@ -30,9 +30,12 @@ Tests migrate the database themselves and must survive running twice against the
 | `test/app.test.ts` | Headers on every kind of response, logging, rate limits |
 | `test/config.test.ts`, `robots.test.ts` | Configuration rules, `robots.txt` |
 | `test/db.test.ts` | Migrations, `/healthz`, a dropped database connection |
+| `test/ws.ts` | The WebSocket test client (`Client.open`, members with a session cookie, guests without) and `makeUser` |
+| `test/game.test.ts` | Steps 4 and 5 over WebSocket: turns and rights, cooldown, `rolled` after its `state`, test rooms and simulated players, guest link and its limits, reactions, restart mid-game, 100 sockets with the broadcast latency. Short timings are injected (`rollCooldownMs`, `simulatedRollDelayMs` in `Deps`) |
 | `test/rooms.test.ts` | Step 3: rooms over HTTP, a listening server with Node's `WebSocket` client, raw upgrades for refused and silent sockets; sessions are inserted directly (`sessionIdFor`) |
 | `test/docs.test.ts` | `docs-tech/` stays unpublished, links resolve, every variable documented |
 | `test/web.test.ts` | Web logic without a DOM: preferences with blocked storage, `theme-init.js`, sound gating, six text escaping, reaction cooldown and bursts, avatars, CSS timing, no inline styles or scripts, asset sizes, theme tokens without `light-dark()` |
+| `test/room-view.test.ts` | Room client without a DOM: routes, reconnect backoff and close codes against a fake socket, button permissions per viewer, turn and gift lists, history texts ("würfelt für", undone), result text, form checks, roll animation timing |
 | `test/bundle.test.ts` | The client build fails when anything reaches zod |
 | `test/preview.test.ts` | Open Graph tags: in the served HTML, identical on every page, image URL from `BASE_URL` |
 
@@ -41,3 +44,6 @@ Tests migrate the database themselves and must survive running twice against the
 - Fictitious values only: the repository is public. `dice.example.org`, IDs like `100000000000000001`.
 - Test the real path: `app.inject` against the built app, real PostgreSQL, the fake Discord over HTTP.
 - A test that can pass while checking nothing gets a guard that it saw something (see `docs.test.ts`).
+- No sleeps to prove that nothing happened: wait for a control event instead (a later message, a closed
+  socket, `app.live.simulatedTurn(roomId)` for simulated players' timers). Timings that matter are
+  injected through `Deps`.

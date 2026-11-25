@@ -27,11 +27,18 @@ export function ThemeToggle() {
   );
 }
 
-export function Switch({ on, onChange, label }: { on: boolean; onChange: (on: boolean) => void; label: string }) {
+// showState: "ja"/"nein" after the label, for switches in a list where the track alone is easy to misread.
+// ariaLabel: names the switch with its context ("Anna würfelt mit"); it must contain the visible label.
+type SwitchProps = { on: boolean; onChange: (on: boolean) => void; label: string; ariaLabel?: string; disabled?: boolean; showState?: boolean };
+
+export function Switch({ on, onChange, label, ariaLabel, disabled = false, showState = false }: SwitchProps) {
   return (
-    <button type="button" className="switch" role="switch" aria-checked={on} onClick={() => onChange(!on)}>
+    <button type="button" className="switch" role="switch" aria-checked={on} aria-label={ariaLabel} disabled={disabled} onClick={() => onChange(!on)}>
       <span className="switch-track" aria-hidden="true" />
-      {label}
+      <span>
+        {label}
+        {showState && <span className="switch-state">{on ? ": ja" : ": nein"}</span>}
+      </span>
     </button>
   );
 }

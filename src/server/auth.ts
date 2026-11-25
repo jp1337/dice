@@ -225,6 +225,7 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
     const me: MeResponse = {
       userId: request.user!.id,
       displayName: row!.nickname ?? row!.displayName,
+      nickname: row!.nickname,
       avatarUrl: row!.avatarHash ? `/avatars/${request.user!.id}/${row!.avatarHash}` : null,
       isHost: config.hostDiscordIds.includes(request.user!.discordId), // never stored (spec 4.2)
     };
