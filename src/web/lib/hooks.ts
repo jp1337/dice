@@ -1,7 +1,7 @@
 // React glue for the preferences and the sound player. All components share one preference store, so a
 // toggle in the header and a player in the game view never disagree.
 import { useCallback, useEffect, useSyncExternalStore } from "react";
-import { MUTED_KEY, THEME_KEY, type ThemeChoice, applyTheme, prefs, themeOf } from "./prefs.js";
+import { MUTED_KEY, SOUND_OFF_KEYS, THEME_KEY, type ThemeChoice, applyTheme, prefs, themeOf } from "./prefs.js";
 import { type SoundName, createSoundPlayer } from "./sound.js";
 
 const usePref = (key: string) => useSyncExternalStore(prefs.subscribe, () => prefs.get(key));
@@ -36,16 +36,26 @@ export function useReducedMotion() {
 
 let player: ReturnType<typeof createSoundPlayer> | undefined;
 
-// Sound on by default; muting is per browser (spec 10.1). play() is silent until the first gesture.
+// The old single switch muted both sounds: carry that over to the two switches, once.
+export function migrateMuted(store: Pick<typeof prefs, "get" | "set"> = prefs) {
+  if (store.get(MUTED_KEY) !== "1") return;
+  store.set(SOUND_OFF_KEYS.roll, "1");
+  store.set(SOUND_OFF_KEYS.six, "1");
+  store.set(MUTED_KEY, null);
+}
+
+// Both sounds on by default; each can be muted per browser (spec 10.1). play() is silent until the first gesture.
 export function useSound() {
-  const [muted, setMuted] = useFlag(MUTED_KEY);
+  const [rollOff, setRollOff] = useFlag(SOUND_OFF_KEYS.roll);
+  const [sixOff, setSixOff] = useFlag(SOUND_OFF_KEYS.six);
   useEffect(() => {
+    migrateMuted();
     player ??= createSoundPlayer(
       (url) => Object.assign(new Audio(url), { preload: "auto" }),
       window,
       navigator.userActivation?.hasBeenActive ?? false,
     );
   }, []);
-  const play = useCallback((name: SoundName) => player?.play(name, muted) ?? false, [muted]);
-  return { play, muted, setMuted };
+  const play = useCallback((name: SoundName) => player?.play(name, name === "roll" ? rollOff : sixOff) ?? false, [rollOff, sixOff]);
+  return { play, rollOff, setRollOff, sixOff, setSixOff };
 }

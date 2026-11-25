@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { DieFace } from "./components/Dice.js";
-import { SoundToggle, ThemeToggle } from "./components/Toggles.js";
+import { SoundToggles, ThemeToggle } from "./components/Toggles.js";
 import { parseRoute } from "./lib/routes.js";
 import { RoomPage } from "./views/RoomPage.js";
 import { StartPage } from "./views/Start.js";
@@ -31,7 +31,7 @@ function App() {
           <a href="/">Start</a> · <a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a> · <a href="https://github.com/jp1337/dice">GitHub</a>
         </span>
         <div className="me">
-          <SoundToggle />
+          <SoundToggles />
           <ThemeToggle />
         </div>
       </footer>
