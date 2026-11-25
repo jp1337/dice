@@ -61,7 +61,7 @@ the privacy notice in line with what you set (`PRIVACY_LOG_DAYS`).
 
 The app logs client addresses shortened: IPv4 to `/16` (`198.51.0.0`), IPv6 to `/48` (`2001:db8:abcd::`).
 The full address stays in memory, for rate limits only. The privacy notice says logs hold only
-shortened addresses, so shorten them in nginx too, or do not log them there.
+shortened addresses: [nginx.example.conf](nginx.example.conf) does the same with its `dice_anon` log format.
 
 | Source | Where to limit it |
 | --- | --- |

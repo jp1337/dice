@@ -58,6 +58,18 @@ describe("every kind of response", () => {
     expect(conf).not.toMatch(/^ {8}add_header/m); // one inside a location would silently drop the server-level ones there
   });
 
+  it("docs/nginx.example.conf logs like the app: shortened IPs, no query strings", () => {
+    const conf = readFileSync(new URL("../docs/nginx.example.conf", import.meta.url), "utf8");
+    const format = conf.match(/^log_format (\w+) '([^;]+)';$/m);
+    expect(format, "a log_format at http level").not.toBeNull();
+    const [, name, line] = format!;
+    expect(line).toContain("$dice_ip");
+    expect(line).not.toMatch(/\$(remote_addr|request|request_uri|args|query_string|http_x_forwarded_for)\b/);
+    expect(conf).toMatch(new RegExp(`^ {4}access_log \\S+ ${name};$`, "m"));
+    // The map shortens IPv4 to /16 and IPv6 to /48, the same as src/server/log-ip.ts.
+    expect(conf).toMatch(/^map \$remote_addr \$dice_ip \{$/m);
+  });
+
   it("also on errors", async () => {
     const res = await app.inject({ method: "POST", url: "/api/nope", payload: "x".repeat(20_000), headers: { "content-type": "application/json" } });
     expect(res.statusCode).toBe(413); // body limit
