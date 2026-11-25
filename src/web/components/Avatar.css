@@ -1,10 +1,15 @@
+/* A square portrait in a thin pixel frame. */
 .avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-radius: 50%;
   object-fit: cover;
+  box-shadow:
+    0 -2px 0 var(--wood-dark),
+    0 2px 0 var(--wood-dark),
+    -2px 0 0 var(--wood-dark),
+    2px 0 0 var(--wood-dark);
 }
 
 .avatar-sm { width: 32px; height: 32px; font-size: 0.8rem; }

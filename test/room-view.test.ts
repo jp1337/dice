@@ -57,7 +57,7 @@ function ev<T extends GameEvent["type"]>(type: T, payload: Extract<GameEvent, { 
 
 function makeView(over: { game?: Partial<RoomView["game"]>; room?: Partial<RoomView["room"]>; viewer?: RoomView["viewer"]; members?: MemberView[] } = {}): RoomView {
   return {
-    room: { slug: SLUG, name: "Weihnachten", isTest: false, status: over.game?.status ?? "lobby", settings: defaultSettings, watchLinkActive: false, ...over.room },
+    room: { slug: SLUG, name: "Weihnachten", isTest: false, status: over.game?.status ?? "lobby", settings: defaultSettings, isPublic: true, ...over.room },
     members: over.members ?? [member(HOST, "Hanna", { isHost: true, participation: "spectator" }), member(ANNA, "Anna"), member(BEN, "Ben"), member(CARL, "Carl", { participation: "spectator" })],
     game: { ...initialGameState(), ...over.game },
     viewer: over.viewer ?? { kind: "member", userId: ANNA, isHost: false, canModerate: false },
@@ -71,7 +71,7 @@ describe("routes", () => {
   it("pick the page from the path", () => {
     expect(parseRoute("/")).toEqual({ page: "start" });
     expect(parseRoute(`/r/${SLUG}`)).toEqual({ page: "room", slug: SLUG });
-    expect(parseRoute(`/z/${SLUG}x`)).toEqual({ page: "guest", token: `${SLUG}x` });
+    expect(parseRoute(`/z/${SLUG}`)).toEqual({ page: "start" }); // the old guest links are gone
     expect(parseRoute("/r/short")).toEqual({ page: "start" });
     expect(parseRoute(`/r/${SLUG}/../x`)).toEqual({ page: "start" });
   });
@@ -410,7 +410,7 @@ describe("history", () => {
   const roll = ev("rolled", { userId: ANNA, dice: [6, 1] }, ANNA);
   const forBen = ev("rolled", { userId: BEN, dice: [4], rolledBy: HOST });
   const undone = ev("undone", { seq: forBen.seq });
-  const history = [ev("game_started", { order: [ANNA, BEN] }), roll, forBen, undone, ev("skipped", { userId: BEN }), ev("cohost_changed", { userId: CARL, isCohost: true }), ev("participation_changed", { userId: ANNA, participation: "spectator" }, ANNA), ev("simulated_players_changed", { added: [SIM, id(6)], removed: [] }), ev("last_place_taken", { userId: BEN }, BEN)];
+  const history = [ev("game_started", { order: [ANNA, BEN] }), roll, forBen, undone, ev("skipped", { userId: BEN }), ev("cohost_changed", { userId: CARL, isCohost: true }), ev("participation_changed", { userId: ANNA, participation: "spectator" }, ANNA), ev("simulated_players_changed", { added: [SIM, id(6)], removed: [] }), ev("last_place_taken", { userId: BEN }, BEN), ev("public_changed", { isPublic: false })];
   const view = makeView({ viewer: asHost, game: running({ history, undoneSeqs: [forBen.seq] }) });
 
   it("shows rolls, 'würfelt für' and taken-back rolls, newest first", () => {
@@ -424,6 +424,7 @@ describe("history", () => {
   it("adds the moderation entries when the host switches them on", () => {
     const lines = historyLines(view, true, "UTC").map((l) => l.text);
     expect(lines).toEqual([
+      "Hanna macht den Raum nicht öffentlich",
       "Ben nimmt den letzten Platz",
       "Hanna fügt 2 Testspieler hinzu",
       "Anna ist jetzt Zuschauer",

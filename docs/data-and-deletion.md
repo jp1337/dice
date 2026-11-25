@@ -10,7 +10,7 @@
 | `room_members` | Who is in which room, as player or spectator, co-host | With the room or the user |
 | `game_events` | Who rolled what and when, host actions | With the room |
 
-Emoji reactions and guests of the guest link are never stored.
+Emoji reactions and guests of public rooms are never stored.
 Discord tokens are dropped right after the login check. The browser never loads anything from Discord
 except the login page; the app fetches and serves avatars itself.
 

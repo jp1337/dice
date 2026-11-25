@@ -14,7 +14,7 @@ instance.
 | `src/server/app.ts` | Fastify: headers on every response, one JSON log line per request, rate limits, `/healthz`, legal pages, static files |
 | `src/server/config.ts` | `parseConfig(env)`, pure, every variable validated |
 | `src/server/auth.ts`, `discord.ts` | Step 2: OAuth flow, sessions, `/api/me`, avatars |
-| `src/server/rooms.ts` | `POST /api/rooms`, `GET /api/rooms/:slug`, `PATCH /api/me`, WebSockets `/ws/rooms/:slug` and `/ws/watch/:token` (guests); rooms with connections in memory, one queue per room (database, then memory, then `state` once per audience, then `rolled`); simulated players' timers, reaction bundles, guest limits |
+| `src/server/rooms.ts` | `POST /api/rooms`, `GET /api/rooms/:slug`, `PATCH /api/me`, WebSocket `/ws/rooms/:slug` (members, and guests of public rooms); rooms with connections in memory, one queue per room (database, then memory, then `state` once per audience, then `rolled`); simulated players' timers, reaction bundles, guest limits |
 | `src/server/game-commands.ts` | `handleGameCommand(ctx, command)`: `decide` plus what it cannot see (membership of the target, the roll cooldown); returns the events and a participation change, `rooms.ts` commits them. Real and simulated rolls take this path |
 | `src/server/legal.ts`, `robots.ts` | Imprint and privacy notice HTML; `robots.txt` from a sourced crawler list |
 | `src/server/db/schema.ts`, `migrate.ts` | Drizzle schema; migrations applied at start |

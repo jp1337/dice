@@ -35,7 +35,7 @@ How to get the IDs: [deployment.md](deployment.md#1-discord-application).
 
 | Variable | Required | Default | Meaning |
 | --- | --- | --- | --- |
-| `TRUSTED_PROXIES` | yes, behind a proxy | empty | Addresses or networks, comma-separated, whose `X-Forwarded-*` headers count. With compose: `172.31.250.1`. Empty: every client looks like the proxy and shares one rate limit, and the guest link allows only 5 guests in total (5 per IP, 200 per room) |
+| `TRUSTED_PROXIES` | yes, behind a proxy | empty | Addresses or networks, comma-separated, whose `X-Forwarded-*` headers count. With compose: `172.31.250.1`. Empty: every client looks like the proxy and shares one rate limit, and a public room allows only 5 guests in total (5 per IP, 200 per room) |
 | `DICE_SUBNET` | no | `172.31.250.0/24` | Compose network. Change it only if taken, then set `TRUSTED_PROXIES` to its `.1` address |
 
 ## Imprint and privacy notice

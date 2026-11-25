@@ -73,7 +73,7 @@ export const eventPayloadSchemas = {
   cohost_changed: z.object({ userId, isCohost: z.boolean() }),
   participation_changed: z.object({ userId, participation: participationSchema }),
   nickname_reset: z.object({ userId }),
-  watch_link_changed: z.object({ enabled: z.boolean() }),
+  public_changed: z.object({ isPublic: z.boolean() }),
   simulated_players_changed: z.object({ added: z.array(userId), removed: z.array(userId) }),
 } as const;
 
@@ -96,7 +96,7 @@ export const eventVisibility: Record<EventType, "public" | "hosts"> = {
   cohost_changed: "hosts",
   participation_changed: "hosts",
   nickname_reset: "hosts",
-  watch_link_changed: "hosts",
+  public_changed: "hosts",
   simulated_players_changed: "hosts",
 };
 
@@ -163,7 +163,7 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
   msg("assign_last_place", {}),
   // seq: the roll the host saw as the newest; a stale target is refused (two hosts clicking at once).
   msg("undo", { seq: z.int().min(1).optional() }),
-  msg("set_watch_link", { action: z.enum(["enable", "disable", "regenerate"]) }),
+  msg("set_public", { isPublic: z.boolean() }),
   msg("reset_nickname", { userId }),
   msg("end", {}),
   msg("reset", {}),
@@ -195,8 +195,7 @@ export interface RoomView {
     isTest: boolean;
     status: GameStatus;
     settings: Settings;
-    watchLinkActive: boolean;
-    watchUrl?: string; // hosts only
+    isPublic: boolean; // anyone with the room link may watch without logging in
     guestCount?: number; // hosts only
   };
   members: MemberView[]; // guests: only players and people with a gift place
@@ -240,6 +239,7 @@ export interface RoomSummary {
   name: string;
   isTest: boolean;
   status: GameStatus;
+  isPublic: boolean;
 }
 
 // PATCH /api/me (spec 4.10). null resets to the Discord name.

@@ -1,5 +1,5 @@
-/* The one loud moment of the app: coral sunburst, the six, the host's text on a cream ribbon, confetti.
-   Same colours in both themes. A modal <dialog> in the top layer, stretched over the whole viewport. */
+/* The one loud moment of the app: a harvest sunburst, the six, the host's text on the wooden sign,
+   confetti. Same colours in both themes. A modal <dialog> in the top layer, over the whole viewport. */
 .six-banner {
   box-sizing: border-box;
   inset: 0;
@@ -24,31 +24,32 @@
   gap: 24px;
   padding: 24px 16px;
   background:
-    radial-gradient(circle at 50% 38%, rgb(255 138 106 / 0.9) 0 12%, transparent 60%),
-    radial-gradient(circle at 50% 38%, transparent 35%, rgb(150 45 20 / 0.45) 100%),
-    repeating-conic-gradient(from 0deg at 50% 38%, var(--coral) 0deg 9deg, #f27d5c 9deg 18deg);
+    radial-gradient(circle at 50% 38%, var(--wheat-light) 0 11%, transparent 11.5%),
+    radial-gradient(circle at 50% 38%, transparent 40%, rgb(78 42 18 / 0.5) 100%),
+    repeating-conic-gradient(from 0deg at 50% 38%, var(--pumpkin) 0deg 10deg, var(--wheat) 10deg 20deg);
   color: var(--ink);
   text-align: center;
   animation: six-fade 250ms ease-out both;
 }
 
 .six-die {
-  width: clamp(120px, 32vw, 200px);
-  filter: drop-shadow(0 14px 18px rgb(120 30 10 / 0.45));
+  width: clamp(120px, 30vw, 190px);
+  filter: drop-shadow(8px 10px 0 rgb(78 42 18 / 0.5));
   animation: six-pop 600ms 100ms var(--bounce) both;
 }
 
 .six-banner .ribbon-wrap {
   max-width: 100%;
-  animation: six-ribbon 450ms 250ms var(--bounce) both;
+  animation: six-sign 450ms 250ms var(--bounce) both;
 }
 
 .six-banner h2 {
   display: block;
   max-width: 28ch;
-  padding: 12px 24px;
-  border-bottom: 3px solid var(--ink);
-  font-size: clamp(1.6rem, 6vw, 3rem);
+  padding: 14px 28px;
+  background-color: var(--parchment);
+  font-size: clamp(1.6rem, 6vw, 2.8rem);
+  font-weight: 700;
   line-height: 1.15;
   overflow-wrap: anywhere;
 }
@@ -64,7 +65,7 @@
 }
 
 .six-actions button:focus-visible {
-  outline-color: var(--cream);
+  outline-color: var(--wood-dark);
 }
 
 @keyframes six-fade {
@@ -73,9 +74,10 @@
   }
 }
 
-@keyframes six-ribbon {
+/* The sign drops in on its ropes. */
+@keyframes six-sign {
   from {
-    transform: scale(0.2, 0.6);
+    transform: translateY(-120px);
     opacity: 0;
   }
 }
