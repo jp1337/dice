@@ -3,8 +3,9 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runCleanup } from "../src/server/cleanup.js";
 import { runMigrations } from "../src/server/db/migrate.js";
+import { ownDatabase } from "./helpers.js";
 
-const url = process.env.TEST_DATABASE_URL;
+const url = await ownDatabase();
 
 describe.skipIf(!url)("daily cleanup (spec 9.3)", () => {
   let pool: pg.Pool;

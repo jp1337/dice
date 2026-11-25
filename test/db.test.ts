@@ -36,7 +36,7 @@ describe.skipIf(!url)("with PostgreSQL", () => {
       await admin.query(`drop database ${name}`);
       await admin.end();
     }
-  });
+  }, 20_000); // creates and migrates a database while other files create theirs (helpers.ts ownDatabase): 0.5 s alone, over 5 s under that load
 
   it("/healthz returns 200 ok", async () => {
     const { app } = await makeApp({}, url);

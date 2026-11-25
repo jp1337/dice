@@ -13,10 +13,10 @@ import { CommandError } from "../src/server/game-commands.js";
 import { MAX_SOCKETS_PER_USER, MAX_STRIKES, MESSAGE_BURST, type Member, NICKNAME_LIMIT_PER_MINUTE, checkSettingsChange, roomView } from "../src/server/rooms.js";
 import { type GameEvent, MAX_CLIENT_MESSAGE_BYTES, NICKNAME_MAX, type RoomView, defaultSettings } from "../src/shared/contracts.js";
 import { initialGameState } from "../src/shared/game/reduce.js";
-import { baseEnv, makeApp } from "./helpers.js";
+import { baseEnv, makeApp, ownDatabase } from "./helpers.js";
 import { Client, HOST_ID, ORIGIN, type User, env, makeUser as makeUserIn, newDiscordId, until } from "./ws.js";
 
-const dbUrl = process.env.TEST_DATABASE_URL;
+const dbUrl = await ownDatabase();
 
 type App = Awaited<ReturnType<typeof makeApp>>["app"];
 
