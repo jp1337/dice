@@ -64,11 +64,8 @@ jobs:
           POSTGRES_DB: dice_test
         ports:
           - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U dice -d dice_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+        # No health check here: the runner would wait for it before the first step. The database boots
+        # while checkout, Node and npm ci run, and the step before the tests waits for it.
     env:
       TEST_DATABASE_URL: postgres://dice:dice@localhost:5432/dice_test
     steps:
@@ -80,6 +77,11 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci --ignore-scripts
+      # Over TCP: the image's init server listens on the socket only, so this answers once the real one runs.
+      - name: Wait for PostgreSQL
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: timeout 60 bash -c 'until docker exec "$POSTGRES_CONTAINER" pg_isready -q -h 127.0.0.1 -U dice -d dice_test; do sleep 0.5; done'
       - run: npm test
 
   docker:
@@ -88,7 +90,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      # No setup-buildx-action: the runner's Docker uses the containerd image store, so its built-in builder
+      # reads and writes the GitHub Actions cache without booting a BuildKit container.
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -144,7 +147,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
@@ -158,5 +160,5 @@ jobs:
             ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
             ghcr.io/${{ github.repository }}:latest
           labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          # Read only: the docker job wrote the cache for this commit before this job started.
           cache-from: type=gha
-          cache-to: type=gha,mode=max
