@@ -3,6 +3,7 @@
 import { type FormEvent, useEffect, useId, useState } from "react";
 import { NICKNAME_MAX, SIX_MESSAGE_MAX } from "../../shared/constants.js";
 import type { ClientMessage, MeResponse, PatchMeRequest, RoomView } from "../../shared/contracts.js";
+import { HowTo } from "../components/HowTo.js";
 import { Switch } from "../components/Toggles.js";
 import { type Derived, cleanText, nicknameError, nicknameResponseMessage, sixMessageError } from "../lib/room.js";
 import { CopyButton } from "./Controls.js";
@@ -231,6 +232,9 @@ export function Lobby(props: Props) {
           {view.room.isTest && <SimulatedPlayers {...props} />}
         </section>
       )}
+
+      {/* Open for those who play; hosts know the rules and keep the room for their tools. */}
+      <HowTo settings={view.room.settings} open={!d.showModeration} />
 
       <section className="stack" aria-labelledby="lobby-people">
         <h2 id="lobby-people">

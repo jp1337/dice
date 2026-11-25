@@ -4,6 +4,7 @@
 import { useId, useState } from "react";
 import type { RoomView } from "../../shared/contracts.js";
 import { Dice } from "../components/Dice.js";
+import { HowTo } from "../components/HowTo.js";
 import { FloatingReactions, ReactionBar } from "../components/Reactions.js";
 import { ReactionsToggle, Switch } from "../components/Toggles.js";
 import { useFlag } from "../lib/hooks.js";
@@ -247,6 +248,7 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
 
       <div className="game-col game-left">
         <GiftOrder view={view} />
+        <HowTo settings={view.room.settings} />
         {d.showModeration && <MoreHostTools view={view} d={d} room={room} />}
       </div>
 

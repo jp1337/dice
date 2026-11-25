@@ -625,6 +625,7 @@ label {
 
 .game .stage { order: 1; }
 .game .host-bar { order: 2; }
+.game .howto { order: 2; } /* after the host bar: same order, later in the DOM */
 .game .gifts-panel { order: 3; }
 .game .turns-panel { order: 4; }
 .game .reactions { order: 5; }
@@ -1030,7 +1031,7 @@ details[open] > summary::after {
     grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
       "host me people"
-      "host settings people";
+      "howto settings people";
     gap: 22px 26px;
     padding: 6px 6px 14px;
     align-items: start;
@@ -1038,9 +1039,10 @@ details[open] > summary::after {
 
   .lobby:not(:has(> [aria-labelledby="lobby-host"])) {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
       "me people"
-      "settings people";
+      "howto people";
   }
 
   .lobby > [aria-labelledby="lobby-host"] {
@@ -1054,7 +1056,13 @@ details[open] > summary::after {
     grid-area: me;
   }
 
-  .lobby > details {
+  .lobby > .howto {
+    grid-area: howto;
+    max-height: 100%;
+    overflow-y: auto;
+  }
+
+  .lobby > details:not(.howto) {
     grid-area: settings;
     max-height: 100%;
     overflow-y: auto;
@@ -1227,4 +1235,9 @@ details[open] > summary::after {
   .result .gifts li:nth-child(1)::after {
     animation: none;
   }
+}
+
+.howto ul {
+  margin: 10px 0 0;
+  padding-left: 1.2em;
 }

@@ -3,23 +3,27 @@
 ## Generated files
 
 Both scripts are pure Node, deterministic and the only source of their files. Change the script, run it,
-commit script and output together; CI fails otherwise. The WAVs are byte-identical everywhere; the PNG's
+commit script and output together; CI fails otherwise. The WAV is byte-identical everywhere; the PNG's
 pixels are, its compressed bytes depend on the zlib build (zlib-ng locally, Node's own in CI), so CI
 compares pixels (`--check`).
 
 | File | Script | Size |
 | --- | --- | --- |
-| `src/web/public/sounds/roll.wav` | `node scripts/generate-sounds.mjs` | 57 KB |
-| `src/web/public/sounds/six.wav` | same | 35 KB |
+| `src/web/public/sounds/six.wav` | `node scripts/generate-sounds.mjs` | 35 KB |
 | `src/web/public/og.png` (256×256) | `node scripts/generate-og-image.mjs` | 1 KB |
 
-- Sounds: modal synthesis, seeded, mono 16 bit 22.05 kHz WAV, peak −9 dBFS (quiet on purpose: voice
-  channel). The script refuses a file over 60 KB.
+- Both sounds: mono 16 bit 22.05 kHz WAV, peak −9 dBFS (quiet on purpose: voice channel), under 60 KB,
+  roll no longer than `ROLL_ANIMATION_MS` so it ends before the six sound (tests).
 
 | Sound | Made of | Length |
 | --- | --- | --- |
-| Roll | Two resin dice: muffled clicks in the hand (0–0.27 s), then table hits with shrinking, irregular gaps, edge-then-face doubles, die-on-die clicks, rocking to rest. Each hit = half-sine contact pulse through damped resonators: die modes 2.6–6.2 kHz (own pitches per die), wood 170/280/1050 Hz. Softer hit, longer contact, duller | `ROLL_ANIMATION_MS` (test), ends before the six sound |
-| Six | Marimba arpeggio G–B–D–G, partials 1× and 3.9× (higher ones would alias), soft mallet attack | 0.8 s |
+| Six | Synthesized: marimba arpeggio G–B–D–G, partials 1× and 3.9× (higher ones would alias), soft mallet attack | 0.8 s |
+| Roll | Recorded, not generated (synthesized dice sounded like clinking glass): Kenney "Casino Audio" 1.1, CC0, from `opengameart.org/content/54-casino-sound-effects-cards-dice-chips`. First 0.65 s of `dice-shake-2.ogg` (fade out from 0.5 s), then `dice-throw-1.ogg`; command below | 1.25 s |
+
+```sh
+ffmpeg -i dice-shake-2.ogg -i dice-throw-1.ogg -filter_complex "[0]atrim=0:0.65,afade=t=out:st=0.5:d=0.15[s];[s][1]concat=n=2:v=0:a=1,silenceremove=start_periods=1:start_threshold=-50dB,aresample=22050,pan=mono|c0=0.5*c0+0.5*c1,afade=t=out:st=1.14:d=0.05,apad=whole_dur=1.25" -ac 1 -f f32le stage.raw
+# then: volume to a −9.1 dBFS peak, -c:a pcm_s16le -bitexact -map_metadata -1 (plain 44-byte header, the test reads it)
+```
 - Preview image: pixel art like the app, two dice on a plank table under bunting, sky and hills, drawn
   on a 64×64 grid in the colours of `style.css` and scaled ×4 without smoothing; encoded by a minimal PNG
   writer (`node:zlib`). Square and small: `twitter:card` is `summary`, so Discord shows it as a
@@ -124,6 +128,7 @@ directly or through `contracts.ts`. Values for the browser live in `src/shared/c
 | Import | Use |
 | --- | --- |
 | `Dice` `{values, rollKey, count?, onSettled?}` | New `rollKey` starts the 1.3 s tumble; `onSettled` when the result shows (six sound, banner) |
+| `HowTo` `{settings, open?}` | "So wird gewürfelt": the rules in four lines, worded after the room settings; everyone sees it (lobby: open for non-hosts; game: folded) |
 | `Confetti` | 12 square CSS pieces, `position: fixed`, three falls; hidden with reduced motion |
 | `SixBanner` `{template, name, platz, children?}` | Native modal `<dialog>`: the browser keeps the page behind inert; Escape does nothing; `children` = the host's "Weiter" button |
 | `ReactionBar` `{onReact, disabled?}` | Client cooldown 2 s, mirrors the server |
