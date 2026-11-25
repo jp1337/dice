@@ -209,6 +209,13 @@ describe("public assets", () => {
     }
   });
 
+  it("the roll sound lasts as long as the dice tumble, so it ends before the six sound starts", () => {
+    const file = readFileSync(web("public/sounds/roll.wav"));
+    const ms = (file.readUInt32LE(40) / file.readUInt32LE(28)) * 1000; // data bytes / bytes per second
+    expect(ms).toBeLessThanOrEqual(ROLL_ANIMATION_MS);
+    expect(ms).toBeGreaterThan(ROLL_ANIMATION_MS * 0.9);
+  });
+
   it("the preview image is a small square PNG, as index.html declares it (spec 10.2)", () => {
     const png = readFileSync(web("public/og.png"));
     expect(png.subarray(1, 4).toString()).toBe("PNG");
