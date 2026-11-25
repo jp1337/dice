@@ -113,24 +113,23 @@ colors:
   night-shadow: "#00000073"
 typography:
   title:
-    fontFamily: Pixelify Sans
-    fontSize: 2.6rem
-    fontWeight: 700
-    lineHeight: 1.1
-  turn:
-    fontFamily: Pixelify Sans
-    fontSize: 2rem
-    fontWeight: 700
-    lineHeight: 1.15
-  heading:
-    fontFamily: Pixelify Sans
-    fontSize: 1.2rem
-    fontWeight: 600
-    lineHeight: 1.25
-  digits:
     fontFamily: Jersey 10
-    fontSize: 1em
+    fontSize: 2.6rem
     fontWeight: 400
+    lineHeight: 1.1
+    letterSpacing: 0.02em
+  turn:
+    fontFamily: Jersey 10
+    fontSize: 2rem
+    fontWeight: 400
+    lineHeight: 1.15
+    letterSpacing: 0.02em
+  heading:
+    fontFamily: Jersey 10
+    fontSize: 1.2rem
+    fontWeight: 400
+    lineHeight: 1.25
+    letterSpacing: 0.03em
   body:
     fontFamily: ui-rounded
     fontSize: 1rem
@@ -342,13 +341,30 @@ reach 3:1. `test/design.test.ts` computes them from this file; the table in
 
 ## Typography
 
-- **Pixelify Sans** (OFL, self-hosted) for the room name, headings, the turn and signs:
-  `title` 2.6rem, `turn` 2rem, `heading` 1.2rem.
-- **Jersey 10** (OFL, self-hosted) for the digits inside those headings only: Pixelify's
-  5 reads as an S and Silkscreen's 4 as a blob. `size-adjust: 145%` matches the cap height.
-- The **system rounded face** (`ui-rounded`, then the platform UI font) for everything
-  else: `body` 1rem / 500.
-- No webfont from a CDN; no third font.
+Two faces, each with one job.
+
+- **Jersey 10** (OFL, self-hosted, 78 KB) — the pixel voice: the room name (`title`
+  2.6rem), the turn on the dice table (`turn` 2rem), panel headings and disclosure
+  summaries (`heading` 1.2rem), signs and number tokens. One weight; `size-adjust: 130%`
+  lifts its small x-height to the size of the surrounding text, and a declared weight
+  range stops the browser from faking bold.
+- **The system rounded face** (`ui-rounded`, then the platform UI font) — everything
+  people read in sentences: `body` 1rem / 500, buttons, lists, the history, forms.
+
+### Legibility is the rule, not the look
+
+The pixel face is chosen by one test before any other: every letter and digit of
+these must be unmistakable at heading size, on the dice table and on paper.
+
+> Am Zug · Zugreihenfolge · Größe · Übermut · Geschenk Nr. 45 · Runde 12 · 0123456789
+
+Pixelify Sans failed it (its Z reads as a B, its 5 as an S); Silkscreen failed it (caps
+only, its 4 a blob). Jersey 10 passes. A new pixel face replaces it only after passing
+the same line.
+
+- Pixel text is never smaller than 1.1rem and never set in running sentences longer
+  than one line, except the six banner's sign.
+- No third face, no webfont from a CDN, no synthetic bold.
 
 ## Layout
 
@@ -403,3 +419,4 @@ inside its frame.
 - **Don't** colour titles or arrows berry or pink; berry is the six, notices and focus.
 - **Don't** let the light theme glare: no white panels, no white page background.
 - **Don't** blur shadows or round corners.
+- **Don't** use a pixel face that fails the legibility line in Typography (Z/B, 5/S, 4, 2/Z).

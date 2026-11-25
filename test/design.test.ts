@@ -143,8 +143,11 @@ describe("style.css follows DESIGN.md", () => {
   it("loads exactly the fonts DESIGN.md names", () => {
     const named = new Set([...block("typography").matchAll(/fontFamily: (.+)$/gm)].map((m) => m[1]!.trim()));
     const faces = [...STYLE.matchAll(/@font-face \{[^}]*src: url\("\.\/fonts\/([^"]+)"/g)].map((m) => m[1]);
-    expect(faces).toEqual(["PixelifySans.ttf", "Jersey10-Regular.ttf"]);
-    expect(named).toEqual(new Set(["Pixelify Sans", "Jersey 10", "ui-rounded"]));
+    expect(faces).toEqual(["Jersey10-Regular.ttf"]); // one pixel face for headings and digits
+    expect(named).toEqual(new Set(["Jersey 10", "ui-rounded"]));
+    expect(STYLE).toMatch(/--font-pixel: "Pixel", ui-rounded/);
+    expect(STYLE).not.toMatch(/Pixelify|Silkscreen/); // failed the legibility line in DESIGN.md
+    expect(DESIGN).toContain("Am Zug · Zugreihenfolge · Größe"); // the line a pixel face must pass
   });
 
   it("keeps the host's wishes: blue button, no gold behind the active player, titles not berry, hover on the whole face", () => {
