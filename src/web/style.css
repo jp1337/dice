@@ -1,6 +1,6 @@
 /* A snowed-in village at the year-end gathering: a snowfield under icicles, panels of snow paper in
    evergreen frames, the dice on a warm cabin table, gold for what to press, berry for titles and links.
-   Pixel bevels on every control, a pixel face (Pixelify Sans, digits from Silkscreen, both OFL) for headings only.
+   Pixel bevels on every control, a pixel face (Pixelify Sans, digits from Jersey 10, both OFL) for headings only.
    Light is a clear winter morning, dark a moonlit night. No orange anywhere (wish of the event's host): the
    wood is a low-chroma walnut, the gold leans to yellow. Dark from the system preference unless the toggle fixed
    light, or from the toggle (data-theme on <html>, set before the first paint by theme-init.js). The dark
@@ -16,12 +16,14 @@
   unicode-range: U+0000-002F, U+003A-10FFFF;
 }
 
-/* The digits of the pixel face: Silkscreen (OFL), the same pixel look with a 5 that is a 5. Bold only;
-   the weight range keeps the browser from faking a bolder one. */
+/* The digits of the pixel face: Jersey 10 (OFL), the same pixel look with a 4 and a 5 that read at
+   a glance (Silkscreen's 4 was a blob). It is small for its size, so scaled up to the cap height. The
+   weight range keeps the browser from faking a bolder one. */
 @font-face {
   font-family: "Pixel Digits";
-  src: url("./fonts/Silkscreen-Bold.ttf") format("truetype");
+  src: url("./fonts/Jersey10-Regular.ttf") format("truetype");
   font-weight: 400 700;
+  size-adjust: 145%;
   font-display: swap;
   unicode-range: U+0030-0039;
 }
@@ -94,7 +96,7 @@
 
   /* Kept equal to ROLL_ANIMATION_MS, REACTION_INTERVAL_MS and FLOAT_MS (test/web.test.ts). */
   --roll-duration: 1300ms;
-  --reaction-interval: 2000ms;
+  --reaction-interval: 500ms;
   --float-duration: 2400ms;
   --bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
 

@@ -95,26 +95,22 @@ export function latecomers(view: RoomView) {
   return view.members.filter((m) => !inGame.has(m.userId));
 }
 
-// Whose turn to show. The server moves the turn on as it rolls; while the dice still tumble (busy),
-// the next name would make the result look like theirs, so the turn stays with whoever rolled.
-export function shownTurn(view: RoomView, busy: boolean) {
-  return (busy && view.game.lastRoll?.userId) || view.game.activeUserId;
-}
-
-// The live region of the game view (spec 4.3): read out on every change of turn.
-export function turnText(view: RoomView, myId: UserId | null, busy: boolean) {
+// The live region of the game view (spec 4.3): read out on every change of turn. The view passed in
+// is held back while the dice tumble (roll.ts displayedView), so it names whoever rolled until they land.
+export function turnText(view: RoomView, myId: UserId | null) {
   if (view.game.status !== "running") return "";
-  const who = shownTurn(view, busy);
+  const who = view.game.activeUserId;
   return who !== null && who === myId ? "Du bist dran!" : `Am Zug: ${namesOf(view).name(who)}`;
 }
 
-export function turnList(view: RoomView, busy = false) {
+export function turnList(view: RoomView) {
   const { byId, name } = namesOf(view);
-  const active = shownTurn(view, busy);
+  const active = view.game.activeUserId;
   return view.game.turnOrder.map((userId) => ({
     userId,
     name: name(userId),
     active: userId === active,
+    avatarUrl: byId.get(userId)?.avatarUrl ?? null,
     twoDice: view.game.bonusPending.includes(userId),
     connected: byId.get(userId)?.connected ?? false,
     isSimulated: byId.get(userId)?.isSimulated ?? false,
@@ -176,6 +172,7 @@ export function describeEvent(
   name: (id: UserId | null) => string,
   rollOf: (seq: number) => string,
   known: (id: UserId) => boolean = () => true,
+  pauseOf: (seq: number) => "host" | "six" | null = () => null,
 ): string {
   const actor = event.actorUserId === null ? "Der Server" : name(event.actorUserId);
   switch (event.type) {
@@ -187,8 +184,11 @@ export function describeEvent(
     }
     case "game_started":
       return `${actor} startet das Spiel`;
-    case "continued":
-      return `${actor} macht weiter`;
+    // Not "macht weiter": it read like any other action. Say which pause ended.
+    case "continued": {
+      const pause = pauseOf(event.seq);
+      return pause === "host" ? `${actor} beendet die Pause` : pause === "six" ? `${actor} setzt das Spiel nach der 6 fort` : `${actor} setzt das Spiel fort`;
+    }
     case "paused":
       return `${actor} pausiert das Spiel`;
     case "skipped":
@@ -230,12 +230,21 @@ export function historyLines(view: RoomView, withModeration: boolean, timeZone?:
   const { name, byId } = namesOf(view);
   const rolls = new Map(view.game.history.flatMap((e) => (e.type === "rolled" ? [[e.seq, name(e.payload.userId)] as const] : [])));
   const rollOf = (seq: number) => rolls.get(seq) ?? UNKNOWN;
+  // What a `continued` ended: the newest host pause or six before it.
+  const pauseOf = (seq: number) => {
+    for (const e of view.game.history.filter((x) => x.seq < seq).reverse()) {
+      if (e.type === "paused") return "host";
+      if (e.type === "rolled" && e.payload.dice.includes(6)) return "six";
+      if (e.type === "continued") return null;
+    }
+    return null;
+  };
   return view.game.history
     .filter((e) => withModeration || e.type === "rolled")
     .map((e) => ({
       seq: e.seq,
       time: formatTime(e.createdAt, timeZone),
-      text: describeEvent(e, name, rollOf, (id) => byId.has(id)),
+      text: describeEvent(e, name, rollOf, (id) => byId.has(id), pauseOf),
       undone: e.type === "rolled" && view.game.undoneSeqs.includes(e.seq),
       moderation: e.type !== "rolled",
     }))
@@ -270,6 +279,7 @@ export function nicknameResponseMessage(status: number): string | null {
   if (status === 204) return null;
   if (status === 400) return "Diesen Spitznamen nimmt der Server nicht an.";
   if (status === 401) return "Deine Sitzung ist abgelaufen. Bitte melde dich neu an.";
+  if (status === 409) return "Diesen Namen trägt schon jemand in einem deiner Räume.";
   if (status === 429) return "Zu viele Änderungen. Bitte warte eine Minute.";
   return "Das hat nicht geklappt. Bitte versuche es noch einmal.";
 }

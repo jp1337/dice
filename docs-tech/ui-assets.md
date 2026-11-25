@@ -10,6 +10,7 @@ compares pixels (`--check`).
 | File | Script | Size |
 | --- | --- | --- |
 | `src/web/public/sounds/six.wav` | `node scripts/generate-sounds.mjs` | 35 KB |
+| `src/web/public/sounds/turn.wav` | same | 31 KB |
 | `src/web/public/og.png` (256×256) | `node scripts/generate-og-image.mjs` | 1 KB |
 
 - Both sounds: mono 16 bit 22.05 kHz WAV, peak −9 dBFS (quiet on purpose: voice channel), under 60 KB,
@@ -18,6 +19,7 @@ compares pixels (`--check`).
 | Sound | Made of | Length |
 | --- | --- | --- |
 | Six | Synthesized: marimba arpeggio G–B–D–G, partials 1× and 3.9× (higher ones would alias), soft mallet attack | 0.8 s |
+| Turn | Synthesized: two glockenspiel strikes A5, E6 (partials 1×, 2.76×, 5.4×), played to whoever is up once the dice have landed and the game is not paused | 0.7 s |
 | Roll | Recorded, not generated (synthesized dice sounded like clinking glass): Kenney "Casino Audio" 1.1, CC0, from `opengameart.org/content/54-casino-sound-effects-cards-dice-chips`. First 0.65 s of `dice-shake-2.ogg` (fade out from 0.5 s), then `dice-throw-1.ogg`; command below | 1.25 s |
 
 ```sh
@@ -32,8 +34,9 @@ ffmpeg -i dice-shake-2.ogg -i dice-throw-1.ogg -filter_complex "[0]atrim=0:0.65,
 - `src/web/fonts/PixelifySans.ttf` (77 KB, variable 400–700): Pixelify Sans by the Pixelify Sans
   Project Authors, SIL Open Font License 1.1 (`OFL.txt` beside it), unmodified, from
   `github.com/google/fonts/tree/main/ofl/pixelifysans`. `style.css` imports it relatively, so Vite hashes it into `/assets/` (cached for a year).
-- `src/web/fonts/Silkscreen-Bold.ttf` (30 KB): Silkscreen by the Silkscreen Project Authors, OFL 1.1
-  (`OFL-Silkscreen.txt`), unmodified, from `github.com/google/fonts/tree/main/ofl/silkscreen`; digits only.
+- `src/web/fonts/Jersey10-Regular.ttf` (78 KB): Jersey 10 by the Soft Type Project Authors, OFL 1.1 (`OFL-Jersey10.txt`), unmodified, from
+  `github.com/google/fonts/tree/main/ofl/jersey10`; digits only, `size-adjust: 145%`. Silkscreen was tried
+  first: its 4 reads as a blob.
 
 ## Look
 
@@ -64,7 +67,7 @@ no orange anywhere (the wood is low-chroma walnut, oklch hue 38–45; the gold l
 | Switch | knob left + grey track + "aus", knob right + evergreen track + "an"; text in the `aria-hidden` track |
 | Pixel tiles | icicles, pines, snowflakes: hand-drawn SVG data URIs in custom properties (`img-src data:` allows them), 2 px per pixel, `crispEdges` |
 | Snow | `body::before`/`::after`, `position: fixed`, `z-index: -1`, each tile slides down by its own height (transform only, no seam); still with reduced motion |
-| Headings | Pixelify Sans for `h1`–`h3`, `summary`, sign, turn; body stays the system face. Its 5 reads as an S, so digits come from Silkscreen Bold (`"Pixel Digits"`, `unicode-range` 0–9) |
+| Headings | Pixelify Sans for `h1`–`h3`, `summary`, sign, turn; body stays the system face. Its 5 reads as an S, so digits come from Jersey 10 (`"Pixel Digits"`, `unicode-range` 0–9) |
 | Motion | ≤ 500 ms except the dice (1.3 s), confetti and the snow; stepped bob on the roll button; all off with reduced motion |
 
 ### Desktop shell
@@ -145,11 +148,11 @@ directly or through `contracts.ts`. Values for the browser live in `src/shared/c
 | `HowTo` `{settings, open?}` | "So wird gewürfelt": the rules in four lines, worded after the room settings; everyone sees it (lobby: open for non-hosts; game: folded) |
 | `Confetti` | 12 square CSS pieces, `position: fixed`, three falls; hidden with reduced motion |
 | `SixBanner` `{template, name, platz, children?}` | Native modal `<dialog>`: the browser keeps the page behind inert; Escape does nothing; `children` = the host's "Weiter" button |
-| `ReactionBar` `{onReact, disabled?}` | Client cooldown 2 s, mirrors the server |
+| `ReactionBar` `{onReact, disabled?}` | Client cooldown 0.5 s, mirrors the server; emojis rise left and right of the dice, never across them |
 | `useFloatingReactions()` → `{items, add}`, `FloatingReactions` `{items, hidden?}` | `add(msg.emojis)`; place in a `.reaction-stage` element |
 | `Avatar` `{userId, name, avatarUrl, size?}` | Initials on a colour from the user id when there is no image |
-| `ThemeToggle`, `SoundToggles` (Würfel-Ton, Gewinner-Ton), `Switch` | Per-browser settings; reactions have no personal switch, hosts switch them for the room |
-| `useSound()` → `{play, rollOff, setRollOff, sixOff, setSixOff}` | `play("roll" \| "six")`, silent until the first gesture; each sound muted on its own (`SOUND_OFF_KEYS`), the old `dice.muted` carried over once |
+| `ThemeToggle`, `SoundToggles` ("Ton:" Würfel, Gewinner, Dran; group "Töne"), `Switch` | Per-browser settings; reactions have no personal switch, hosts switch them for the room |
+| `useSound()` → `{play, rollOff, setRollOff, sixOff, setSixOff, turnOff, setTurnOff}` | `play("roll" \| "six" \| "turn")`, silent until the first gesture; each sound muted on its own (`SOUND_OFF_KEYS`), the old `dice.muted` carried over once |
 | `useFlag(key)`, `useReducedMotion()` | Shared preference store, motion setting |
 
 Logic sits in `src/web/lib/` (plain functions, tested without a DOM); components only render.

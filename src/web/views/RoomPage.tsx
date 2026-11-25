@@ -1,11 +1,12 @@
 // The room (/r/:slug): connection, status, error pages, then the screen that fits the game status.
 // Without a login a public room shows the guest view: the same screens without anything that sends (spec 4.8, 10).
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
+import { createPortal } from "react-dom";
 import type { RoomSummary, RoomView } from "../../shared/contracts.js";
 import { SixBanner } from "../components/SixBanner.js";
 import { type ProbeResult, showErrorPage, statusLabel } from "../lib/connection.js";
 import { deriveRoom, finalSixOpen, sixBannerValues } from "../lib/room.js";
-import { rollBusy } from "../lib/roll.js";
+import { SIX_BANNER_DELAY_MS, rollBusy } from "../lib/roll.js";
 import { loginHref, socketUrl } from "../lib/routes.js";
 import { useRoom } from "../lib/useRoom.js";
 import { Game } from "./Game.js";
@@ -119,6 +120,9 @@ function RoomScreen({ view, room, label }: { view: RoomView; room: ReturnType<ty
   const d = deriveRoom(view, online);
   const busy = rollBusy(room.roll);
   const [finalSixSeq, setFinalSixSeq] = useState<number | null>(null);
+  // The footer renders after the room page, so its slot exists only once both are mounted.
+  const [footerNote, setFooterNote] = useState<HTMLElement | null>(null);
+  useEffect(() => setFooterNote(document.getElementById("footer-note")), []);
   const finalSix = finalSixOpen(view, finalSixSeq);
   const { status } = view.game;
   // The game view stays while the last roll still tumbles, so the result never spoils the dice.
@@ -134,7 +138,22 @@ function RoomScreen({ view, room, label }: { view: RoomView; room: ReturnType<ty
     }
   };
   const six = sixBannerValues(view);
-  const showSix = !busy && six !== null && (view.game.pause === "six" || finalSix);
+  // A chime when it becomes your turn: after the dice have landed (view is held until then) and not
+  // while the game is paused, so it also sounds when a host continues and you are next.
+  const myTurn = d.isActive && view.game.status === "running" && !view.game.pause;
+  const chime = useEffectEvent(() => room.play("turn")); // not again when a sound switch changes
+  useEffect(() => {
+    if (myTurn) chime();
+  }, [myTurn]);
+  // The six banner waits a moment after the dice land, so everyone sees the six itself first.
+  const sixDue = !busy && six !== null && (view.game.pause === "six" || finalSix);
+  const [sixShown, setSixShown] = useState(false);
+  useEffect(() => {
+    if (!sixDue) return setSixShown(false);
+    const timer = setTimeout(() => setSixShown(true), SIX_BANNER_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [sixDue]);
+  const showSix = sixDue && sixShown;
 
   return (
     <>
@@ -152,8 +171,8 @@ function RoomScreen({ view, room, label }: { view: RoomView; room: ReturnType<ty
             Du schaust als Gast zu. Zum Mitmachen <a href={loginHref(location.pathname)}>mit Discord anmelden</a>.
           </p>
         )}
-        {view.room.isPublic && !d.isGuest && <p className="note">Öffentlicher Raum: Gäste ohne Anmeldung sehen deinen Anzeigenamen.</p>}
       </header>
+      {footerNote && view.room.isPublic && !d.isGuest && createPortal("Öffentlicher Raum: Gäste ohne Anmeldung sehen deinen Anzeigenamen.", footerNote)}
       <p className="notice" role="alert">
         {room.notice?.text}
       </p>

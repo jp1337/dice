@@ -7,7 +7,7 @@ import { useFloatingReactions } from "../components/Reactions.js";
 import { type Connection, type ProbeResult, type Status, createConnection } from "./connection.js";
 import { useSound } from "./hooks.js";
 import { errorText } from "./room.js";
-import { ROLLED_WAIT_MS, initialRoll, rollStep } from "./roll.js";
+import { ROLLED_WAIT_MS, displayedView, initialRoll, rollStep } from "./roll.js";
 
 export type Notice = { id: number; text: string };
 
@@ -101,5 +101,6 @@ export function useRoom(url: string, probe?: () => Promise<ProbeResult>, goneMes
   const settled = useCallback(() => dispatchRoll({ type: "settled" }), []);
   const retryNow = useCallback(() => connection.current?.retryNow(), []);
 
-  return { status, view, roll, settled, notice, say, send, retryNow, floating: floating.items, play };
+  // view: what the panels show (held back while the dice tumble); latest: the newest state, for the dice.
+  return { status, view: view && displayedView(roll, view), latest: view, roll, settled, notice, say, send, retryNow, floating: floating.items, play };
 }

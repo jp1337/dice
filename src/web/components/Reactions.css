@@ -64,12 +64,13 @@
   animation: float-up var(--float-duration) ease-out both;
 }
 
-.lane-0 { left: 8%; --drift: -10px; }
-.lane-1 { left: 70%; --drift: 14px; }
-.lane-2 { left: 24%; --drift: 8px; }
-.lane-3 { left: 56%; --drift: -14px; }
-.lane-4 { left: 40%; --drift: -6px; }
-.lane-5 { left: 82%; --drift: -12px; }
+/* Left and right of the dice only, never across them: the result must stay readable. */
+.lane-0 { left: 3%; --drift: 6px; }
+.lane-1 { left: 74%; --drift: -6px; }
+.lane-2 { left: 13%; --drift: -4px; }
+.lane-3 { left: 84%; --drift: 4px; }
+.lane-4 { left: 22%; --drift: -6px; }
+.lane-5 { left: 92%; --drift: -8px; }
 
 .delay-1 { animation-delay: 150ms; }
 .delay-2 { animation-delay: 300ms; }
