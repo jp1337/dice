@@ -45,7 +45,7 @@
 
 .six-banner h2 {
   display: block;
-  max-width: 22ch;
+  max-width: 28ch;
   padding: 12px 24px;
   border-bottom: 3px solid var(--ink);
   font-size: clamp(1.6rem, 6vw, 3rem);

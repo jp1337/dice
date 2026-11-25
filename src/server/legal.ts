@@ -8,7 +8,10 @@ export const escapeHtml = (text: string) =>
 
 const notConfigured = "<p><strong>Angaben nicht konfiguriert.</strong></p>";
 
-function page(title: string, body: string) {
+// css: the app's built stylesheet (from index.html), so these pages look like the app. Without a build
+// (server-only development) they stay plain HTML.
+function page(title: string, body: string, css: string | null) {
+  const style = css ? `\n<script src="/theme-init.js"></script>\n<link rel="stylesheet" href="${escapeHtml(css)}">` : "";
   return `<!doctype html>
 <html lang="de">
 <head>
@@ -16,19 +19,27 @@ function page(title: string, body: string) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
 <meta name="color-scheme" content="light dark">
-<title>${title} – Würfel</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<title>${title} – Würfel</title>${style}
 </head>
 <body>
-<main>
+<div class="page">
+<main class="doc">
 <h1>${title}</h1>
 ${body}
 </main>
 <footer>
 <nav><a href="/">Start</a> · <a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a> · <a href="${REPO_URL}">GitHub</a></nav>
 </footer>
+</div>
 </body>
 </html>
 `;
+}
+
+// Unknown addresses and guest links that are off: a page with a way back, not a bare "Nicht gefunden".
+export function notFoundHtml(text: string, css: string | null = null) {
+  return page("Nicht gefunden", `<p>${escapeHtml(text)}</p>\n<p><a class="button" href="/">Zur Startseite</a></p>`, css);
 }
 
 function contact(legal: Legal) {
@@ -37,10 +48,10 @@ function contact(legal: Legal) {
 <p>E-Mail: <a href="mailto:${email}">${email}</a></p>`;
 }
 
-export function impressumHtml(legal: Legal | null) {
-  if (!legal) return page("Impressum", notConfigured);
+export function impressumHtml(legal: Legal | null, css: string | null = null) {
+  if (!legal) return page("Impressum", notConfigured, css);
   const note = legal.note ? `\n<p>${escapeHtml(legal.note)}</p>` : "";
-  return page("Impressum", `<p>Angaben gemäß § 5 DDG</p>\n${contact(legal)}${note}`);
+  return page("Impressum", `<p>Angaben gemäß § 5 DDG</p>\n${contact(legal)}${note}`, css);
 }
 
 export const PRIVACY_UPDATED = "25. November 2026";
@@ -64,7 +75,7 @@ function protection(services: PrivacyServices) {
 <p>Die App läuft auf einem Server von Hetzner (Hetzner Online GmbH) in Deutschland.</p>${crowdsec}${cloudflare}`;
 }
 
-export function datenschutzHtml(legal: Legal | null, services: PrivacyServices = { cloudflare: false, crowdsec: true }) {
+export function datenschutzHtml(legal: Legal | null, services: PrivacyServices = { cloudflare: false, crowdsec: true }, css: string | null = null) {
   const days = services.retentionDays ?? 90;
   const mail = legal ? `eine E-Mail an <a href="mailto:${escapeHtml(legal.email)}">${escapeHtml(legal.email)}</a>` : "eine Nachricht an den Verantwortlichen";
   return page(
@@ -135,5 +146,6 @@ ${protection(services)}
 <p>Dafür genügt ${mail}. Außerdem besteht das Recht auf Beschwerde bei einer Datenschutz-Aufsichtsbehörde (Art. 77 DSGVO).</p>
 
 <p>Stand: ${PRIVACY_UPDATED}</p>`,
+    css,
   );
 }

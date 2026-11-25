@@ -80,7 +80,7 @@ const CLOSE = {
   "reload failed": [1012, "Der Raum wird neu geladen. Bitte verbinde dich neu."],
   retry: [1013, "Bitte verbinde dich neu."],
   "join failed": [1011, "Beitritt fehlgeschlagen."],
-  "logged out": [4001, "Abgemeldet."],
+  "logged out": [4001, "Du hast dich abgemeldet. Melde dich wieder an, um weiterzumachen."],
   "session expired": [4001, "Sitzung abgelaufen. Bitte melde dich neu an."],
   "watch link changed": [4004, "Dieser Zuschauer-Link gilt nicht mehr."],
   "too many guests": [1008, "Zu viele Zuschauer in diesem Raum."],

@@ -26,6 +26,7 @@ import {
   giftList,
   historyLines,
   lastGiftText,
+  rollCaption,
   latecomers,
   nicknameError,
   nicknameResponseMessage,
@@ -234,7 +235,7 @@ describe("the room connection", () => {
   it.each([
     [1008, "Zu viele offene Tabs in diesem Raum.", "stopped"],
     [4004, "", "stopped"],
-    [4001, "Abgemeldet.", "login"],
+    [4001, "Du hast dich abgemeldet. Melde dich wieder an, um weiterzumachen.", "login"],
   ])("stops on %i with a message", async (code, reason, kind) => {
     connect();
     last().open();
@@ -501,6 +502,14 @@ describe("review fixes", () => {
     expect(pickOption(options, "")).toBeNull();
     expect(pickOption(options, BEN)).toEqual({ userId: BEN, name: "Ben" });
     expect(pickOption(options.slice(0, 1), BEN)).toBeNull(); // Ben left the list: the choice is cleared
+  });
+
+  it("names whose dice lie on the table, also while they tumble", () => {
+    expect(rollCaption(makeView({ game: running() }), ANNA, false)).toBe("Noch hat niemand gewürfelt.");
+    const rolled = makeView({ game: running({ lastRoll: { userId: BEN, dice: [3, 1] }, activeUserId: ANNA }) });
+    expect(rollCaption(rolled, ANNA, true)).toBe("Ben würfelt …");
+    expect(rollCaption(rolled, ANNA, false)).toBe("Ben hat 3 und 1 gewürfelt.");
+    expect(rollCaption(rolled, BEN, false)).toBe("Du hast 3 und 1 gewürfelt.");
   });
 
   it("names the newest gift in one line", () => {

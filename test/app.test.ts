@@ -137,6 +137,23 @@ describe("routes", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain("12345 Musterstadt");
   });
+  it.each(["/impressum", "/datenschutz", "/does-not-exist"])("%s wears the app's stylesheet and theme", async (url) => {
+    const { body } = await app.inject({ url });
+    // makeWebRoot serves the source index.html, whose stylesheet is ./style.css; a build has /assets/….css.
+    expect(body).toContain('<link rel="stylesheet" href="./style.css">');
+    expect(body).toContain('<script src="/theme-init.js"></script>');
+  });
+
+  it.each([
+    ["/does-not-exist", "Diese Seite gibt es nicht."],
+    ["/z/kurz", "Dieser Zuschauer-Link ist nicht mehr aktiv."],
+  ])("%s answers 404 with a page and a way back", async (url, text) => {
+    const res = await app.inject({ url });
+    expect(res.statusCode).toBe(404);
+    expect(res.headers["content-type"]).toBe("text/html; charset=utf-8");
+    expect(res.body).toContain(text);
+    expect(res.body).toContain('<a class="button" href="/">Zur Startseite</a>');
+  });
 });
 
 describe("legal pages without configuration (development)", () => {

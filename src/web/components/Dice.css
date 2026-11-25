@@ -41,14 +41,14 @@
 }
 
 @keyframes tumble {
-  0% { transform: translate(-40%, -45%) rotate(-220deg) scale(0.8); }
+  0% { transform: translate(-40%, -20%) rotate(-220deg) scale(0.8); }
   55% { transform: translate(5%, 6%) rotate(18deg) scale(1.03); }
   78% { transform: translate(0, -4%) rotate(-6deg); }
   100% { transform: none; }
 }
 
 @keyframes tumble-alt {
-  0% { transform: translate(45%, -55%) rotate(260deg) scale(0.8); }
+  0% { transform: translate(45%, -25%) rotate(260deg) scale(0.8); }
   60% { transform: translate(-6%, 5%) rotate(-14deg) scale(1.03); }
   82% { transform: translate(0, -3%) rotate(5deg); }
   100% { transform: none; }

@@ -94,6 +94,7 @@ function SixMessage({ view, send, enabled }: { view: RoomView; send: Props["send
   const saved = view.room.settings.sixMessage;
   const [value, setValue] = useState(saved);
   const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false); // "Gespeichert." once the server's state carries the text
   const id = useId();
   useEffect(() => setValue(saved), [saved]); // another host changed it
 
@@ -106,10 +107,14 @@ function SixMessage({ view, send, enabled }: { view: RoomView; send: Props["send
         const invalid = sixMessageError(value);
         setError(invalid);
         if (!invalid) send({ type: "update_settings", settings: { sixMessage: cleanText(value) } });
+        setSent(!invalid);
       }}
     >
       <label htmlFor={id}>Text bei einer 6</label>
-      <textarea id={id} rows={2} value={value} maxLength={SIX_MESSAGE_MAX * 2} aria-describedby={`${id}-hint`} onChange={(event) => setValue(event.target.value)} />
+      <textarea id={id} rows={2} value={value} maxLength={SIX_MESSAGE_MAX * 2} aria-describedby={`${id}-hint`} onChange={(event) => {
+          setValue(event.target.value);
+          setSent(false);
+        }} />
       <span id={`${id}-hint`} className="hint">
         Platzhalter: {"{name}"} für den Namen, {"{platz}"} für die Geschenk-Nummer.
       </span>
@@ -120,6 +125,9 @@ function SixMessage({ view, send, enabled }: { view: RoomView; send: Props["send
         <button type="submit" disabled={!enabled || value === saved}>
           Text speichern
         </button>
+        <span role="status" className="hint">
+          {sent && value === saved ? "Gespeichert." : ""}
+        </span>
       </span>
     </form>
   );

@@ -655,7 +655,7 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       const other = await connect(slug, await makeUser());
       const res = await app.inject({ method: "POST", url: "/auth/logout", cookies: cookies(user), headers: { origin: ORIGIN } });
       expect(res.statusCode).toBe(204);
-      expect(await mine.closed).toEqual({ code: 4001, reason: "Abgemeldet." });
+      expect(await mine.closed).toEqual({ code: 4001, reason: "Du hast dich abgemeldet. Melde dich wieder an, um weiterzumachen." });
       expect(other.ws.readyState).toBe(WebSocket.OPEN);
     });
 

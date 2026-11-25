@@ -29,7 +29,7 @@ function App() {
       </main>
       <footer>
         <span>
-          <a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a> · <a href="https://github.com/jp1337/dice">GitHub</a>
+          <a href="/">Start</a> · <a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a> · <a href="https://github.com/jp1337/dice">GitHub</a>
         </span>
         <div className="me">
           <SoundToggle />

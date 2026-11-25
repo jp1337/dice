@@ -321,6 +321,9 @@ label {
 
 .lead {
   font-size: 1.1rem;
+}
+
+.start .lead {
   text-align: center;
 }
 
@@ -531,6 +534,13 @@ label {
       0 0 0 6px rgb(255 228 122 / 0.35),
       0 6px 30px var(--glow-gold);
   }
+}
+
+.roll-caption {
+  min-height: 1.5em;
+  margin: 0 0 12px;
+  color: var(--cream);
+  font-weight: 700;
 }
 
 .last-gift {

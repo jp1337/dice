@@ -8,17 +8,19 @@ import { GiftOrder, History, RESET_QUESTION } from "./Game.js";
 
 export function Result({ view, d, send }: { view: RoomView; d: Derived; send: (message: ClientMessage) => void }) {
   const seq = d.newestRollSeq;
+  // "Spiel beenden" before anyone rolled a six: nothing to celebrate, nothing to distribute.
+  const none = view.game.giftOrder.length === 0;
   return (
     <div className="result stack">
-      <Confetti />
+      {!none && <Confetti />}
       <div className="ribbon-wrap">
         <p className="ribbon" aria-live="polite">
-          Fertig! So werden die Geschenke verteilt:
+          {none ? "Spiel beendet. Niemand hat eine 6 gewürfelt." : "Fertig! So werden die Geschenke verteilt:"}
         </p>
       </div>
-      <GiftOrder view={view} />
+      {!none && <GiftOrder view={view} />}
       <span className="row">
-        <CopyButton text={resultText(view)} label="Als Text kopieren" multiline />
+        {!none && <CopyButton text={resultText(view)} label="Als Text kopieren" multiline />}
         {d.can.undo && seq !== null && (
           <ConfirmButton key={seq} label={`Wurf von ${d.newestRollName} zurücknehmen`} question={`Wurf von ${d.newestRollName} zurücknehmen? Das Spiel geht dann weiter.`} onConfirm={() => send({ type: "undo", seq })} />
         )}

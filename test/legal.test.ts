@@ -113,8 +113,10 @@ describe("Datenschutzhinweis", () => {
     for (const html of [datenschutzHtml(value, { cloudflare: true, crowdsec: true }), datenschutzHtml(value, { cloudflare: true, crowdsec: true, logDays: 30, backupDays: 14 })]) {
       expect(html).not.toMatch(/undefined|null|NaN/);
     }
-    const html = datenschutzHtml(value, { cloudflare: true, crowdsec: true });
-    expect(html).not.toMatch(/<(script|link|img|iframe|object|embed|style)\b|\bstyle=|\bsrc=/i);
+    // With the app's stylesheet: the theme script, the stylesheet and the icon, all from this server.
+    const html = datenschutzHtml(value, { cloudflare: true, crowdsec: true }, "/assets/index-abc.css");
+    expect(html).not.toMatch(/<(img|iframe|object|embed|style)\b|\bstyle=/i);
+    for (const [, url] of html.matchAll(/<(?:script|link)\b[^>]*(?:src|href)="([^"]*)"/g)) expect(url).toMatch(/^\/(?!\/)/);
     // Only plain links: relative, mailto or https.
     for (const [, href] of html.matchAll(/href="([^"]*)"/g)) expect(href).toMatch(/^(\/|mailto:|https:\/\/)/);
   });
