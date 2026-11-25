@@ -22,9 +22,10 @@ Measured November 2026, seconds. The wall-clock is the slowest job; on `main` pl
 | | Before | After |
 | --- | --- | --- |
 | Pull request, wall-clock | 43–69 | 37–43 |
+| PostgreSQL ready (`Initialize containers`) | 10–13 | 4–7 |
 | `test` | 38–44 | 34–40 |
 | `docker`, source changed | 31–49 | 23–25 |
-| `docker`, nothing in the image changed | 13–20 | 13 |
+| `docker`, nothing in the image changed | 13–20 | 10–13 |
 | `main`, wall-clock | 72–90 | not yet measured |
 
 | Choice | Why | Saves |
