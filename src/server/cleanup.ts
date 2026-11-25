@@ -17,8 +17,10 @@ const statements = {
   // A simulated player belongs to exactly one test room and is created with its membership in one
   // transaction, so one without a room is one whose room is gone (spec 9.3).
   simulated: "delete from users u where u.is_simulated and not exists (select 1 from room_members m where m.user_id = u.id)",
+  // Not while a session is valid: with RETENTION_DAYS under the 7-day session, people were logged out mid-week.
   users: `delete from users u where not u.is_simulated and u.last_login_at < $1 and u.id <> all($2::uuid[])
-    and not exists (select 1 from room_members m where m.user_id = u.id)`, // sessions cascade
+    and not exists (select 1 from room_members m where m.user_id = u.id)
+    and not exists (select 1 from sessions s where s.user_id = u.id and s.expires_at > now())`, // sessions cascade
 };
 
 export async function runCleanup(pool: Pool, retentionDays: number, live: LiveRooms = nothingLive) {

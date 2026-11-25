@@ -10,7 +10,7 @@
 </p>
 
 A small web app for one Discord community: members log in with Discord, a host starts a room, and
-**the server rolls every die, enforces the turn order and pauses the game on every 6**, so the
+**the server rolls every die, enforces the turn order and pauses the game on every 6 while others still roll**, so the
 moderator can talk instead of keeping score.
 
 <!-- Screenshot of the game view (light and dark, <picture>) goes here once the interface exists (step 6). -->

@@ -50,7 +50,7 @@ describe("handleGameCommand: what decide cannot see", () => {
   const [A, B, S] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
   const ctx = (members: [string, Participation][], over: Partial<GameCommandContext> = {}): GameCommandContext => ({
     actor: { userId: A, canModerate: true },
-    room: { game: reduce([], defaultSettings), members: new Map(members.map(([id, participation]) => [id, { participation }])), lastRollAt: 0 },
+    room: { game: reduce([], defaultSettings), settings: defaultSettings, members: new Map(members.map(([id, participation]) => [id, { participation }])), lastRollAt: 0 },
     rollCooldownMs: 2000,
     now: 10_000,
     randomInt,

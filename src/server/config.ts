@@ -35,8 +35,8 @@ const list = <T extends z.ZodType<string, string>>(item: T) =>
 
 const envSchema = z
   .object({
-    NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
-    PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+    NODE_ENV: optional(z.enum(["development", "production", "test"])).transform((value) => value ?? "development"),
+    PORT: optional(z.coerce.number().int().min(1).max(65535)).transform((value) => value ?? 3000),
     BASE_URL: z.url({ protocol: /^https?$/ }),
     DATABASE_URL: z.string().min(1),
     SESSION_SECRET: z.string().min(32),
@@ -59,7 +59,7 @@ const envSchema = z
     ),
     LEGAL_EMAIL: optional(z.string().trim().pipe(z.email())),
     LEGAL_NOTE: optional(z.string().trim()),
-    RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+    RETENTION_DAYS: optional(z.coerce.number().int().min(1)).transform((value) => value ?? 90),
     // Only switch sections of the privacy notice on and off (spec 9.2).
     PRIVACY_CLOUDFLARE: flag(false),
     PRIVACY_CROWDSEC: flag(true),

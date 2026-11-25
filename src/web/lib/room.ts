@@ -3,6 +3,7 @@
 // decides every action again (spec 7); these only keep buttons from offering what it would refuse.
 import { NICKNAME_MAX, ROOM_NAME_MAX, SIX_MESSAGE_MAX, isVisibleText } from "../../shared/constants.js";
 import type { GameEvent, MemberView, RoomView, ServerMessage, UserId } from "../../shared/contracts.js";
+import { undoReopens } from "../../shared/game/decide.js";
 
 const UNKNOWN = "Unbekannt";
 
@@ -71,13 +72,21 @@ export function deriveRoom(view: RoomView, online: boolean) {
       removePlayer: canModerate && running,
       addPlayer: canModerate && running,
       assignLastPlace: canModerate && lastPlayer !== null,
-      undo: canModerate && !lobby && !ended && newestRoll !== null,
+      undo: canModerate && !lobby && !ended && newestRoll !== null && undoReopens(game, room.settings, newestRoll.seq),
       end: canModerate && running,
       reset: canModerate && !lobby,
     },
   };
 }
 export type Derived = ReturnType<typeof deriveRoom>;
+
+// The banner of the six that ended the game stays until its viewer closes it, but only for that roll. It was
+// a flag of its own: left open over a reset, it made the next game's end show the old banner, or (ended
+// without a roll) keep the game screen with no way to the result.
+export function finalSixOpen(view: RoomView, sixSeq: number | null) {
+  const { game } = view;
+  return sixSeq !== null && game.status === "finished" && game.history.findLast((e) => e.type === "rolled" && !game.undoneSeqs.includes(e.seq))?.seq === sixSeq;
+}
 
 // Co-host switch: never for hosts (always host) or simulated players (spec 4.2).
 export const canBeCohost = (m: MemberView) => !m.isHost && !m.isSimulated;

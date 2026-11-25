@@ -53,4 +53,14 @@ describe.skipIf(!url)("daily cleanup (spec 9.3)", () => {
     expect(await exists("rooms", oldRoom)).toBe(false);
     expect(await exists("users", oldInOldRoom)).toBe(false); // its room went first
   });
+
+  // With RETENTION_DAYS below the 7-day session, someone logged in 2 days ago was deleted with their
+  // session: logged out mid-week by a rule that should only remove people who are gone.
+  it("never deletes a user whose session is still valid, whatever RETENTION_DAYS says", async () => {
+    const loggedIn = await user("logged-in", 2);
+    await pool.query("insert into sessions (id, user_id, expires_at) values ($1, $2, now() + interval '5 days')", [`${tag}-live`, loggedIn]);
+    await runCleanup(pool, 1);
+    expect(await exists("users", loggedIn)).toBe(true);
+    expect(await exists("sessions", `${tag}-live`)).toBe(true);
+  });
 });

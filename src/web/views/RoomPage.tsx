@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { RoomSummary, RoomView } from "../../shared/contracts.js";
 import { SixBanner } from "../components/SixBanner.js";
 import { type ProbeResult, showErrorPage, statusLabel } from "../lib/connection.js";
-import { deriveRoom, sixBannerValues } from "../lib/room.js";
+import { deriveRoom, finalSixOpen, sixBannerValues } from "../lib/room.js";
 import { rollBusy } from "../lib/roll.js";
 import { socketUrl } from "../lib/routes.js";
 import { useRoom } from "../lib/useRoom.js";
@@ -134,7 +134,8 @@ function RoomScreen({ view, room, label }: { view: RoomView; room: ReturnType<ty
   const online = room.status.kind === "open";
   const d = deriveRoom(view, online);
   const busy = rollBusy(room.roll);
-  const [finalSix, setFinalSix] = useState(false);
+  const [finalSixSeq, setFinalSixSeq] = useState<number | null>(null);
+  const finalSix = finalSixOpen(view, finalSixSeq);
   const { status } = view.game;
   // The game view stays while the last roll still tumbles, so the result never spoils the dice.
   const screen = status === "lobby" ? "lobby" : status === "running" || busy || finalSix ? "game" : "result";
@@ -145,11 +146,11 @@ function RoomScreen({ view, room, label }: { view: RoomView; room: ReturnType<ty
     const dice = room.roll.dice ?? [];
     if (dice.includes(6)) {
       room.play("six");
-      if (view.game.status === "finished") setFinalSix(true);
+      if (view.game.status === "finished") setFinalSixSeq(d.newestRollSeq);
     }
   };
   const six = sixBannerValues(view);
-  const showSix = !busy && six !== null && (view.game.pause === "six" || (finalSix && status === "finished"));
+  const showSix = !busy && six !== null && (view.game.pause === "six" || finalSix);
 
   return (
     <>
@@ -174,7 +175,7 @@ function RoomScreen({ view, room, label }: { view: RoomView; room: ReturnType<ty
       {showSix && (
         <SixBanner template={view.room.settings.sixMessage} name={six.name} platz={six.platz}>
           {finalSix ? (
-            <button type="button" className="primary" onClick={() => setFinalSix(false)}>
+            <button type="button" className="primary" onClick={() => setFinalSixSeq(null)}>
               Zum Ergebnis
             </button>
           ) : (

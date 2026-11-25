@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultSettings } from "../src/shared/contracts.js";
 import type { GameEvent, MemberView, RoomView } from "../src/shared/contracts.js";
-import { initialGameState } from "../src/shared/game/reduce.js";
+import { initialGameState, reduce } from "../src/shared/game/reduce.js";
 import {
   BACKOFF_CAP_MS,
   ERROR_PAGE_AFTER,
@@ -22,6 +22,7 @@ import {
   cleanText,
   createRoomResponseMessage,
   deriveRoom,
+  finalSixOpen,
   errorText,
   giftList,
   historyLines,
@@ -343,6 +344,33 @@ describe("what a viewer may click", () => {
     const ended = makeView({ viewer: asHost, game: { status: "finished", history: [roll1, ev("game_ended", {})] } });
     expect(deriveRoom(ended, true).can).toMatchObject({ undo: false, end: false, reset: true });
     expect(deriveRoom(view, false).can.undo).toBe(false);
+  });
+
+  // The result page promised "Das Spiel geht dann weiter" for a roll whose undo left the game over.
+  it("on the result page offers undo only for a roll the game ended on", () => {
+    const start = [ev("game_started", { order: [ANNA, BEN] }), ev("rolled", { userId: ANNA, dice: [6] }, ANNA), ev("continued", {})];
+    const afterThree = reduce([...start, ev("rolled", { userId: BEN, dice: [3] }, BEN), ev("last_place_taken", { userId: BEN }, BEN)], defaultSettings);
+    expect(afterThree.status).toBe("finished");
+    expect(deriveRoom(makeView({ viewer: asHost, game: afterThree }), true).can.undo).toBe(false);
+    const afterSix = reduce([...start, ev("last_place_taken", { userId: BEN }, BEN)], defaultSettings);
+    expect(afterSix.status).toBe("finished");
+    expect(deriveRoom(makeView({ viewer: asHost, game: afterSix }), true).can.undo).toBe(true);
+  });
+
+  it("keeps the final six banner for its own roll only", () => {
+    const start = [ev("game_started", { order: [ANNA, BEN] }), ev("rolled", { userId: ANNA, dice: [6] }, ANNA), ev("continued", {})];
+    const six = ev("rolled", { userId: BEN, dice: [6] }, BEN);
+    const done = makeView({ game: reduce([...start, six], defaultSettings) });
+    expect(finalSixOpen(done, six.seq)).toBe(true);
+    expect(finalSixOpen(done, null)).toBe(false); // closed
+    // Back to the lobby, a new game, ended before anyone rolled: the old banner must not hold the screen.
+    const next = makeView({ game: reduce([...start, six, ev("game_reset", {}), ev("game_started", { order: [ANNA, BEN] }), ev("game_ended", {})], defaultSettings) });
+    expect(next.game.status).toBe("finished");
+    expect(finalSixOpen(next, six.seq)).toBe(false);
+    // The six taken back, then the last place assigned: not that six's banner either.
+    const undone = makeView({ game: reduce([...start, six, ev("undone", { seq: six.seq }), ev("last_place_taken", { userId: BEN })], defaultSettings) });
+    expect(undone.game.status).toBe("finished");
+    expect(finalSixOpen(undone, six.seq)).toBe(false);
   });
 
   it("guests can do nothing", () => {

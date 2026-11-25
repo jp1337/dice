@@ -17,7 +17,7 @@ fi
 # Drop comments and blank lines; match whole words, case-insensitive, as fixed strings.
 patterns="$(mktemp)"
 trap 'rm -f "$patterns"' EXIT
-grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "$denylist" > "$patterns" || true
+tr -d '\r' < "$denylist" | grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' > "$patterns" || true
 if [[ ! -s "$patterns" ]]; then
   echo "personal-data check: denylist has no entries, refusing to continue." >&2
   exit 1

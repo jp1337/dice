@@ -15,8 +15,4 @@ if ! command -v gitleaks >/dev/null; then
 fi
 gitleaks git --pre-commit --staged --redact --no-banner "$root"
 
-# Added lines and file names of everything staged.
-{
-  git diff --cached --no-color -U0 --diff-filter=ACMR | grep -E '^\+' | grep -vE '^\+\+\+ ' || true
-  git diff --cached --name-only --diff-filter=ACMR
-} | "$root/scripts/check-personal-data.sh" "the staged changes"
+"$root/scripts/scan-personal-data.sh" staged

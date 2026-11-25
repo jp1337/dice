@@ -97,6 +97,8 @@ function SixMessage({ view, send, enabled }: { view: RoomView; send: Props["send
   const [sent, setSent] = useState(false); // "Gespeichert." once the server's state carries the text
   const id = useId();
   useEffect(() => setValue(saved), [saved]); // another host changed it
+  // Compared as sent: with a trailing space the saved text never equalled the field, so "Gespeichert." never came.
+  const unchanged = cleanText(value) === saved;
 
   return (
     <form
@@ -106,7 +108,10 @@ function SixMessage({ view, send, enabled }: { view: RoomView; send: Props["send
         event.preventDefault();
         const invalid = sixMessageError(value);
         setError(invalid);
-        if (!invalid) send({ type: "update_settings", settings: { sixMessage: cleanText(value) } });
+        if (!invalid) {
+          send({ type: "update_settings", settings: { sixMessage: cleanText(value) } });
+          setValue(cleanText(value));
+        }
         setSent(!invalid);
       }}
     >
@@ -122,11 +127,11 @@ function SixMessage({ view, send, enabled }: { view: RoomView; send: Props["send
         {error}
       </span>
       <span className="row">
-        <button type="submit" disabled={!enabled || value === saved}>
+        <button type="submit" disabled={!enabled || unchanged}>
           Text speichern
         </button>
         <span role="status" className="hint">
-          {sent && value === saved ? "Gespeichert." : ""}
+          {sent && unchanged ? "Gespeichert." : ""}
         </span>
       </span>
     </form>

@@ -5,12 +5,15 @@ must never enter it, its history or its commit metadata. Two layers catch them.
 
 | Where | Checks | Denylist from |
 | --- | --- | --- |
-| `.githooks/pre-commit` | author e-mail is the GitHub noreply address; gitleaks on the staged diff; denylist on added lines and file names | `.personal-denylist` |
+| `.githooks/pre-commit` | author e-mail is the GitHub noreply address; gitleaks on the staged diff; denylist on added lines and file names (`scripts/scan-personal-data.sh staged`) | `.personal-denylist` |
 | `.githooks/commit-msg` | denylist on the message | `.personal-denylist` |
-| CI `secrets-and-personal-data` | gitleaks on the whole history; denylist on file names, contents, history, commit messages, authors | secret `PERSONAL_DENYLIST` |
+| CI `secrets-and-personal-data` | gitleaks on the whole history; denylist on file names, contents, history, commit messages, authors (`scripts/scan-personal-data.sh repo`) | secret `PERSONAL_DENYLIST` |
 
 `npm install` activates the hooks (`prepare` sets `core.hooksPath`). gitleaks must be installed; the hook
 refuses to commit without it. Never `--no-verify`.
+
+Both scans read file names unescaped (`core.quotePath=false`), binary files as text, and ignore external diff
+tools; `test/personal-data-scan.test.ts` has one case for each, since each once passed unnoticed.
 
 ## The denylist
 

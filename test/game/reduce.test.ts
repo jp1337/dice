@@ -50,6 +50,12 @@ describe("bonus (core rule 6, R3, R4)", () => {
     expect(run([e.start(A, B), e.roll(A, 1), e.roll(B, 3)])).toMatchObject({ activeUserId: A, activeDiceCount: 2 });
   });
 
+  // The last player rolls a 1 and takes the last place: a bonus for someone who never rolls again.
+  it("a player who gets a place keeps no bonus", () => {
+    const s = run([e.start(A, B), e.roll(A, 6), e.cont(), e.roll(B, 1), e.last(B)]);
+    expect(s).toMatchObject({ status: "finished", bonusPending: [] });
+  });
+
   it("the bonus lasts exactly one roll", () => {
     const s = run([e.start(A, B), e.roll(A, 1), e.roll(B, 3), e.roll(A, 3, 4), e.roll(B, 3)]);
     expect(s).toMatchObject({ activeUserId: A, activeDiceCount: 1, bonusPending: [] });

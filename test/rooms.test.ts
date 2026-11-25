@@ -637,6 +637,8 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       const client = await connect(slug, user);
       await pool.query("update rooms set last_activity_at = now() - interval '400 days' where id = $1", [roomId]);
       await pool.query("update users set last_login_at = now() - interval '400 days' where id = $1", [user.id]);
+      // A login 400 days ago has no valid session left; a valid one keeps the user (cleanup.ts).
+      await pool.query("update sessions set expires_at = now() - interval '1 second' where user_id = $1", [user.id]);
       await runCleanup(pool, 90, app.live);
       expect(await roomIdOf(slug)).toBe(roomId);
       await client.close();

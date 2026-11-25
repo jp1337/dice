@@ -73,6 +73,7 @@ export class Game {
       actorIsHost: opts.host ?? actor === HOST,
       players: opts.players ?? [],
       randomInt: this.randomInt,
+      settings: this.settings,
     });
     if ("events" in result)
       for (const x of result.events)

@@ -30,6 +30,15 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run lint
+      # Committed generator output: a migration, the link-preview image and the sounds. A changed source
+      # whose output was not regenerated and committed fails here.
+      - name: Generated files match their sources
+        run: |
+          npx drizzle-kit generate
+          node scripts/generate-og-image.mjs
+          node scripts/generate-sounds.mjs
+          git add --intent-to-add --all
+          git diff --exit-code --stat
 
   typecheck:
     runs-on: ubuntu-latest
@@ -120,13 +129,7 @@ jobs:
           printf '%s\n' "$PERSONAL_DENYLIST" > "$RUNNER_TEMP/personal-denylist"
           echo "PERSONAL_DENYLIST_FILE=$RUNNER_TEMP/personal-denylist" >> "$GITHUB_ENV"
       - name: Check file names, contents, history, commit messages and authors
-        run: |
-          check=scripts/check-personal-data.sh
-          git ls-files | $check "tracked file names"
-          git ls-files -z | xargs -0 cat -- | $check "tracked file contents"
-          git log --all -p --diff-merges=first-parent --format= | $check "the history of all files"
-          git log --all --format=%B | $check "commit messages"
-          git log --all --format='%an%n%ae%n%cn%n%ce' | $check "commit authors and committers"
+        run: scripts/scan-personal-data.sh repo
       - if: always()
         run: rm -f "$RUNNER_TEMP/personal-denylist"
 
