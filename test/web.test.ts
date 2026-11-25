@@ -193,9 +193,9 @@ describe("CSP (default-src 'self', no style-src): nothing inline", () => {
     expect(sources.length).toBeGreaterThan(5);
     for (const file of sources) {
       const text = readFileSync(file, "utf8");
-      expect(text, file).not.toMatch(/\sstyle=|<style/);
+      expect(text, file).not.toMatch(/\sstyle=|<style/i);
       // Every <script> loads a file.
-      for (const tag of text.match(/<script[^>]*>/g) ?? []) expect(tag, file).toMatch(/\ssrc=/);
+      for (const tag of text.match(/<script[^>]*>/gi) ?? []) expect(tag, file).toMatch(/\ssrc=/);
     }
   });
 });
