@@ -95,26 +95,22 @@ export function latecomers(view: RoomView) {
   return view.members.filter((m) => !inGame.has(m.userId));
 }
 
-// Whose turn to show. The server moves the turn on as it rolls; while the dice still tumble (busy),
-// the next name would make the result look like theirs, so the turn stays with whoever rolled.
-export function shownTurn(view: RoomView, busy: boolean) {
-  return (busy && view.game.lastRoll?.userId) || view.game.activeUserId;
-}
-
-// The live region of the game view (spec 4.3): read out on every change of turn.
-export function turnText(view: RoomView, myId: UserId | null, busy: boolean) {
+// The live region of the game view (spec 4.3): read out on every change of turn. The view passed in
+// is held back while the dice tumble (roll.ts displayedView), so it names whoever rolled until they land.
+export function turnText(view: RoomView, myId: UserId | null) {
   if (view.game.status !== "running") return "";
-  const who = shownTurn(view, busy);
+  const who = view.game.activeUserId;
   return who !== null && who === myId ? "Du bist dran!" : `Am Zug: ${namesOf(view).name(who)}`;
 }
 
-export function turnList(view: RoomView, busy = false) {
+export function turnList(view: RoomView) {
   const { byId, name } = namesOf(view);
-  const active = shownTurn(view, busy);
+  const active = view.game.activeUserId;
   return view.game.turnOrder.map((userId) => ({
     userId,
     name: name(userId),
     active: userId === active,
+    avatarUrl: byId.get(userId)?.avatarUrl ?? null,
     twoDice: view.game.bonusPending.includes(userId),
     connected: byId.get(userId)?.connected ?? false,
     isSimulated: byId.get(userId)?.isSimulated ?? false,
@@ -270,6 +266,7 @@ export function nicknameResponseMessage(status: number): string | null {
   if (status === 204) return null;
   if (status === 400) return "Diesen Spitznamen nimmt der Server nicht an.";
   if (status === 401) return "Deine Sitzung ist abgelaufen. Bitte melde dich neu an.";
+  if (status === 409) return "Diesen Namen trägt schon jemand in einem deiner Räume.";
   if (status === 429) return "Zu viele Änderungen. Bitte warte eine Minute.";
   return "Das hat nicht geklappt. Bitte versuche es noch einmal.";
 }

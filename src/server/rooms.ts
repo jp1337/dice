@@ -642,7 +642,7 @@ export function registerRooms(
       case "react": {
         if (!room.settings.reactions) throw fail("reactions_off", "Reaktionen sind in diesem Raum abgeschaltet.");
         const now = Date.now();
-        if (now < (room.lastReaction.get(actorId) ?? -Infinity) + REACTION_INTERVAL_MS) throw fail("reaction_too_fast", "Höchstens eine Reaktion alle 2 Sekunden.");
+        if (now < (room.lastReaction.get(actorId) ?? -Infinity) + REACTION_INTERVAL_MS) throw fail("reaction_too_fast", "Kurz warten, dann geht die nächste Reaktion.");
         room.lastReaction.set(actorId, now);
         room.reactions.set(message.emoji, (room.reactions.get(message.emoji) ?? 0) + 1);
         room.reactionTimer ??= setTimeout(() => sendReactions(room), REACTION_BUNDLE_MS);
@@ -895,7 +895,19 @@ export function registerRooms(
     async (request, reply) => {
       const body = patchMeRequestSchema.safeParse(request.body);
       if (!body.success) return reply.code(400).send({ error: "invalid_nickname" });
-      await db.update(users).set({ nickname: body.data.nickname }).where(eq(users.id, request.user!.id));
+      // Nobody in any of the user's rooms may already show this name (nickname, else Discord name),
+      // compared without case, or two people would read alike in the turn order and the result.
+      const nickname = body.data.nickname;
+      if (nickname !== null) {
+        const taken = await db.execute(sql`
+          select 1 from room_members mine
+          join room_members other on other.room_id = mine.room_id and other.user_id <> mine.user_id
+          join users u on u.id = other.user_id
+          where mine.user_id = ${request.user!.id} and lower(coalesce(u.nickname, u.display_name)) = lower(${nickname})
+          limit 1`);
+        if (taken.rows.length > 0) return reply.code(409).send({ error: "nickname_taken" });
+      }
+      await db.update(users).set({ nickname }).where(eq(users.id, request.user!.id));
       refreshUser(request.user!.id);
       return reply.code(204).send();
     },

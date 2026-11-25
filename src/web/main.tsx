@@ -30,6 +30,8 @@ function App() {
         <span>
           <a href="/">Start</a> · <a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a> · <a href="https://github.com/jp1337/dice">GitHub</a>
         </span>
+        {/* A room page puts its privacy note here (RoomPage, portal): it took a whole line at the top. */}
+        <span id="footer-note" className="footer-note" />
         <div className="me">
           <SoundToggles />
           <ThemeToggle />

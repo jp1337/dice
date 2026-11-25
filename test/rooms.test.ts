@@ -250,6 +250,23 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       expect(await me()).toBe("Max");
       expect(await own()).toBeNull();
     });
+
+    it("refuses a nickname someone in a shared room already shows, whatever the case", async () => {
+      const slug = await newRoom(host);
+      const [{ id: roomId }] = (await pool.query("select id from rooms where slug = $1", [slug])).rows;
+      const anna = await makeUser(undefined, "Anna");
+      const max = await makeUser(undefined, "Max");
+      const stranger = await makeUser(undefined, "Fremd"); // in no room with Max
+      await pool.query("insert into room_members (room_id, user_id, participation) select $1, unnest($2::uuid[]), 'player'", [roomId, [anna.id, max.id]]);
+      const patch = (user: typeof max, nickname: string | null) =>
+        app.inject({ method: "PATCH", url: "/api/me", cookies: cookies(user), headers: { origin: ORIGIN }, payload: { nickname }, remoteAddress: nextIp() });
+      expect((await patch(max, "anna")).statusCode).toBe(409); // Anna's Discord name
+      expect((await patch(anna, "Weihnachtself")).statusCode).toBe(204);
+      expect((await patch(max, "WEIHNACHTSELF")).statusCode).toBe(409); // Anna's nickname now
+      expect((await patch(max, "Anna")).statusCode).toBe(204); // free again: Anna shows her nickname
+      expect((await patch(stranger, "Weihnachtself")).statusCode).toBe(204); // no shared room
+      expect((await patch(max, null)).statusCode).toBe(204);
+    });
   });
 
   describe("WebSocket access", () => {

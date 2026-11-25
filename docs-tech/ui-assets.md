@@ -32,8 +32,9 @@ ffmpeg -i dice-shake-2.ogg -i dice-throw-1.ogg -filter_complex "[0]atrim=0:0.65,
 - `src/web/fonts/PixelifySans.ttf` (77 KB, variable 400–700): Pixelify Sans by the Pixelify Sans
   Project Authors, SIL Open Font License 1.1 (`OFL.txt` beside it), unmodified, from
   `github.com/google/fonts/tree/main/ofl/pixelifysans`. `style.css` imports it relatively, so Vite hashes it into `/assets/` (cached for a year).
-- `src/web/fonts/Silkscreen-Bold.ttf` (30 KB): Silkscreen by the Silkscreen Project Authors, OFL 1.1
-  (`OFL-Silkscreen.txt`), unmodified, from `github.com/google/fonts/tree/main/ofl/silkscreen`; digits only.
+- `src/web/fonts/Jersey10-Regular.ttf` (78 KB): Jersey 10 by the Soft Type Project Authors, OFL 1.1 (`OFL-Jersey10.txt`), unmodified, from
+  `github.com/google/fonts/tree/main/ofl/jersey10`; digits only, `size-adjust: 145%`. Silkscreen was tried
+  first: its 4 reads as a blob.
 
 ## Look
 
@@ -55,7 +56,7 @@ brown, the call to action evergreen, title and links berry.
 | --- | --- |
 | Pixel frame | four hard `box-shadow` copies, no blur; the corners stay notched. Buttons swap `--face`, `--hi`, `--lo`, `--frame` |
 | Sign (`.ribbon`) | parchment in a plank frame on two ropes; needs an isolated parent (`.ribbon-wrap`, `.hero`) |
-| Headings | Pixelify Sans for `h1`–`h3`, `summary`, sign, turn; body stays the system face. Its 5 reads as an S, so digits come from Silkscreen Bold (`"Pixel Digits"`, `unicode-range` 0–9) |
+| Headings | Pixelify Sans for `h1`–`h3`, `summary`, sign, turn; body stays the system face. Its 5 reads as an S, so digits come from Jersey 10 (`"Pixel Digits"`, `unicode-range` 0–9) |
 | Motion | ≤ 500 ms except the dice (1.3 s) and confetti; stepped bob on the roll button; all off with reduced motion |
 
 ### Desktop shell
@@ -134,7 +135,7 @@ directly or through `contracts.ts`. Values for the browser live in `src/shared/c
 | `HowTo` `{settings, open?}` | "So wird gewürfelt": the rules in four lines, worded after the room settings; everyone sees it (lobby: open for non-hosts; game: folded) |
 | `Confetti` | 12 square CSS pieces, `position: fixed`, three falls; hidden with reduced motion |
 | `SixBanner` `{template, name, platz, children?}` | Native modal `<dialog>`: the browser keeps the page behind inert; Escape does nothing; `children` = the host's "Weiter" button |
-| `ReactionBar` `{onReact, disabled?}` | Client cooldown 2 s, mirrors the server |
+| `ReactionBar` `{onReact, disabled?}` | Client cooldown 0.5 s, mirrors the server; emojis rise left and right of the dice, never across them |
 | `useFloatingReactions()` → `{items, add}`, `FloatingReactions` `{items, hidden?}` | `add(msg.emojis)`; place in a `.reaction-stage` element |
 | `Avatar` `{userId, name, avatarUrl, size?}` | Initials on a colour from the user id when there is no image |
 | `ThemeToggle`, `SoundToggles` (Würfel-Ton, Gewinner-Ton), `Switch` | Per-browser settings; reactions have no personal switch, hosts switch them for the room |
