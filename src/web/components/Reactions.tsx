@@ -55,9 +55,8 @@ export function useFloatingReactions() {
 }
 
 // Place inside the dice area, given class "reaction-stage" (position: relative). Decorative, so hidden from
-// screen readers. hidden: the viewer switched reactions off (HIDE_REACTIONS_KEY).
-export function FloatingReactions({ items, hidden = false }: { items: FloatingEmoji[]; hidden?: boolean }) {
-  if (hidden) return null;
+// screen readers.
+export function FloatingReactions({ items }: { items: FloatingEmoji[] }) {
   return (
     <div className="floating-reactions" aria-hidden="true">
       {items.map((item) => (

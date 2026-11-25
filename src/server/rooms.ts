@@ -641,7 +641,6 @@ export function registerRooms(
       }
       case "react": {
         if (!room.settings.reactions) throw fail("reactions_off", "Reaktionen sind in diesem Raum abgeschaltet.");
-        if (room.game.activeUserId === actorId) throw fail("active_player", "Wer dran ist, kann nicht reagieren.");
         const now = Date.now();
         if (now < (room.lastReaction.get(actorId) ?? -Infinity) + REACTION_INTERVAL_MS) throw fail("reaction_too_fast", "Höchstens eine Reaktion alle 2 Sekunden.");
         room.lastReaction.set(actorId, now);

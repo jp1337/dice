@@ -161,6 +161,10 @@ it("follows the room's settings", () => {
   expect(guide({ bonusChains: false })).toContain("wieder mit einem Würfel");
   expect(guide({ lastPlayer: "choice" })).toContain("nimmt den letzten Platz direkt");
   expect(guide({ lastPlayer: "auto" })).toContain("bekommt den letzten Platz sofort");
+  // The guide names the call the server makes: decide.ts rolls with it, app.ts passes node:crypto's.
+  expect(guide({})).toContain("crypto.randomInt(1, 7)");
+  expect(readFileSync(new URL("../src/shared/game/decide.ts", import.meta.url), "utf8")).toContain("ctx.randomInt(1, 7)");
+  expect(readFileSync(new URL("../src/server/app.ts", import.meta.url), "utf8")).toMatch(/import \{[^}]*\brandomInt\b[^}]*\} from "node:crypto"/);
 });
 });
 

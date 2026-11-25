@@ -19,6 +19,11 @@ export function HowTo({ settings, open = false }: { settings: Settings; open?: b
             ? "Wer als Letzte oder Letzter übrig ist, würfelt weiter bis zur 6 oder nimmt den letzten Platz direkt."
             : "Wer als Letzte oder Letzter übrig ist, bekommt den letzten Platz sofort."}
         </li>
+        <li>
+          <strong>Fair gewürfelt:</strong> Die Augenzahl entsteht auf dem Server, nicht in deinem Browser. Jeder Würfel ist{" "}
+          <code>crypto.randomInt(1, 7)</code> aus Node.js: ein kryptografisch sicherer Zufall, jede Zahl von 1 bis 6 gleich
+          wahrscheinlich. Auch die Startreihenfolge lost der Server so aus. Niemand, auch kein Host, kann ein Ergebnis wählen.
+        </li>
       </ul>
     </details>
   );

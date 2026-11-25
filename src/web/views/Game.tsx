@@ -6,9 +6,7 @@ import type { RoomView } from "../../shared/contracts.js";
 import { Dice } from "../components/Dice.js";
 import { HowTo } from "../components/HowTo.js";
 import { FloatingReactions, ReactionBar } from "../components/Reactions.js";
-import { ReactionsToggle, Switch } from "../components/Toggles.js";
-import { useFlag } from "../lib/hooks.js";
-import { HIDE_REACTIONS_KEY } from "../lib/prefs.js";
+import { Switch } from "../components/Toggles.js";
 import { type Derived, giftList, historyLines, lastGiftText, latecomers, pickOption, rollCaption, shownTurn, turnList, turnText } from "../lib/room.js";
 import { type RollState, countdown, rollBusy, rollLocked, shownDice } from "../lib/roll.js";
 import type { useRoom } from "../lib/useRoom.js";
@@ -129,7 +127,6 @@ function MoreHostTools({ view, d, room }: Props) {
           <PickAndAct label="Aus dem Spiel entfernen" options={turnList(view)} confirm={(name) => `${name} wirklich entfernen? Er oder sie bekommt keinen Platz.`} action={(userId) => send({ type: "remove_player", userId })} />
         )}
         {can.addPlayer && <PickAndAct label="Als Nachzügler anhängen" options={late} action={(userId) => send({ type: "add_player", userId })} />}
-        <Switch on={view.room.settings.reactions} disabled={!can.toggleReactions} onChange={(on) => send({ type: "update_settings", settings: { reactions: on } })} label="Reaktionen im Raum erlaubt" />
         <RoomLink view={view} d={d} send={send} />
         <span className="row">
           <ConfirmButton label="Spiel beenden" question="Spiel wirklich beenden?" disabled={!can.end} className="danger" onConfirm={() => send({ type: "end" })} />
@@ -211,7 +208,6 @@ function TurnOrder({ view, busy }: { view: RoomView; busy: boolean }) {
 }
 
 export function Game({ view, d, room, onSettled }: Props & { onSettled: () => void }) {
-  const [hideReactions] = useFlag(HIDE_REACTIONS_KEY);
   const { game } = view;
   const locked = rollLocked(room.roll);
   const busy = rollBusy(room.roll);
@@ -238,7 +234,7 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
           <Dice values={shownDice(room.roll, view)} rollKey={room.roll.rollKey} count={game.activeDiceCount} onSettled={onSettled} />
           <p className="roll-caption">{rollCaption(view, d.myId, busy)}</p>
           {!game.pause && <NextRollCountdown roll={room.roll} />}
-          <FloatingReactions items={room.floating} hidden={hideReactions} />
+          <FloatingReactions items={room.floating} />
           {lastGift && <p className="last-gift">{lastGift}</p>}
           {(inTurn || d.can.claimLastPlace) && (
             <p className="actions">
@@ -258,10 +254,14 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
 
         {d.showModeration && <HostBar view={view} d={d} room={room} />}
 
-        {!d.isGuest && (
+        {/* Everyone logged in reacts while the room allows it, whoever's turn it is; only hosts and
+            co-hosts switch reactions on and off, for the whole room. */}
+        {!d.isGuest && (view.room.settings.reactions || d.can.toggleReactions) && (
           <section className="reactions" aria-label="Reaktionen">
-            {!d.isActive && view.room.settings.reactions && <ReactionBar disabled={!d.can.react} onReact={(emoji) => room.send({ type: "react", emoji })} />}
-            <ReactionsToggle />
+            {view.room.settings.reactions && <ReactionBar disabled={!d.can.react} onReact={(emoji) => room.send({ type: "react", emoji })} />}
+            {d.can.toggleReactions && (
+              <Switch on={view.room.settings.reactions} onChange={(on) => room.send({ type: "update_settings", settings: { reactions: on } })} label="Reaktionen" />
+            )}
           </section>
         )}
       </div>
