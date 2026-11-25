@@ -74,9 +74,11 @@ function HostBar({ view, d, room }: Props) {
         <button type="button" disabled={!can.skip || !active} onClick={() => active && send({ type: "skip", userId: active })}>
           {d.activeName} überspringen
         </button>
-        <button type="button" disabled={!can.rollFor || locked || !active} onClick={() => active && send({ type: "roll_for", userId: active })}>
-          Für {d.activeName} würfeln
-        </button>
+        {!d.isActive && (
+          <button type="button" disabled={!can.rollFor || locked || !active} onClick={() => active && send({ type: "roll_for", userId: active })}>
+            Für {d.activeName} würfeln
+          </button>
+        )}
         {/* key: a newer roll closes an open question instead of taking back the wrong one */}
         <ConfirmButton
           key={seq ?? 0}

@@ -336,6 +336,9 @@ describe("what a viewer may click", () => {
     expect([d.newestRollSeq, d.newestRollName]).toEqual([roll1.seq, "Anna"]);
     const paused = deriveRoom(makeView({ viewer: asHost, game: running({ pause: "six" }) }), true);
     expect(paused.can).toMatchObject({ pause: false, continue: true, rollFor: false, undo: false });
+    // A host whose own turn it is rolls with the big button; "Für <sich> würfeln" would only duplicate it.
+    const ownTurn = deriveRoom(makeView({ viewer: asHost, game: running({ activeUserId: HOST, turnOrder: [HOST, ANNA] }) }), true);
+    expect(ownTurn.can).toMatchObject({ rollFor: false, skip: true });
     const ended = makeView({ viewer: asHost, game: { status: "finished", history: [roll1, ev("game_ended", {})] } });
     expect(deriveRoom(ended, true).can).toMatchObject({ undo: false, end: false, reset: true });
     expect(deriveRoom(view, false).can.undo).toBe(false);
