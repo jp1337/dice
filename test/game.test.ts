@@ -781,9 +781,9 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
         expect(again.state.game).toEqual(expected);
         expect(back.state.game.giftOrder).toEqual(expected.giftOrder);
         if (again.state.game.status === "finished") return;
-        if (again.state.game.pause) again.send({ type: "continue" });
         await until(async () => {
           const game = again.state.game;
+          if (game.pause) again.send({ type: "continue" }); // also after the real player's own six, or the game waits forever
           if (game.activeUserId === user.id && !game.pause) back.send({ type: "roll" });
           expect(game.history.filter((e) => e.type === "rolled" && sims.has(e.actorUserId!)).length).toBeGreaterThan(
             expected.history.filter((e) => e.type === "rolled" && sims.has(e.actorUserId!)).length,
