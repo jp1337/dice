@@ -8,7 +8,7 @@ main {
 
 h1 {
   margin: 20px 0 8px;
-  color: var(--accent);
+  color: var(--title);
   font-size: clamp(1.9rem, 7vw, 2.6rem);
   font-weight: 700;
   line-height: 1.1;
@@ -180,7 +180,7 @@ label {
   margin: 8px 3px;
   padding: 10px 16px;
   background: var(--berry);
-  color: #ffffff;
+  color: var(--on-berry);
   font-weight: 700;
   box-shadow:
     0 -3px 0 var(--outline),
@@ -393,20 +393,11 @@ label {
 }
 
 .hero .ribbon {
-  color: var(--accent);
+  color: var(--ink); /* the sign is snow paper in both themes */
   font-size: clamp(2rem, 9vw, 2.9rem);
   padding: 8px 40px;
 }
 
-:root[data-theme="dark"] .hero .ribbon {
-  color: #a3233f; /* the sign stays parchment: the light accent */
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .hero .ribbon {
-    color: #a3233f;
-  }
-}
 
 /* Participants */
 .people {
@@ -543,20 +534,20 @@ label {
   overflow-wrap: anywhere;
 }
 
-/* Your turn: the name on a wheat plaque. */
+/* Your turn: the name on an ice-blue plaque, the colour of the button you press next. */
 .turn.is-me {
   width: fit-content;
   padding: 6px 22px;
-  background: var(--wheat);
-  color: var(--on-wheat);
+  background: var(--primary);
+  color: var(--on-primary);
   text-shadow: none;
   box-shadow:
     0 -3px 0 var(--wood-dark),
     0 3px 0 var(--wood-dark),
     -3px 0 0 var(--wood-dark),
     3px 0 0 var(--wood-dark),
-    inset 0 3px 0 var(--wheat-light),
-    inset 0 -4px 0 var(--wheat-dark);
+    inset 0 3px 0 #ffffff40,
+    inset 0 -4px 0 #00000040;
 }
 
 .stage .pause,
@@ -787,10 +778,10 @@ label {
 }
 
 .turns .is-active {
-  background: var(--tint-wheat);
+  background: var(--turn-active);
   box-shadow:
-    inset 4px 0 0 var(--holly),
-    inset 0 0 0 2px var(--wheat-dark);
+    inset 4px 0 0 var(--turn-active-edge),
+    inset 0 0 0 2px var(--turn-active-edge);
 }
 
 .turns .is-active > :first-child {
@@ -798,8 +789,8 @@ label {
 }
 
 .turns .is-active::before {
-  background: var(--holly);
-  color: var(--on-holly);
+  background: var(--primary);
+  color: var(--on-primary);
 }
 
 /* Podium: gold, silver, evergreen (no copper: it reads brown); the medal is decoration (empty alt text where supported). */
@@ -835,7 +826,7 @@ label {
 }
 
 .gifts li:nth-child(2)::before {
-  background: #c9d2de;
+  background: var(--silver);
   color: var(--ink);
 }
 
