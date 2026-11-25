@@ -6,6 +6,7 @@ import { runInNewContext } from "node:vm";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { HowTo } from "../src/web/components/HowTo.js";
 import { SixBanner } from "../src/web/components/SixBanner.js";
 import * as constants from "../src/shared/constants.js";
 import * as contracts from "../src/shared/contracts.js";
@@ -138,6 +139,17 @@ describe("six banner text", () => {
     expect(html).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt; bekommt Nr. 2");
     expect(html).toMatch(/^<dialog [^>]*role="alertdialog"/);
   });
+});
+
+describe("rules guide", () => {
+const guide = (settings: Partial<contracts.Settings>) =>
+  renderToStaticMarkup(createElement(HowTo, { settings: { ...contracts.defaultSettings, ...settings } }));
+it("follows the room's settings", () => {
+  expect(guide({ bonusChains: true })).toContain("gibt es nochmal 2 Würfel");
+  expect(guide({ bonusChains: false })).toContain("wieder mit einem Würfel");
+  expect(guide({ lastPlayer: "choice" })).toContain("nimmt den letzten Platz direkt");
+  expect(guide({ lastPlayer: "auto" })).toContain("bekommt den letzten Platz sofort");
+});
 });
 
 describe("reactions", () => {
