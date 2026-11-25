@@ -47,7 +47,7 @@ describe("preferences", () => {
     const store = createPrefs(() => storage);
     store.set(MUTED_KEY, "1");
     migrateMuted(store);
-    expect([store.get(SOUND_OFF_KEYS.roll), store.get(SOUND_OFF_KEYS.six), store.get(MUTED_KEY)]).toEqual(["1", "1", null]);
+    expect([store.get(SOUND_OFF_KEYS.roll), store.get(SOUND_OFF_KEYS.six), store.get(SOUND_OFF_KEYS.turn), store.get(MUTED_KEY)]).toEqual(["1", "1", "1", null]);
     store.set(SOUND_OFF_KEYS.six, null); // the winner sound switched back on
     migrateMuted(store);
     expect(store.get(SOUND_OFF_KEYS.six)).toBeNull();
@@ -123,7 +123,7 @@ describe("sound player", () => {
   it("plays after a gesture, unless muted", async () => {
     const { clips, target, player } = setup();
     target.dispatchEvent(new Event("pointerup"));
-    expect(clips).toHaveLength(2);
+    expect(clips).toHaveLength(3);
     expect(clips.every((clip) => clip.plays[0]?.muted)).toBe(true); // the silent unlock for iOS
     await Promise.resolve();
     expect(player.play("six", true)).toBe(false);
@@ -230,7 +230,7 @@ describe("CSP (default-src 'self', no style-src): nothing inline", () => {
 
 describe("public assets", () => {
   it("sounds are small", () => {
-    for (const name of ["roll.wav", "six.wav"]) {
+    for (const name of ["roll.wav", "six.wav", "turn.wav"]) {
       const file = readFileSync(web(`public/sounds/${name}`));
       expect(file.subarray(0, 4).toString()).toBe("RIFF");
       expect(file.length).toBeLessThan(60_000);

@@ -2,8 +2,8 @@
 // play() fail (and log), nothing is played until a gesture has happened. Kept free of React so the
 // gating can be tested with fakes.
 
-export type SoundName = "roll" | "six";
-export const SOUND_URLS: Record<SoundName, string> = { roll: "/sounds/roll.wav", six: "/sounds/six.wav" };
+export type SoundName = "roll" | "six" | "turn";
+export const SOUND_URLS: Record<SoundName, string> = { roll: "/sounds/roll.wav", six: "/sounds/six.wav", turn: "/sounds/turn.wav" };
 
 export type Clip = { play(): Promise<void>; pause(): void; currentTime: number; muted: boolean };
 type Target = Pick<EventTarget, "addEventListener" | "removeEventListener">;
@@ -19,7 +19,7 @@ export function createSoundPlayer(makeClip: (url: string) => Clip, target: Targe
   const unlock = () => {
     if (clips) return;
     for (const type of GESTURES) target.removeEventListener(type, unlock, true);
-    clips = { roll: makeClip(SOUND_URLS.roll), six: makeClip(SOUND_URLS.six) };
+    clips = { roll: makeClip(SOUND_URLS.roll), six: makeClip(SOUND_URLS.six), turn: makeClip(SOUND_URLS.turn) };
     // iOS unlocks each media element separately, by playing it inside a gesture: once, muted.
     for (const clip of Object.values(clips)) {
       warming.add(clip);

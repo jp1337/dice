@@ -1,6 +1,6 @@
 // The room (/r/:slug): connection, status, error pages, then the screen that fits the game status.
 // Without a login a public room shows the guest view: the same screens without anything that sends (spec 4.8, 10).
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { createPortal } from "react-dom";
 import type { RoomSummary, RoomView } from "../../shared/contracts.js";
 import { SixBanner } from "../components/SixBanner.js";
@@ -138,6 +138,13 @@ function RoomScreen({ view, room, label }: { view: RoomView; room: ReturnType<ty
     }
   };
   const six = sixBannerValues(view);
+  // A chime when it becomes your turn: after the dice have landed (view is held until then) and not
+  // while the game is paused, so it also sounds when a host continues and you are next.
+  const myTurn = d.isActive && view.game.status === "running" && !view.game.pause;
+  const chime = useEffectEvent(() => room.play("turn")); // not again when a sound switch changes
+  useEffect(() => {
+    if (myTurn) chime();
+  }, [myTurn]);
   // The six banner waits a moment after the dice land, so everyone sees the six itself first.
   const sixDue = !busy && six !== null && (view.game.pause === "six" || finalSix);
   const [sixShown, setSixShown] = useState(false);
