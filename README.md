@@ -17,7 +17,7 @@ moderator can talk instead of keeping score.
 
 ## Status
 
-Steps 1 to 4 done: a complete game runs over WebSocket. Steps 5 and 6 are in progress.
+All six steps are done. Not yet verified on a live deployment: the Discord login on real devices and the Discord link preview.
 
 | Step | | State |
 | --- | --- | --- |
@@ -25,11 +25,13 @@ Steps 1 to 4 done: a complete game runs over WebSocket. Steps 5 and 6 are in pro
 | 2 | Discord login, sessions, hosts, imprint, privacy notice, daily cleanup | done |
 | 3 | Rooms and lobby over WebSocket | done |
 | 4 | Game rules: turns, bonus die, 6 pauses the game | done |
-| 5 | Host tools, co-hosts, test rooms, cleanup of simulated players | open |
-| 6 | Animation, sound, reactions, guest link, link preview | open |
+| 5 | Host tools, co-hosts, test rooms, cleanup of simulated players | done |
+| 6 | Animation, sound, reactions, guest link, link preview, design | done |
 
-Works today: the container starts, migrates the database, answers `/healthz`, `/robots.txt`,
-`/impressum` and `/datenschutz`, and sends the no-index and security headers on every response.
+Works today: Discord login with server membership check, rooms with a lobby, the full game with
+bonus die and six pauses, every host tool, test rooms with simulated players, a read-only guest
+link, reactions, sound, light and dark theme. Proven behind nginx: 31 minutes idle WebSocket,
+restart mid-game without a lost roll, 100 clients in one room ([acceptance](docs-tech/acceptance.md)).
 
 ## Quick start
 
