@@ -19,7 +19,6 @@ export function DieFace({ value, className = "" }: { value: number | null; class
     <svg className={`die ${value === 6 ? "is-six" : ""} ${className}`} viewBox="0 0 100 100" aria-hidden="true">
       {/* Pixel-art die: small corner radius, a square glint, square pips. */}
       <rect className="die-body" x="4" y="4" width="92" height="92" rx="10" />
-      <rect className="die-shine" x="14" y="12" width="26" height="8" />
       {value !== null && PIPS[value]?.map(([cx, cy]) => <rect key={`${cx}-${cy}`} className="pip" x={cx - 8} y={cy - 8} width="16" height="16" />)}
     </svg>
   );

@@ -18,11 +18,6 @@
   stroke-width: 5;
 }
 
-.die-shine {
-  fill: #ffffff;
-  opacity: 0.8;
-}
-
 .pip {
   fill: var(--pip);
 }

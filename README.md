@@ -80,6 +80,8 @@ Dice roll sound: from [Casino Audio](https://kenney.nl/assets/casino-audio) by K
 
 Heading font: [Pixelify Sans](https://github.com/eifetx/Pixelify-Sans) by the Pixelify Sans Project Authors, [SIL Open Font License 1.1](src/web/fonts/OFL.txt), self-hosted from [google/fonts](https://github.com/google/fonts/tree/main/ofl/pixelifysans).
 
+Digits in headings: [Silkscreen](https://github.com/googlefonts/silkscreen) by the Silkscreen Project Authors, [SIL Open Font License 1.1](src/web/fonts/OFL-Silkscreen.txt), self-hosted from [google/fonts](https://github.com/google/fonts/tree/main/ofl/silkscreen).
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
