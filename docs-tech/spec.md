@@ -84,7 +84,7 @@ public on/off · reset a nickname · switch reactions off · end the game, back 
 - Chosen at creation by a host, permanent, labelled "Testraum" for everyone.
 - Only there: hosts add (up to 30) and remove simulated players in the lobby; the server refuses them elsewhere.
 - Simulated players are `users` rows without Discord ID (`Testspieler 1`, marked in the UI), belong to one
-  test room, roll by themselves about 3 s after their turn starts, under exactly the same rules and code.
+  test room, roll by themselves 6 s after their turn starts (3 s was too fast to watch a roll land), under exactly the same rules and code.
 - Real users can join and play: mixed rehearsals work.
 
 ## Public room (one link: `/r/:slug`)
@@ -172,7 +172,7 @@ only) · `POST /api/rooms` (hosts), `GET /api/rooms/:slug` (without session: 401
 `rolled`, drops everything received.
 
 Server rules: every action is checked against host status, turn and game status; the client decides
-nothing. About 2 s after a roll no further roll is accepted (animation). JSON only, schema-validated, a few
+nothing. For 6.3 s after a roll no further roll is accepted: 1.3 s of tumbling dice, then a 5 s countdown everyone sees ("Nächster Wurf in 5 …"). JSON only, schema-validated, a few
 KB at most. The game never depends on one connection, a host's included.
 
 ## Proxy, security, no indexing

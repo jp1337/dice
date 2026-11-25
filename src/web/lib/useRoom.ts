@@ -42,7 +42,7 @@ export function useRoom(url: string, probe?: () => Promise<ProbeResult>, goneMes
             setView(message.state);
             break;
           case "rolled":
-            dispatchRoll({ type: "rolled", dice: message.dice });
+            dispatchRoll({ type: "rolled", dice: message.dice, at: Date.now() });
             playRoll();
             break;
           case "reactions":

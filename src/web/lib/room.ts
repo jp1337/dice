@@ -44,8 +44,6 @@ export function deriveRoom(view: RoomView, online: boolean) {
     lastPlayer,
     players,
     activeName: name(game.activeUserId),
-    // The live region of the game view (spec 4.3): read out on every change of turn.
-    turnText: !running ? "" : isActive ? "Du bist dran!" : `Am Zug: ${name(game.activeUserId)}`,
     activeConnected: game.activeUserId ? (byId.get(game.activeUserId)?.connected ?? false) : false,
     newestRollSeq: newestRoll?.seq ?? null,
     newestRollName: newestRoll?.type === "rolled" ? name(newestRoll.payload.userId) : null,
@@ -97,12 +95,26 @@ export function latecomers(view: RoomView) {
   return view.members.filter((m) => !inGame.has(m.userId));
 }
 
-export function turnList(view: RoomView) {
+// Whose turn to show. The server moves the turn on as it rolls; while the dice still tumble (busy),
+// the next name would make the result look like theirs, so the turn stays with whoever rolled.
+export function shownTurn(view: RoomView, busy: boolean) {
+  return (busy && view.game.lastRoll?.userId) || view.game.activeUserId;
+}
+
+// The live region of the game view (spec 4.3): read out on every change of turn.
+export function turnText(view: RoomView, myId: UserId | null, busy: boolean) {
+  if (view.game.status !== "running") return "";
+  const who = shownTurn(view, busy);
+  return who !== null && who === myId ? "Du bist dran!" : `Am Zug: ${namesOf(view).name(who)}`;
+}
+
+export function turnList(view: RoomView, busy = false) {
   const { byId, name } = namesOf(view);
+  const active = shownTurn(view, busy);
   return view.game.turnOrder.map((userId) => ({
     userId,
     name: name(userId),
-    active: userId === view.game.activeUserId,
+    active: userId === active,
     twoDice: view.game.bonusPending.includes(userId),
     connected: byId.get(userId)?.connected ?? false,
     isSimulated: byId.get(userId)?.isSimulated ?? false,

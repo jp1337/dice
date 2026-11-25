@@ -8,7 +8,8 @@ import { SESSION_COOKIE } from "../src/server/auth.js";
 import { runCleanup } from "../src/server/cleanup.js";
 import { runMigrations } from "../src/server/db/migrate.js";
 import { CommandError, type GameCommandContext, handleGameCommand } from "../src/server/game-commands.js";
-import { MAX_GUESTS_PER_IP, MAX_GUESTS_PER_ROOM, MAX_SIMULATED_PLAYERS } from "../src/server/rooms.js";
+import { MAX_SIMULATED_PLAYERS } from "../src/shared/constants.js";
+import { MAX_GUESTS_PER_IP, MAX_GUESTS_PER_ROOM } from "../src/server/rooms.js";
 import { type GameEvent, type Participation, type Settings, defaultSettings } from "../src/shared/contracts.js";
 import { reduce } from "../src/shared/game/reduce.js";
 import { makeApp, ownDatabase } from "./helpers.js";
@@ -780,9 +781,9 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
         expect(again.state.game).toEqual(expected);
         expect(back.state.game.giftOrder).toEqual(expected.giftOrder);
         if (again.state.game.status === "finished") return;
-        if (again.state.game.pause) again.send({ type: "continue" });
         await until(async () => {
           const game = again.state.game;
+          if (game.pause) again.send({ type: "continue" }); // also after the real player's own six, or the game waits forever
           if (game.activeUserId === user.id && !game.pause) back.send({ type: "roll" });
           expect(game.history.filter((e) => e.type === "rolled" && sims.has(e.actorUserId!)).length).toBeGreaterThan(
             expected.history.filter((e) => e.type === "rolled" && sims.has(e.actorUserId!)).length,

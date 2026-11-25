@@ -7,7 +7,13 @@ export const reactionEmojis = ["🎉", "😮", "😂", "👏", "🍀", "❤️"]
 // Limits shared by server and client
 export const MAX_CLIENT_MESSAGE_BYTES = 4096;
 export const NICKNAME_MAX = 32;
-export const ROLL_COOLDOWN_MS = 2000;
+export const MAX_SIMULATED_PLAYERS = 30; // per test room (spec 4.7)
+// The dice tumble ROLL_ANIMATION_MS (style.css: --roll-duration); then everyone sees a countdown of
+// NEXT_ROLL_COUNTDOWN_MS before the next roll, so the result can sink in. The server refuses rolls
+// for the sum after one.
+export const ROLL_ANIMATION_MS = 1300;
+export const NEXT_ROLL_COUNTDOWN_MS = 5000;
+export const ROLL_COOLDOWN_MS = ROLL_ANIMATION_MS + NEXT_ROLL_COUNTDOWN_MS;
 export const REACTION_INTERVAL_MS = 2000;
 export const PING_INTERVAL_MS = 25_000;
 export const ROOM_NAME_MAX = 60;

@@ -1,7 +1,7 @@
 // Lobby (spec 10): who is here, who rolls, own nickname, the room link; for hosts and co-hosts settings, public switch,
 // simulated players (test rooms) and "Start".
 import { type FormEvent, useEffect, useId, useState } from "react";
-import { NICKNAME_MAX, SIX_MESSAGE_MAX } from "../../shared/constants.js";
+import { MAX_SIMULATED_PLAYERS, NICKNAME_MAX, SIX_MESSAGE_MAX } from "../../shared/constants.js";
 import type { ClientMessage, MeResponse, PatchMeRequest, RoomView } from "../../shared/contracts.js";
 import { HowTo } from "../components/HowTo.js";
 import { Switch } from "../components/Toggles.js";
@@ -188,10 +188,14 @@ export function RoomLink({ view, d, send }: Props) {
   );
 }
 
-function SimulatedPlayers({ d, send }: Props) {
-  const [count, setCount] = useState(3);
+function SimulatedPlayers({ view, d, send }: Props) {
+  // The limit counts the room's simulated players, so the form offers only what is still free.
+  const free = MAX_SIMULATED_PLAYERS - view.members.filter((m) => m.isSimulated).length;
+  const [wanted, setCount] = useState(3);
+  const count = Math.min(wanted, free); // after adding some, the default never exceeds what is left
   const id = useId();
-  const valid = Number.isInteger(count) && count >= 1 && count <= 30;
+  const valid = Number.isInteger(count) && count >= 1;
+  if (free <= 0) return <p className="hint">{MAX_SIMULATED_PLAYERS} Testspieler sind die Höchstzahl.</p>;
   return (
     <form
       className="inline-form"
@@ -200,9 +204,9 @@ function SimulatedPlayers({ d, send }: Props) {
         if (valid) send({ type: "add_simulated_players", count });
       }}
     >
-      <label htmlFor={id}>Testspieler hinzufügen (1 bis 30)</label>
+      <label htmlFor={id}>Testspieler hinzufügen (1 bis {free})</label>
       <span className="row">
-        <input id={id} type="number" min={1} max={30} step={1} value={count} onChange={(event) => setCount(event.target.valueAsNumber)} />
+        <input id={id} type="number" min={1} max={free} step={1} value={count} onChange={(event) => setCount(event.target.valueAsNumber)} />
         <button type="submit" disabled={!valid || !d.can.simulatedPlayers}>
           Hinzufügen
         </button>

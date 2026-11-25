@@ -1,7 +1,7 @@
 // The running game (spec 10). Phone first, in the order a host needs it: whose turn and the dice, the
 // four everyday host tools, gifts and turn order, reactions, the rarer host tools folded away, history.
 // Guests see the same without anything that sends.
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { RoomView } from "../../shared/contracts.js";
 import { Dice } from "../components/Dice.js";
 import { HowTo } from "../components/HowTo.js";
@@ -9,8 +9,8 @@ import { FloatingReactions, ReactionBar } from "../components/Reactions.js";
 import { ReactionsToggle, Switch } from "../components/Toggles.js";
 import { useFlag } from "../lib/hooks.js";
 import { HIDE_REACTIONS_KEY } from "../lib/prefs.js";
-import { type Derived, giftList, historyLines, lastGiftText, latecomers, pickOption, rollCaption, turnList } from "../lib/room.js";
-import { rollBusy, rollLocked, shownDice } from "../lib/roll.js";
+import { type Derived, giftList, historyLines, lastGiftText, latecomers, pickOption, rollCaption, shownTurn, turnList, turnText } from "../lib/room.js";
+import { type RollState, countdown, rollBusy, rollLocked, shownDice } from "../lib/roll.js";
 import type { useRoom } from "../lib/useRoom.js";
 import { ConfirmButton } from "./Controls.js";
 import { RoomLink } from "./Lobby.js";
@@ -52,13 +52,31 @@ function PickAndAct({ label, options, action, confirm }: { label: string; option
   );
 }
 
+// After the dice land, everyone sees how long until the next roll; the buttons are locked meanwhile.
+function NextRollCountdown({ roll }: { roll: RollState }) {
+  const [now, setNow] = useState(() => Date.now());
+  const ticking = roll.cooling && !rollBusy(roll);
+  useEffect(() => {
+    if (!ticking) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(timer);
+  }, [ticking, roll.rollKey]);
+  const left = countdown(roll, now);
+  return left > 0 ? <p className="countdown">Nächster Wurf in {left} …</p> : null;
+}
+
 // The everyday tools, two by two.
 function HostBar({ view, d, room }: Props) {
   const { can } = d;
   const send = room.send;
   const locked = rollLocked(room.roll);
+  const busy = rollBusy(room.roll);
   const seq = d.newestRollSeq;
   const active = view.game.activeUserId;
+  // Name the player the heading shows: while the dice tumble that is still whoever rolled, so skip and
+  // roll-for wait (disabled) until they land instead of already naming the next player.
+  const shown = shownTurn(view, busy);
   return (
     <section className="card stack host-bar" aria-label="Host-Werkzeuge">
       <div className="grid2">
@@ -74,13 +92,13 @@ function HostBar({ view, d, room }: Props) {
         {/* The player named on the button: if the turn moved on meanwhile, the server answers turn_changed.
             No one active (the last six is still on screen): no name to put on them. */}
         {active && (
-          <button type="button" disabled={!can.skip} onClick={() => send({ type: "skip", userId: active })}>
-            {d.activeName} überspringen
+          <button type="button" disabled={!can.skip || busy} onClick={() => send({ type: "skip", userId: active })}>
+            {d.name(shown)} überspringen
           </button>
         )}
-        {active && !d.isActive && (
+        {active && shown !== d.myId && (
           <button type="button" disabled={!can.rollFor || locked} onClick={() => send({ type: "roll_for", userId: active })}>
-            Für {d.activeName} würfeln
+            Für {d.name(shown)} würfeln
           </button>
         )}
         {/* key: a newer roll closes an open question instead of taking back the wrong one */}
@@ -169,7 +187,7 @@ export function GiftOrder({ view }: { view: RoomView }) {
   );
 }
 
-function TurnOrder({ view }: { view: RoomView }) {
+function TurnOrder({ view, busy }: { view: RoomView; busy: boolean }) {
   return (
     <section className="panel stack turns-panel" aria-labelledby="order">
       <h2 id="order">
@@ -177,7 +195,7 @@ function TurnOrder({ view }: { view: RoomView }) {
         Zugreihenfolge (Runde {view.game.round})
       </h2>
       <ol className="turns">
-        {turnList(view).map((t) => (
+        {turnList(view, busy).map((t) => (
           <li key={t.userId} className={t.active ? "is-active" : ""} aria-current={t.active ? "step" : undefined}>
             <span>{t.name}</span>
             <span className="badges">
@@ -196,6 +214,7 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
   const [hideReactions] = useFlag(HIDE_REACTIONS_KEY);
   const { game } = view;
   const locked = rollLocked(room.roll);
+  const busy = rollBusy(room.roll);
   const inTurn = d.myId !== null && game.turnOrder.includes(d.myId);
   const lastGift = lastGiftText(view);
 
@@ -205,8 +224,8 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
           the reading order: dice, host tools, gifts, turns, reactions, more tools, history, participants. */}
       <div className="game-col game-main">
         <section className="reaction-stage stage" aria-labelledby="turn">
-          <p id="turn" className={`turn ${d.isActive ? "is-me" : ""}`} aria-live="polite">
-            {d.turnText}
+          <p id="turn" className={`turn ${d.myId !== null && shownTurn(view, busy) === d.myId ? "is-me" : ""}`} aria-live="polite">
+            {turnText(view, d.myId, busy)}
           </p>
           <p className="pause" role="status">
             {game.pause === "host" ? "Pausiert. Ein Host macht gleich weiter." : ""}
@@ -217,7 +236,8 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
             </p>
           )}
           <Dice values={shownDice(room.roll, view)} rollKey={room.roll.rollKey} count={game.activeDiceCount} onSettled={onSettled} />
-          <p className="roll-caption">{rollCaption(view, d.myId, rollBusy(room.roll))}</p>
+          <p className="roll-caption">{rollCaption(view, d.myId, busy)}</p>
+          {!game.pause && <NextRollCountdown roll={room.roll} />}
           <FloatingReactions items={room.floating} hidden={hideReactions} />
           {lastGift && <p className="last-gift">{lastGift}</p>}
           {(inTurn || d.can.claimLastPlace) && (
@@ -253,7 +273,7 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
       </div>
 
       <div className="game-col game-right">
-        <TurnOrder view={view} />
+        <TurnOrder view={view} busy={busy} />
         <History view={view} d={d} />
         {!d.isGuest && (
           <details className="card people-panel">
