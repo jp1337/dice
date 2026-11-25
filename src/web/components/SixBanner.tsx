@@ -4,6 +4,7 @@
 // while it is open. The heading names the dialog, so screen readers announce the result on open.
 import { type ReactNode, useId, useLayoutEffect, useRef } from "react";
 import { fillTemplate } from "../lib/ui.js";
+import { Confetti } from "./Confetti.js";
 import { DieFace } from "./Dice.js";
 import "./SixBanner.css";
 
@@ -48,12 +49,13 @@ export function SixBanner({ template, name, platz, children }: Props) {
       onCancel={(event) => event.preventDefault()}
       onClose={() => !unmounting.current && ref.current?.showModal()}
     >
-      <div className="six-ribbon">
-        <DieFace value={6} className="six-die" />
+      <Confetti />
+      <DieFace value={6} className="six-die" />
+      <div className="ribbon-wrap">
+        <h2 id={titleId} className="ribbon" tabIndex={-1}>
+          {fillTemplate(template, { name, platz })}
+        </h2>
       </div>
-      <h2 id={titleId} tabIndex={-1}>
-        {fillTemplate(template, { name, platz })}
-      </h2>
       {children && <div className="six-actions">{children}</div>}
     </dialog>
   );

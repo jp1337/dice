@@ -9,13 +9,18 @@
   width: clamp(88px, 26vw, 156px);
   height: auto;
   aspect-ratio: 1;
-  filter: drop-shadow(0 10px 10px var(--shadow));
+  filter: drop-shadow(0 10px 8px rgb(5 40 38 / 0.45));
 }
 
 .die-body {
   fill: var(--die-face);
   stroke: var(--die-edge);
-  stroke-width: 3;
+  stroke-width: 3.5;
+}
+
+.die-shine {
+  fill: #ffffff;
+  opacity: 0.3;
 }
 
 .pip {

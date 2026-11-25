@@ -1,53 +1,92 @@
-/* Design tokens. A winter evening with a wrapped gift: ink and frost, a gold ribbon, cranberry for the
-   six. Light by default; dark from the system preference unless the toggle fixed light, or from the
-   toggle (data-theme on <html>, set before the first paint by theme-init.js). The dark values stand
-   twice, identically (test/web.test.ts): the CSS light-dark function would say it once but needs Safari 17.5. */
+/* Design tokens after the "Flip7 Card Game" design system (yiujc, DESIGNmd, MIT): teal for the table and
+   the everyday controls, gold for the one thing to press and for first place, coral for the six. Light by
+   default; dark from the system preference unless the toggle fixed light, or from the toggle (data-theme
+   on <html>, set before the first paint by theme-init.js). The dark values stand twice, identically
+   (test/web.test.ts): the CSS light-dark function would say it once but needs Safari 17.5.
+   Text contrast of every pair: docs-tech/ui-assets.md. */
 :root {
   color-scheme: light;
-  --bg: #eef2f4;
+  --bg: #eff8f7;
   --surface: #ffffff;
-  --fg: #182631;
-  --muted: #4b5d69;
-  --line: #c9d3d9;
-  --accent: #7a5200; /* gold, readable as text on --bg in both themes */
-  --on-accent: #ffffff;
-  --focus: #1d5fc4;
-  --danger: #a3203a;
-  --shadow: rgb(24 38 49 / 0.22);
+  --field: #fff8e7; /* cream: inputs */
+  --fg: #123a3e;
+  --muted: #46666a;
+  --line: #cfe5e2; /* decoration only */
+  --edge: #5e918d; /* borders that must be seen: inputs, 3:1 */
+  --accent: #14615c; /* teal as text */
+  --fill: #136a65; /* teal as a filled control, with --on-fill text */
+  --on-fill: #ffffff;
+  --tint: #e8f6f5;
+  --tint-gold: #fff3c4;
+  --tint-coral: #ffe0d6;
+  --tint-sky: #e3f1fb;
+  --title-shadow: #ffd23f;
+  --focus: #1f6fb2;
+  --danger: #b53a1e;
+  --glow-teal: rgb(43 168 162 / 0.3);
+  --glow-card: rgb(43 168 162 / 0.12);
+  --glow-gold: rgb(230 184 0 / 0.45);
+  --glow-coral: rgb(239 108 74 / 0.35);
   --avatar-bg: 88% 0.06; /* oklch lightness and chroma; Avatar.css adds the hue */
   --avatar-fg: 32% 0.09;
 
-  /* Physical things look the same in both themes: the dice, the ribbon, the six banner. */
-  --die-face: #fbf6ea;
-  --die-edge: #d8cdb5;
-  --pip: #1b2a36;
-  --pip-six: #b3263e;
-  --gold: #e2b85a;
-  --six-bg: #7d1830;
-  --six-fg: #fbf6ea;
+  /* Kit colours, and the physical things that look the same in both themes: felt, dice, ribbon, six. */
+  --teal: #2ba8a2;
+  --teal-light: #3cc4bd;
+  --teal-dark: #1e8c86;
+  --gold: #ffd23f;
+  --gold-light: #ffe47a;
+  --gold-dark: #e6b800;
+  --on-gold: #3a2a00;
+  --coral: #ef6c4a;
+  --coral-light: #ff8a6a;
+  --coral-dark: #d45233;
+  --sky: #5dade2;
+  --success: #27ae60;
+  --cream: #fff8e7;
+  --ink: #123a3e;
+  --felt: #17766f;
+  --felt-edge: #0f5e59;
+  --die-face: #fff8e7;
+  --die-edge: #e3d3a8;
+  --pip: #14615c;
+  --pip-six: #d45233;
 
   /* Kept equal to ROLL_ANIMATION_MS, REACTION_INTERVAL_MS and FLOAT_MS (test/web.test.ts). */
   --roll-duration: 1300ms;
   --reaction-interval: 2000ms;
   --float-duration: 2400ms;
+  --bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-  font-family: ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+  font-family: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-weight: 500;
   line-height: 1.5;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #0f1d27;
-    --surface: #172a36;
-    --fg: #e9eef1;
-    --muted: #a3b5bf;
-    --line: #2c4352;
-    --accent: #e2b85a;
-    --on-accent: #0f1d27;
-    --focus: #8ab8ff;
-    --danger: #ff8fa0;
-    --shadow: rgb(0 0 0 / 0.45);
+    --bg: #0e2629;
+    --surface: #163539;
+    --field: #1b3d42;
+    --fg: #e8f6f5;
+    --muted: #9fc3c0;
+    --line: #2a5257;
+    --edge: #6e9c99;
+    --accent: #3cc4bd;
+    --fill: #3cc4bd;
+    --on-fill: #0e2629;
+    --tint: #1b3d42;
+    --tint-gold: #3d3a1c;
+    --tint-coral: #47291f;
+    --tint-sky: #18374a;
+    --title-shadow: #1e8c86;
+    --focus: #8ccbf2;
+    --danger: #ff8a6a;
+    --glow-teal: rgb(60 196 189 / 0.25);
+    --glow-card: rgb(0 0 0 / 0.25);
+    --glow-gold: rgb(255 210 63 / 0.35);
+    --glow-coral: rgb(255 138 106 / 0.3);
     --avatar-bg: 40% 0.09;
     --avatar-fg: 95% 0.03;
   }
@@ -55,16 +94,27 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0f1d27;
-  --surface: #172a36;
-  --fg: #e9eef1;
-  --muted: #a3b5bf;
-  --line: #2c4352;
-  --accent: #e2b85a;
-  --on-accent: #0f1d27;
-  --focus: #8ab8ff;
-  --danger: #ff8fa0;
-  --shadow: rgb(0 0 0 / 0.45);
+  --bg: #0e2629;
+  --surface: #163539;
+  --field: #1b3d42;
+  --fg: #e8f6f5;
+  --muted: #9fc3c0;
+  --line: #2a5257;
+  --edge: #6e9c99;
+  --accent: #3cc4bd;
+  --fill: #3cc4bd;
+  --on-fill: #0e2629;
+  --tint: #1b3d42;
+  --tint-gold: #3d3a1c;
+  --tint-coral: #47291f;
+  --tint-sky: #18374a;
+  --title-shadow: #1e8c86;
+  --focus: #8ccbf2;
+  --danger: #ff8a6a;
+  --glow-teal: rgb(60 196 189 / 0.25);
+  --glow-card: rgb(0 0 0 / 0.25);
+  --glow-gold: rgb(255 210 63 / 0.35);
+  --glow-coral: rgb(255 138 106 / 0.3);
   --avatar-bg: 40% 0.09;
   --avatar-fg: 95% 0.03;
 }
@@ -73,6 +123,18 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
+}
+
+/* Party bunting along the top of every page: gold, teal and coral pennants on a string. */
+body::before {
+  content: "";
+  display: block;
+  height: 16px;
+  background:
+    linear-gradient(var(--edge), var(--edge)) 0 0 / 100% 2px no-repeat,
+    conic-gradient(from -40deg at 16px 100%, var(--gold) 80deg, transparent 0) 0 0 / 96px 16px repeat-x,
+    conic-gradient(from -40deg at 48px 100%, var(--teal) 80deg, transparent 0) 0 0 / 96px 16px repeat-x,
+    conic-gradient(from -40deg at 80px 100%, var(--coral) 80deg, transparent 0) 0 0 / 96px 16px repeat-x;
 }
 
 #root {
@@ -92,17 +154,27 @@ footer {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 0;
+  max-width: 1100px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 32px auto 0;
+  padding: 16px 0 24px;
+  border-top: 3px dashed var(--line);
   color: var(--muted);
 }
 
 a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+footer a {
   color: inherit;
 }
 
 :focus-visible {
   outline: 3px solid var(--focus);
-  outline-offset: 2px;
+  outline-offset: 3px;
 }
 
 .sr-only {
@@ -123,19 +195,94 @@ a {
   gap: 12px;
 }
 
+/* Every control is a pill; teal unless it is the gold call to action or a coral danger. */
 .button,
 button {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 8px 20px;
+  border: 2px solid var(--teal);
+  border-radius: 999px;
+  background: var(--tint);
+  color: var(--accent);
   font: inherit;
-  padding: 8px 16px;
-  border-radius: 6px;
-  border: 1px solid var(--muted);
-  background: transparent;
-  color: inherit;
+  font-weight: 700;
+  text-align: center;
   text-decoration: none;
   cursor: pointer;
+  box-shadow: 0 2px 8px var(--glow-card);
+  transition:
+    transform 300ms var(--bounce),
+    box-shadow 200ms ease-out,
+    background-color 200ms ease-out;
+}
+
+.button:hover,
+button:hover:not(:disabled) {
+  box-shadow: 0 4px 16px var(--glow-teal);
+}
+
+.button:active,
+button:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+/* Gold call to action with a gloss on top. */
+.primary {
+  border-color: var(--gold-dark);
+  background: linear-gradient(var(--gold-light), var(--gold) 55%, var(--gold-dark));
+  color: var(--on-gold);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 16px var(--glow-gold);
+}
+
+.primary::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 3px 14px auto;
+  height: 45%;
+  border-radius: 999px;
+  background: linear-gradient(rgb(255 255 255 / 0.7), rgb(255 255 255 / 0));
+  pointer-events: none;
+}
+
+.button.primary:hover,
+.primary:hover:not(:disabled) {
+  box-shadow: 0 6px 22px var(--glow-gold);
+}
+
+.danger {
+  border-color: var(--coral);
+  background: var(--tint-coral);
+  color: var(--danger);
+}
+
+.danger:hover:not(:disabled) {
+  box-shadow: 0 4px 16px var(--glow-coral);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  button {
+    transition: none;
+  }
+
+  .button:active,
+  button:active:not(:disabled) {
+    transform: none;
+  }
 }

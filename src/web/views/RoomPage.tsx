@@ -174,12 +174,12 @@ function RoomScreen({ view, room, label }: { view: RoomView; room: ReturnType<ty
       {showSix && (
         <SixBanner template={view.room.settings.sixMessage} name={six.name} platz={six.platz}>
           {finalSix ? (
-            <button type="button" onClick={() => setFinalSix(false)}>
+            <button type="button" className="primary" onClick={() => setFinalSix(false)}>
               Zum Ergebnis
             </button>
           ) : (
             d.showModeration && (
-              <button type="button" disabled={!d.can.continue} onClick={() => room.send({ type: "continue" })}>
+              <button type="button" className="primary" disabled={!d.can.continue} onClick={() => room.send({ type: "continue" })}>
                 Weiter
               </button>
             )

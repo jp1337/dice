@@ -14,7 +14,7 @@ async function logout() {
 export function LoginPrompt({ intro }: { intro: string }) {
   return (
     <>
-      <p>{intro}</p>
+      <p className="lead">{intro}</p>
       <p className="login">
         <a className="button primary" href={loginHref(location.pathname + location.search)}>
           Mit Discord anmelden
@@ -54,7 +54,10 @@ function CreateRoom() {
 
   return (
     <form className="card stack" onSubmit={submit} noValidate>
-      <h2>Raum erstellen</h2>
+      <h2>
+        <span className="icon" aria-hidden="true">✨</span>
+        Raum erstellen
+      </h2>
       <label htmlFor={nameId}>Name des Raums</label>
       <input
         id={nameId}
