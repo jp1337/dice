@@ -135,8 +135,8 @@ directly or through `contracts.ts`. Values for the browser live in `src/shared/c
 | `ReactionBar` `{onReact, disabled?}` | Client cooldown 2 s, mirrors the server |
 | `useFloatingReactions()` → `{items, add}`, `FloatingReactions` `{items, hidden?}` | `add(msg.emojis)`; place in a `.reaction-stage` element |
 | `Avatar` `{userId, name, avatarUrl, size?}` | Initials on a colour from the user id when there is no image |
-| `ThemeToggle`, `SoundToggle`, `ReactionsToggle`, `Switch` | Per-browser settings |
-| `useSound()` → `{play, muted, setMuted}` | `play("roll" \| "six")`, silent until the first gesture |
+| `ThemeToggle`, `SoundToggles` (Würfel-Ton, Gewinner-Ton), `ReactionsToggle`, `Switch` | Per-browser settings |
+| `useSound()` → `{play, rollOff, setRollOff, sixOff, setSixOff}` | `play("roll" \| "six")`, silent until the first gesture; each sound muted on its own (`SOUND_OFF_KEYS`), the old `dice.muted` carried over once |
 | `useFlag(HIDE_REACTIONS_KEY)`, `useReducedMotion()` | Shared preference store, motion setting |
 
 Logic sits in `src/web/lib/` (plain functions, tested without a DOM); components only render.

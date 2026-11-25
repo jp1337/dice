@@ -43,9 +43,15 @@ export function Switch({ on, onChange, label, ariaLabel, disabled = false, showS
   );
 }
 
-export function SoundToggle() {
-  const { muted, setMuted } = useSound();
-  return <Switch on={!muted} onChange={(on) => setMuted(!on)} label="Ton" />;
+// Two switches: some want the six's jingle but not thirty dice rolls, or the other way round.
+export function SoundToggles() {
+  const { rollOff, setRollOff, sixOff, setSixOff } = useSound();
+  return (
+    <>
+      <Switch on={!rollOff} onChange={(on) => setRollOff(!on)} label="Würfel-Ton" />
+      <Switch on={!sixOff} onChange={(on) => setSixOff(!on)} label="Gewinner-Ton" />
+    </>
+  );
 }
 
 export function ReactionsToggle() {

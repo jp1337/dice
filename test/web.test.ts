@@ -10,7 +10,8 @@ import { HowTo } from "../src/web/components/HowTo.js";
 import { SixBanner } from "../src/web/components/SixBanner.js";
 import * as constants from "../src/shared/constants.js";
 import * as contracts from "../src/shared/contracts.js";
-import { THEME_KEY, applyTheme, createPrefs, themeOf } from "../src/web/lib/prefs.js";
+import { migrateMuted } from "../src/web/lib/hooks.js";
+import { MUTED_KEY, SOUND_OFF_KEYS, THEME_KEY, applyTheme, createPrefs, themeOf } from "../src/web/lib/prefs.js";
 import { type Clip, createSoundPlayer } from "../src/web/lib/sound.js";
 import { AVATAR_TONES, FLOAT_LANES, FLOAT_MS, ROLL_ANIMATION_MS, avatarTone, cooldownLeft, expandBurst, fillTemplate, initials } from "../src/web/lib/ui.js";
 
@@ -39,6 +40,17 @@ describe("preferences", () => {
     expect(createPrefs(() => storage).get(THEME_KEY)).toBe("dark"); // after a reload
     createPrefs(() => storage).set(THEME_KEY, null);
     expect(storage.getItem(THEME_KEY)).toBeNull();
+  });
+
+  it("carry the old single sound switch over to both new ones, once", () => {
+    const storage = memoryStorage();
+    const store = createPrefs(() => storage);
+    store.set(MUTED_KEY, "1");
+    migrateMuted(store);
+    expect([store.get(SOUND_OFF_KEYS.roll), store.get(SOUND_OFF_KEYS.six), store.get(MUTED_KEY)]).toEqual(["1", "1", null]);
+    store.set(SOUND_OFF_KEYS.six, null); // the winner sound switched back on
+    migrateMuted(store);
+    expect(store.get(SOUND_OFF_KEYS.six)).toBeNull();
   });
 
   it.each([
