@@ -33,7 +33,7 @@ Behind real nginx, idle for 31 minutes, restarts and 100 clients: [acceptance.md
 | `test/config.test.ts`, `robots.test.ts` | Configuration rules, `robots.txt` |
 | `test/db.test.ts` | Migrations, `/healthz`, a dropped database connection |
 | `test/ws.ts` | The WebSocket test client (`Client.open`, members with a session cookie, guests without) and `makeUser` |
-| `test/game.test.ts` | Steps 4 and 5 over WebSocket: turns and rights, cooldown, `rolled` after its `state`, test rooms and simulated players, guest link and its limits, reactions, restart mid-game, 100 sockets with the broadcast latency. Short timings are injected (`rollCooldownMs`, `simulatedRollDelayMs` in `Deps`) |
+| `test/game.test.ts` | Steps 4 and 5 over WebSocket: turns and rights, cooldown, `rolled` after its `state`, test rooms and simulated players, public rooms and their limits, reactions, restart mid-game, 100 sockets with the broadcast latency. Short timings are injected (`rollCooldownMs`, `simulatedRollDelayMs` in `Deps`) |
 | `test/rooms.test.ts` | Step 3: rooms over HTTP, a listening server with Node's `WebSocket` client, raw upgrades for refused and silent sockets; sessions are inserted directly (`sessionIdFor`) |
 | `test/docs.test.ts` | `docs-tech/` stays unpublished, links resolve, every variable documented |
 | `test/web.test.ts` | Web logic without a DOM: preferences with blocked storage, `theme-init.js`, sound gating, six text escaping, reaction cooldown and bursts, avatars, CSS timing, no inline styles or scripts, asset sizes, theme tokens without `light-dark()` |

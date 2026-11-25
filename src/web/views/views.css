@@ -479,6 +479,30 @@ label {
   flex-basis: 100%;
 }
 
+/* The room link: copy and "Öffentlich" side by side on a pinned slip, the explanation below. */
+.room-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 12px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 2px var(--paper-edge);
+}
+
+.room-link .hint {
+  flex-basis: 100%;
+}
+
+/* A guest in the lobby: the waiting note sits where the "Du" card would be. */
+.lobby > p {
+  margin: 4px 0 12px;
+  padding: 10px 14px 10px 20px;
+  background: linear-gradient(var(--wheat), var(--wheat)) 0 0 / 8px 100% no-repeat var(--surface);
+  box-shadow: 0 4px 0 var(--shadow);
+  font-weight: 700;
+}
+
 /* Game: the dice land on a plank table, the same in both themes. */
 .stage {
   margin: 5px 5px 16px;

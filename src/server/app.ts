@@ -9,7 +9,6 @@ import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import Fastify, { type FastifyError, type FastifyReply, type FastifyRequest, LogController } from "fastify";
-import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { Pool } from "pg";
 import { registerAuth } from "./auth.js";
@@ -17,8 +16,7 @@ import type { Config } from "./config.js";
 import { datenschutzHtml, escapeHtml, impressumHtml, notFoundHtml } from "./legal.js";
 import { logIp } from "./log-ip.js";
 import { MAX_CLIENT_MESSAGE_BYTES, PING_INTERVAL_MS, ROLL_COOLDOWN_MS } from "../shared/contracts.js";
-import { rooms } from "./db/schema.js";
-import { GUEST_CONNECTS_PER_MINUTE, SIMULATED_ROLL_DELAY_MS, registerRooms } from "./rooms.js";
+import { SIMULATED_ROLL_DELAY_MS, registerRooms } from "./rooms.js";
 import { robotsTxt } from "./robots.js";
 
 export const HEALTHZ_LIMIT_PER_MINUTE = 120;
@@ -37,9 +35,7 @@ export type Deps = {
 // Paths that answer with the SPA's index.html. Every one gets the same HTML, so the link preview
 // (spec 10.2) never depends on the room.
 // Room slugs are base64url, 16 to 64 characters; anything else under /r/ is a 404.
-// Guest links (spec 4.8): a 128-bit token, and a 404 unless it is the room's active one.
-const WATCH_ROUTE = "/z/:token(^[A-Za-z0-9_-]{22}$)";
-export const SPA_ROUTES = ["/", "/r/:slug(^[A-Za-z0-9_-]{16,64}$)", WATCH_ROUTE];
+export const SPA_ROUTES = ["/", "/r/:slug(^[A-Za-z0-9_-]{16,64}$)"];
 
 const ROBOTS = "noindex, nofollow, noarchive, nosnippet, noimageindex";
 const HTML = "text/html; charset=utf-8";
@@ -65,9 +61,9 @@ export function serializeError(err: Error & { query?: unknown; params?: unknown;
   };
 }
 
-// Without the query string, which may carry codes or tokens, and without the guest token in the path:
-// "/z/<token>" in a log is the key to watch the room. Logged as "/z/:token" and "/ws/watch/:token".
-const logPath = (url: string) => url.split("?")[0]!.replace(/^\/(z|ws\/watch)\/[^/]+/, "/$1/:token");
+// Without the query string, which may carry codes or tokens, and without the room slug: "/r/<slug>" in a
+// log is the key to watch a public room. Logged as "/r/:slug", "/api/rooms/:slug" and "/ws/rooms/:slug".
+const logPath = (url: string) => url.split("?")[0]!.replace(/^\/(r|api\/rooms|ws\/rooms)\/[^/]+/, "/$1/:slug");
 
 function logRequest(request: FastifyRequest, reply: FastifyReply) {
   request.log.info(
@@ -172,10 +168,7 @@ export async function buildApp(config: Config, deps: Deps) {
 
   app.setNotFoundHandler((request, reply) => {
     if (/^\/api(\/|\?|$)/.test(request.url)) return reply.code(404).send({ error: "not_found" });
-    const text = request.url.startsWith("/z/")
-      ? "Dieser Zuschauer-Link ist nicht mehr aktiv. Frag beim Host nach einem neuen."
-      : "Diese Seite gibt es nicht. Prüfe den Link oder fang auf der Startseite an.";
-    return reply.code(404).type(HTML).send(notFoundHtml(text, appCss));
+    return reply.code(404).type(HTML).send(notFoundHtml("Diese Seite gibt es nicht. Prüfe den Link oder fang auf der Startseite an.", appCss));
   });
 
   app.setErrorHandler<FastifyError>((error, request, reply) => {
@@ -209,15 +202,8 @@ export async function buildApp(config: Config, deps: Deps) {
   app.get("/impressum", (_request, reply) => reply.type(HTML).send(impressumHtml(config.legal, appCss)));
   app.get("/datenschutz", (_request, reply) => reply.type(HTML).send(datenschutzHtml(config.legal, { ...config.privacyServices, retentionDays: config.retentionDays }, appCss)));
 
-  const watchLinkActive = async (token: string) => (await db.select({ id: rooms.id }).from(rooms).where(eq(rooms.watchToken, token))).length > 0;
   for (const url of SPA_ROUTES) {
-    const watch = url === WATCH_ROUTE;
-    // The guest page is public and touches the database, so it is limited like the guest socket.
-    const options = watch ? { onRequest: app.rateLimit({ max: GUEST_CONNECTS_PER_MINUTE, timeWindow: "1 minute" }) } : {};
-    app.get<{ Params: { token: string } }>(url, options, async (request, reply) => {
-      if (spaHtml === null || (watch && !(await watchLinkActive(request.params.token)))) return reply.callNotFound();
-      return reply.type(HTML).send(spaHtml);
-    });
+    app.get(url, (_request, reply) => (spaHtml === null ? reply.callNotFound() : reply.type(HTML).send(spaHtml)));
   }
 
   // The hashed files under /assets/ and the files of src/web/public. index.html only through the

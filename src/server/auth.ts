@@ -91,6 +91,11 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
 
   // preHandler for routes that need a user: resolves the session cookie, 401 without one.
   async function requireUser(request: FastifyRequest, reply: FastifyReply) {
+    await loadUser(request);
+    if (!request.user) return reply.code(401).send({ error: "unauthorized" });
+  }
+  // Hook for routes that also serve guests: request.user stays null without a valid session.
+  async function loadUser(request: FastifyRequest) {
     const token = request.cookies[SESSION_COOKIE];
     if (token) {
       const id = sessionId(token);
@@ -104,7 +109,6 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
         request.session = { id, expiresAt: row.expiresAt };
       }
     }
-    if (!request.user) return reply.code(401).send({ error: "unauthorized" });
   }
 
   app.get<{ Querystring: { next?: string } }>("/auth/login", loginLimit(), (request, reply) => {
@@ -246,5 +250,5 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
     return reply.type(row.type).send(row.image);
   });
 
-  return { requireUser, onSessionEnd: (listener: (sessionId: string) => void) => sessionEndListeners.push(listener) };
+  return { requireUser, loadUser, onSessionEnd: (listener: (sessionId: string) => void) => sessionEndListeners.push(listener) };
 }

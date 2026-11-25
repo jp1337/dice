@@ -19,9 +19,9 @@ compares pixels (`--check`).
   writer (`node:zlib`). Square and small: `twitter:card` is `summary`, so Discord shows it as a
   thumbnail beside `og:title` (spec 10.2: "kleines Bild"). No text in it.
 - `src/web/public/` is copied unchanged to `dist/web/`; `favicon.svg` and `theme-init.js` are hand-written.
-- `src/web/public/fonts/PixelifySans.ttf` (77 KB, variable 400–700): Pixelify Sans by the Pixelify Sans
+- `src/web/fonts/PixelifySans.ttf` (77 KB, variable 400–700): Pixelify Sans by the Pixelify Sans
   Project Authors, SIL Open Font License 1.1 (`OFL.txt` beside it), unmodified, from
-  `github.com/google/fonts/tree/main/ofl/pixelifysans`. Served under `/fonts/` with the default `no-store`.
+  `github.com/google/fonts/tree/main/ofl/pixelifysans`. `style.css` imports it relatively, so Vite hashes it into `/assets/` (cached for a year).
 
 ## Look
 
@@ -136,8 +136,7 @@ No router: `main.tsx` picks the page from the path (`lib/routes.ts`); every page
 | Path | View | Connects to |
 | --- | --- | --- |
 | `/` | `views/Start.tsx`: login, logged-in user, "Raum erstellen" for hosts | `GET /api/me`, `POST /api/rooms` |
-| `/r/:slug` | `views/RoomPage.tsx` → `Lobby`, `Game`, `Result` by game status | `GET /api/rooms/:slug` first (401 login, 404 not found), then `/ws/rooms/:slug` |
-| `/z/:token` | same screens, `viewer.kind === "guest"`: nothing that sends | `/ws/watch/:token`; `HEAD /z/:token` 404 = link off |
+| `/r/:slug` | `views/RoomPage.tsx` → `Lobby`, `Game`, `Result` by game status; a guest (public room, no session) gets the same screens without anything that sends | `GET /api/rooms/:slug` first (401 login, 404 not found), then `/ws/rooms/:slug` |
 
 | Module | Holds |
 | --- | --- |

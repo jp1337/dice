@@ -1,16 +1,14 @@
-// The three pages of the app, picked from the path without a router library. Every page is a full
+// The two pages of the app, picked from the path without a router library. Every page is a full
 // page load: the server sends the same HTML for each (SPA_ROUTES in app.ts).
 
-export type Route = { page: "start" } | { page: "room"; slug: string } | { page: "guest"; token: string };
+export type Route = { page: "start" } | { page: "room"; slug: string };
 
-// The slug alphabet of app.ts (base64url, 16 to 64); tokens use the same.
+// The slug alphabet of app.ts (base64url, 16 to 64).
 const ID = "([A-Za-z0-9_-]{16,64})";
 
 export function parseRoute(pathname: string): Route {
   const room = new RegExp(`^/r/${ID}/?$`).exec(pathname);
   if (room) return { page: "room", slug: room[1]! };
-  const guest = new RegExp(`^/z/${ID}/?$`).exec(pathname);
-  if (guest) return { page: "guest", token: guest[1]! };
   return { page: "start" };
 }
 

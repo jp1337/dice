@@ -18,7 +18,7 @@ export function backoffDelay(attempt: number, random: () => number = Math.random
 
 export type CloseAction = "reconnect-now" | "reconnect" | "login" | "stop";
 
-// The server's codes (rooms.ts): 1008 too many tabs or messages, 4004 room gone, 4001 session ended,
+// The server's codes (rooms.ts): 1008 too many tabs or messages, 4004 room gone, 4001 session ended or room no longer public,
 // 1011 join failed, 1012/1013 the room reloads (back within a second, jittered). 1006 is a lost network or a refused upgrade.
 export function classifyClose(code: number): CloseAction {
   if (code === 1012 || code === 1013) return "reconnect-now";
