@@ -410,6 +410,19 @@ describe("lists", () => {
     ]);
   });
 
+  it("says which pause a host ended: a host pause or the one after a six", () => {
+    const history = [
+      ev("game_started", { order: [ANNA, BEN] }),
+      ev("paused", {}),
+      ev("continued", {}),
+      ev("rolled", { userId: ANNA, dice: [6] }, ANNA),
+      ev("continued", {}),
+    ];
+    const texts = historyLines(makeView({ game: running({ history }) }), true).map((l) => l.text);
+    expect(texts[0]).toBe("Hanna setzt das Spiel nach der 6 fort");
+    expect(texts[2]).toBe("Hanna beendet die Pause");
+  });
+
   it("while the dice tumble, every panel keeps the view from before the roll", () => {
     // Ben is up; then a state brings his six: a place, Anna's turn, a history line. Then `rolled`.
     const before = makeView({ game: running({ activeUserId: BEN, history: [ev("game_started", { order: [ANNA, BEN] })] }) });
@@ -426,6 +439,11 @@ describe("lists", () => {
     roll = rollStep(roll, { type: "settled" });
     expect(displayedView(roll, after)).toBe(after); // landed: the result everywhere
     expect(turnText(displayedView(roll, after), ANNA)).toBe("Du bist dran!");
+    // The next roll comes without any state in between: it holds `after`, not the view before Ben's six.
+    const next = makeView({ game: running({ turnOrder: [ANNA], activeUserId: ANNA, giftOrder: [BEN], lastRoll: { userId: ANNA, dice: [2] }, history: [...after.game.history, ev("rolled", { userId: ANNA, dice: [2] }, ANNA)] }) });
+    roll = rollStep(roll, { type: "state", view: next, first: false });
+    roll = rollStep(roll, { type: "rolled", dice: [2] });
+    expect(displayedView(roll, next)).toBe(after);
   });
 
   it("turn order carries each player's profile picture", () => {

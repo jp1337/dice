@@ -1260,13 +1260,29 @@ details[open] > summary::after {
   padding-left: 1.2em;
 }
 
-/* The room's privacy note, small, between the links and the switches. */
-.footer-note {
-  flex: 1 1 16rem;
-  color: var(--muted);
-  font-size: 0.9rem;
+/* Links and the room's privacy note, small and stacked on the left; the switches on the right. */
+.footer-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.85rem;
+  line-height: 1.35;
 }
 
 .footer-note:empty {
   display: none;
+}
+
+.sound-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+
+/* A 32-character name without spaces ("WWWW…") must wrap, not run out of its button or the stage. */
+button,
+.stage {
+  overflow-wrap: anywhere;
 }
