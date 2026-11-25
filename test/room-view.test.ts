@@ -302,11 +302,11 @@ describe("what a viewer may click", () => {
     expect(d.players.map((m) => m.userId)).toEqual([ANNA, BEN]);
   });
 
-  it("the active player rolls, except during a pause, and does not react", () => {
+  it("the active player rolls, except during a pause, and reacts like everyone", () => {
     const d = deriveRoom(makeView({ game: running() }), true);
     expect(d).toMatchObject({ isActive: true });
     expect(turnText(makeView({ game: running() }), ANNA, false)).toBe("Du bist dran!");
-    expect(d.can).toMatchObject({ roll: true, react: false, claimLastPlace: false, setOwnParticipation: false });
+    expect(d.can).toMatchObject({ roll: true, react: true, claimLastPlace: false, setOwnParticipation: false });
     expect(deriveRoom(makeView({ game: running({ pause: "host" }) }), true).can.roll).toBe(false);
     expect(deriveRoom(makeView({ game: running() }), false).can.roll).toBe(false); // offline
   });

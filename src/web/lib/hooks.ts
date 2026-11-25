@@ -15,7 +15,7 @@ export function useTheme(): [ThemeChoice, (choice: ThemeChoice) => void] {
   return [theme, setTheme];
 }
 
-// A boolean preference that defaults to false (MUTED_KEY, HIDE_REACTIONS_KEY).
+// A boolean preference that defaults to false (SOUND_OFF_KEYS).
 export function useFlag(key: string): [boolean, (on: boolean) => void] {
   const on = usePref(key) === "1";
   const set = useCallback((value: boolean) => prefs.set(key, value ? "1" : null), [key]);

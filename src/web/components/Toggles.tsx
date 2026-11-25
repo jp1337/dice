@@ -1,7 +1,7 @@
 // The per-browser switches of spec 10, 10.1 and 4.11, ready to place in the header or footer.
 import { useId } from "react";
-import { useFlag, useSound, useTheme } from "../lib/hooks.js";
-import { HIDE_REACTIONS_KEY, type ThemeChoice } from "../lib/prefs.js";
+import { useSound, useTheme } from "../lib/hooks.js";
+import type { ThemeChoice } from "../lib/prefs.js";
 import "./Toggles.css";
 
 const THEMES: [ThemeChoice, string][] = [
@@ -52,9 +52,4 @@ export function SoundToggles() {
       <Switch on={!sixOff} onChange={(on) => setSixOff(!on)} label="Gewinner-Ton" />
     </>
   );
-}
-
-export function ReactionsToggle() {
-  const [hidden, setHidden] = useFlag(HIDE_REACTIONS_KEY);
-  return <Switch on={!hidden} onChange={(on) => setHidden(!on)} label="Reaktionen" />;
 }

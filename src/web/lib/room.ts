@@ -51,7 +51,7 @@ export function deriveRoom(view: RoomView, online: boolean) {
       roll: online && running && isActive && !game.pause,
       claimLastPlace: online && running && !game.pause && room.settings.lastPlayer === "choice" && lastPlayer !== null && lastPlayer === myId,
       // Spec 4.11: every logged-in member except the active player, while the room allows it.
-      react: online && member && room.settings.reactions && !isActive,
+      react: online && member && room.settings.reactions,
       setOwnParticipation: online && member && lobby,
       editNickname: online && member,
       // Host tools (spec 4.6)

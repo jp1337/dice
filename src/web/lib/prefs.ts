@@ -6,7 +6,6 @@
 export const THEME_KEY = "dice.theme";
 export const MUTED_KEY = "dice.muted"; // before the two switches: both sounds off; read once, then moved
 export const SOUND_OFF_KEYS = { roll: "dice.muted.roll", six: "dice.muted.six" } as const; // per sound, spec 10.1
-export const HIDE_REACTIONS_KEY = "dice.hideReactions";
 
 export type ThemeChoice = "light" | "dark" | "system";
 type Store = Pick<Storage, "getItem" | "setItem" | "removeItem">;

@@ -647,7 +647,7 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       return counts;
     };
 
-    it("bundles reactions for members and guests, never stores them, refuses the active player", async () => {
+    it("bundles reactions for members and guests, never stores them, the active player's too", async () => {
       const { slug, ch, players } = await startGame(2);
       const active = ch.state.game.activeUserId!;
       const [other] = [...players].filter(([id]) => id !== active).map(([, c]) => c);
@@ -658,11 +658,10 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       ch.send({ type: "react", emoji: "🎉" });
       other!.send({ type: "react", emoji: "🎉" });
       other!.send({ type: "react", emoji: "😂" }); // within 2 s: refused
-      await until(() => expect(players.get(active)!.errors).toEqual(["active_player"]));
       await until(() => expect(other!.errors).toEqual(["reaction_too_fast"]));
       // Counted per emoji, however the two land in bundles (usually one).
       for (const c of [ch, guest, other!]) {
-        await until(() => expect(reactionsOf(c)).toEqual({ "🎉": 2 }));
+        await until(() => expect(reactionsOf(c)).toEqual({ "🎉": 3 }));
         expect(c.messages.filter((m) => m.type === "reactions").length).toBeLessThanOrEqual(2);
       }
       expect((await eventsOf(slug)).length).toBe(events);
