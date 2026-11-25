@@ -140,7 +140,7 @@ directly or through `contracts.ts`. Values for the browser live in `src/shared/c
 | `ReactionBar` `{onReact, disabled?}` | Client cooldown 0.5 s, mirrors the server; emojis rise left and right of the dice, never across them |
 | `useFloatingReactions()` → `{items, add}`, `FloatingReactions` `{items, hidden?}` | `add(msg.emojis)`; place in a `.reaction-stage` element |
 | `Avatar` `{userId, name, avatarUrl, size?}` | Initials on a colour from the user id when there is no image |
-| `ThemeToggle`, `SoundToggles` (Würfel-Ton, Gewinner-Ton, Dran-Ton), `Switch` | Per-browser settings; reactions have no personal switch, hosts switch them for the room |
+| `ThemeToggle`, `SoundToggles` ("Ton:" Würfel, Gewinner, Dran; group "Töne"), `Switch` | Per-browser settings; reactions have no personal switch, hosts switch them for the room |
 | `useSound()` → `{play, rollOff, setRollOff, sixOff, setSixOff, turnOff, setTurnOff}` | `play("roll" \| "six" \| "turn")`, silent until the first gesture; each sound muted on its own (`SOUND_OFF_KEYS`), the old `dice.muted` carried over once |
 | `useFlag(key)`, `useReducedMotion()` | Shared preference store, motion setting |
 

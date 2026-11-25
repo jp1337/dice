@@ -47,10 +47,12 @@ export function Switch({ on, onChange, label, ariaLabel, disabled = false, showS
 export function SoundToggles() {
   const { rollOff, setRollOff, sixOff, setSixOff, turnOff, setTurnOff } = useSound();
   return (
-    <>
-      <Switch on={!rollOff} onChange={(on) => setRollOff(!on)} label="Würfel-Ton" />
-      <Switch on={!sixOff} onChange={(on) => setSixOff(!on)} label="Gewinner-Ton" />
-      <Switch on={!turnOff} onChange={(on) => setTurnOff(!on)} label="Dran-Ton" />
-    </>
+    // Short labels under one "Ton:" so the footer stays one line; the group names them for screen readers.
+    <div className="sound-toggles" role="group" aria-label="Töne">
+      <span aria-hidden="true">Ton:</span>
+      <Switch on={!rollOff} onChange={(on) => setRollOff(!on)} label="Würfel" />
+      <Switch on={!sixOff} onChange={(on) => setSixOff(!on)} label="Gewinner" />
+      <Switch on={!turnOff} onChange={(on) => setTurnOff(!on)} label="Dran" />
+    </div>
   );
 }

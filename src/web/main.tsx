@@ -27,11 +27,14 @@ function App() {
         {route.page === "room" && <RoomPage slug={route.slug} />}
       </main>
       <footer>
-        <span>
-          <a href="/">Start</a> · <a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a> · <a href="https://github.com/jp1337/dice">GitHub</a>
-        </span>
-        {/* A room page puts its privacy note here (RoomPage, portal): it took a whole line at the top. */}
-        <span id="footer-note" className="footer-note" />
+        <div className="footer-info">
+          <span>
+            <a href="/">Start</a> · <a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a> · <a href="https://github.com/jp1337/dice">GitHub</a>
+          </span>
+          {/* A room page puts its privacy note here (RoomPage, portal), under the links: at the top it
+              took a whole line. Both small, so the footer stays as high as its switches. */}
+          <span id="footer-note" className="footer-note" />
+        </div>
         <div className="me">
           <SoundToggles />
           <ThemeToggle />

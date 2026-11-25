@@ -14,7 +14,8 @@ export type RollState = {
   rollKey: number; // the Dice component's trigger, one per `rolled`
   dice: number[] | null; // the values of the newest `rolled`
   rolledAt: number | null; // when it arrived (Date.now()), for the countdown
-  held: RoomView | null; // the last view before the new roll: shown everywhere until the dice land
+  held: RoomView | null; // the view just before the new roll: shown everywhere until the dice land
+  latest: RoomView | null; // the newest state seen, which becomes `held` when the next roll arrives
 };
 
 export type RollAction =
@@ -26,7 +27,7 @@ export type RollAction =
 
 export const ROLLED_WAIT_MS = 1500;
 export const SIX_BANNER_DELAY_MS = 1000; // the landed six stays visible this long before the banner covers it
-export const initialRoll: RollState = { seenSeq: 0, waiting: false, tumbling: false, cooling: false, rollKey: 0, dice: null, rolledAt: null, held: null };
+export const initialRoll: RollState = { seenSeq: 0, waiting: false, tumbling: false, cooling: false, rollKey: 0, dice: null, rolledAt: null, held: null, latest: null };
 
 // Rolls only, so the number means the same for hosts and everyone else. Undone rolls stay in the history.
 export const newestRollSeq = (view: RoomView) => view.game.history.findLast((e) => e.type === "rolled")?.seq ?? 0;
@@ -37,11 +38,12 @@ export function rollStep(state: RollState, action: RollAction): RollState {
       const seq = newestRollSeq(action.view);
       // A reconnect or a reset unmounts the dice mid-tumble, and their onSettled never comes.
       if (action.first || action.view.game.status === "lobby") {
-        return { ...state, seenSeq: Math.max(seq, state.seenSeq), waiting: false, tumbling: false, cooling: false, held: action.view };
+        return { ...state, seenSeq: Math.max(seq, state.seenSeq), waiting: false, tumbling: false, cooling: false, held: action.view, latest: action.view };
       }
-      // A new roll: keep showing the view from before it. Other states while the dice tumble wait too.
-      if (seq > state.seenSeq) return { ...state, seenSeq: seq, waiting: true };
-      return rollBusy(state) ? state : { ...state, held: action.view };
+      // A new roll: keep showing the state from just before it (not an older one: after the last roll
+      // landed no further state may have come). Other states while the dice tumble wait too.
+      if (seq > state.seenSeq) return { ...state, seenSeq: seq, waiting: true, held: state.latest ?? action.view, latest: action.view };
+      return state.latest === action.view ? state : { ...state, latest: action.view };
     }
     case "rolled":
       return { ...state, waiting: false, tumbling: true, cooling: true, rollKey: state.rollKey + 1, dice: action.dice, rolledAt: action.at ?? null };
