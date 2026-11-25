@@ -169,7 +169,7 @@ function Settings({ view, d, send }: Props) {
 export function RoomLink({ view, d, send }: Props) {
   const { slug, isPublic, guestCount } = view.room;
   return (
-    <div className="stack">
+    <div className="room-link">
       <span className="row">
         <CopyButton text={`${location.origin}/r/${slug}`} label="Raum-Link kopieren" />
       </span>

@@ -1,23 +1,22 @@
+/* Emoji in square slots, like a row of item boxes. */
 .reaction-bar {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .reaction-bar button {
+  --face: var(--field);
   width: 52px;
   height: 52px;
   padding: 0;
-  border-radius: 50%;
-  border-color: var(--line);
-  background: var(--field);
   font-size: 1.6rem;
   line-height: 1;
 }
 
 .reaction-bar button:hover:not([aria-disabled="true"]) {
-  box-shadow: 0 4px 16px var(--glow-gold);
+  --face: var(--tint-wheat);
 }
 
 .reaction-bar button[aria-disabled="true"]:active {
@@ -32,9 +31,8 @@
 /* Shrinks over the cooldown; empty otherwise. */
 .reaction-cooldown {
   flex-basis: 100%;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--gold-dark);
+  height: 6px;
+  background: var(--wheat-dark);
   transform: scaleX(0);
 }
 

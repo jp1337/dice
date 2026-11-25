@@ -1,56 +1,73 @@
-/* Design tokens after the "Flip7 Card Game" design system (yiujc, DESIGNmd, MIT): teal for the table and
-   the everyday controls, gold for the one thing to press and for first place, coral for the six. Light by
-   default; dark from the system preference unless the toggle fixed light, or from the toggle (data-theme
-   on <html>, set before the first paint by theme-init.js). The dark values stand twice, identically
-   (test/web.test.ts): the CSS light-dark function would say it once but needs Safari 17.5.
+/* Harvest festival in a small valley: parchment panels in chunky wooden frames, a plank table for the
+   dice, pixel bevels on every control, a pixel face (Pixelify Sans, OFL) for headings only. Light is a
+   sunny morning, dark a lantern-lit evening. Dark from the system preference unless the toggle fixed
+   light, or from the toggle (data-theme on <html>, set before the first paint by theme-init.js). The dark
+   values stand twice, identically (test/web.test.ts): the CSS light-dark function would say it once but needs Safari 17.5.
+   Pixel frames are hard box-shadows (no blur, no images): four offset copies leave the corners notched.
    Text contrast of every pair: docs-tech/ui-assets.md. */
+@font-face {
+  font-family: "Pixelify Sans";
+  src: url("./fonts/PixelifySans.ttf") format("truetype");
+  font-weight: 400 700;
+  font-display: swap;
+  /* Not the digits: its 5 reads as an S, and "Geschenk Nr. 5" must be unmistakable. Digits come from
+     the system face in the stack. */
+  unicode-range: U+0000-002F, U+003A-10FFFF;
+}
+
 :root {
   color-scheme: light;
-  --bg: #eff8f7;
-  --surface: #ffffff;
-  --field: #fff8e7; /* cream: inputs */
-  --fg: #123a3e;
-  --muted: #46666a;
-  --line: #cfe5e2; /* decoration only */
-  --edge: #5e918d; /* borders that must be seen: inputs, 3:1 */
-  --accent: #14615c; /* teal as text */
-  --fill: #136a65; /* teal as a filled control, with --on-fill text */
-  --on-fill: #ffffff;
-  --tint: #e8f6f5;
-  --tint-gold: #fff3c4;
-  --tint-coral: #ffe0d6;
-  --tint-sky: #e3f1fb;
-  --title-shadow: #ffd23f;
-  --focus: #1f6fb2;
-  --danger: #b53a1e;
-  --glow-teal: rgb(43 168 162 / 0.3);
-  --glow-card: rgb(43 168 162 / 0.12);
-  --glow-gold: rgb(230 184 0 / 0.45);
-  --glow-coral: rgb(239 108 74 / 0.35);
+  --bg: #cbe7ef; /* sky, in three bands down to the meadow */
+  --bg-mid: #d7ecea;
+  --bg-low: #e2efcc;
+  --star: transparent;
+  --surface: #fbf0d4; /* parchment */
+  --surface-2: #f6e6bd; /* every other row */
+  --paper-edge: #e3cb93;
+  --field: #fffaf0;
+  --fg: #3f2614;
+  --muted: #6b4a2f;
+  --line: #d9bd85; /* decoration only */
+  --edge: #8d6a45; /* borders that must be seen: inputs, 3:1 */
+  --accent: #8a3a10; /* links, title */
+  --fill: #3d7424; /* meadow green as a filled control, with --on-fill text */
+  --on-fill: #fffaf0;
+  --tint: #f3dfae; /* button face */
+  --tint-wheat: #f8e2a0;
+  --tint-berry: #f7d6d6;
+  --tint-sky: #d4ebf2;
+  --tint-meadow: #dcefc9;
+  --frame: #4e2a12; /* button and slot frames */
+  --focus: #1d5f9e;
+  --danger: #962033;
+  --shadow: rgb(46 25 8 / 0.28);
   --avatar-bg: 88% 0.06; /* oklch lightness and chroma; Avatar.css adds the hue */
   --avatar-fg: 32% 0.09;
 
-  /* Kit colours, and the physical things that look the same in both themes: felt, dice, ribbon, six. */
-  --teal: #2ba8a2;
-  --teal-light: #3cc4bd;
-  --teal-dark: #1e8c86;
-  --gold: #ffd23f;
-  --gold-light: #ffe47a;
-  --gold-dark: #e6b800;
-  --on-gold: #3a2a00;
-  --coral: #ef6c4a;
-  --coral-light: #ff8a6a;
-  --coral-dark: #d45233;
-  --sky: #5dade2;
-  --success: #27ae60;
-  --cream: #fff8e7;
-  --ink: #123a3e;
-  --felt: #17766f;
-  --felt-edge: #0f5e59;
-  --die-face: #fff8e7;
-  --die-edge: #e3d3a8;
-  --pip: #14615c;
-  --pip-six: #d45233;
+  /* Materials and harvest colours, the same in both themes: wood, dice, signs, the six. */
+  --wood: #8a5229;
+  --wood-dark: #4e2a12;
+  --wood-light: #b07040;
+  --plank: #7d4a25;
+  --pumpkin: #e9792f;
+  --pumpkin-light: #f6a25a;
+  --pumpkin-dark: #b8551a;
+  --on-pumpkin: #2e1606;
+  --wheat: #f2c14e;
+  --wheat-light: #f9dc8a;
+  --wheat-dark: #c9952a;
+  --on-wheat: #3a2405;
+  --meadow: #6aa84f;
+  --berry: #a8304a;
+  --berry-light: #e0607a;
+  --sky: #79c0da;
+  --cream: #fff4d6;
+  --parchment: #fbf0d4;
+  --ink: #3f2614;
+  --die-face: #fff6df;
+  --die-edge: #4e2a12;
+  --pip: #4e2a12;
+  --pip-six: #a8304a;
 
   /* Kept equal to ROLL_ANIMATION_MS, REACTION_INTERVAL_MS and FLOAT_MS (test/web.test.ts). */
   --roll-duration: 1300ms;
@@ -58,6 +75,7 @@
   --float-duration: 2400ms;
   --bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
 
+  --font-pixel: "Pixelify Sans", ui-rounded, system-ui, sans-serif;
   font-family: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   font-weight: 500;
   line-height: 1.5;
@@ -66,27 +84,30 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #0e2629;
-    --surface: #163539;
-    --field: #1b3d42;
-    --fg: #e8f6f5;
-    --muted: #9fc3c0;
-    --line: #2a5257;
-    --edge: #6e9c99;
-    --accent: #3cc4bd;
-    --fill: #3cc4bd;
-    --on-fill: #0e2629;
-    --tint: #1b3d42;
-    --tint-gold: #3d3a1c;
-    --tint-coral: #47291f;
-    --tint-sky: #18374a;
-    --title-shadow: #1e8c86;
-    --focus: #8ccbf2;
-    --danger: #ff8a6a;
-    --glow-teal: rgb(60 196 189 / 0.25);
-    --glow-card: rgb(0 0 0 / 0.25);
-    --glow-gold: rgb(255 210 63 / 0.35);
-    --glow-coral: rgb(255 138 106 / 0.3);
+    --bg: #1b2033;
+    --bg-mid: #1c2632;
+    --bg-low: #1d2c2a;
+    --star: rgb(255 244 214 / 0.55);
+    --surface: #33261b;
+    --surface-2: #3b2c1f;
+    --paper-edge: #5a4330;
+    --field: #271d15;
+    --fg: #f6e6c4;
+    --muted: #d4bb92;
+    --line: #6a5038;
+    --edge: #a88a63;
+    --accent: #f4a261;
+    --fill: #8cc46c;
+    --on-fill: #1b2033;
+    --tint: #4a3725;
+    --tint-wheat: #4d3d17;
+    --tint-berry: #4d2228;
+    --tint-sky: #1f3a47;
+    --tint-meadow: #2a3d22;
+    --frame: #c08a52;
+    --focus: #9fd3ff;
+    --danger: #ffa3b0;
+    --shadow: rgb(0 0 0 / 0.45);
     --avatar-bg: 40% 0.09;
     --avatar-fg: 95% 0.03;
   }
@@ -94,47 +115,42 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0e2629;
-  --surface: #163539;
-  --field: #1b3d42;
-  --fg: #e8f6f5;
-  --muted: #9fc3c0;
-  --line: #2a5257;
-  --edge: #6e9c99;
-  --accent: #3cc4bd;
-  --fill: #3cc4bd;
-  --on-fill: #0e2629;
-  --tint: #1b3d42;
-  --tint-gold: #3d3a1c;
-  --tint-coral: #47291f;
-  --tint-sky: #18374a;
-  --title-shadow: #1e8c86;
-  --focus: #8ccbf2;
-  --danger: #ff8a6a;
-  --glow-teal: rgb(60 196 189 / 0.25);
-  --glow-card: rgb(0 0 0 / 0.25);
-  --glow-gold: rgb(255 210 63 / 0.35);
-  --glow-coral: rgb(255 138 106 / 0.3);
+  --bg: #1b2033;
+  --bg-mid: #1c2632;
+  --bg-low: #1d2c2a;
+  --star: rgb(255 244 214 / 0.55);
+  --surface: #33261b;
+  --surface-2: #3b2c1f;
+  --paper-edge: #5a4330;
+  --field: #271d15;
+  --fg: #f6e6c4;
+  --muted: #d4bb92;
+  --line: #6a5038;
+  --edge: #a88a63;
+  --accent: #f4a261;
+  --fill: #8cc46c;
+  --on-fill: #1b2033;
+  --tint: #4a3725;
+  --tint-wheat: #4d3d17;
+  --tint-berry: #4d2228;
+  --tint-sky: #1f3a47;
+  --tint-meadow: #2a3d22;
+  --frame: #c08a52;
+  --focus: #9fd3ff;
+  --danger: #ffa3b0;
+  --shadow: rgb(0 0 0 / 0.45);
   --avatar-bg: 40% 0.09;
   --avatar-fg: 95% 0.03;
 }
 
+/* Sky in hard bands like a pixel-art backdrop; in the dark theme a few stars. */
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--fg);
-}
-
-/* Party bunting along the top of every page: gold, teal and coral pennants on a string. */
-body::before {
-  content: "";
-  display: block;
-  height: 16px;
   background:
-    linear-gradient(var(--edge), var(--edge)) 0 0 / 100% 2px no-repeat,
-    conic-gradient(from -40deg at 16px 100%, var(--gold) 80deg, transparent 0) 0 0 / 96px 16px repeat-x,
-    conic-gradient(from -40deg at 48px 100%, var(--teal) 80deg, transparent 0) 0 0 / 96px 16px repeat-x,
-    conic-gradient(from -40deg at 80px 100%, var(--coral) 80deg, transparent 0) 0 0 / 96px 16px repeat-x;
+    radial-gradient(circle, var(--star) 1px, transparent 1.5px) 13px 21px / 97px 61px,
+    radial-gradient(circle, var(--star) 1px, transparent 1.5px) 52px 7px / 151px 83px,
+    linear-gradient(var(--bg) 0 38%, var(--bg-mid) 38% 70%, var(--bg-low) 70%) fixed;
+  color: var(--fg);
 }
 
 #root,
@@ -145,8 +161,31 @@ body::before {
   padding: 0 16px;
 }
 
+/* Festival string across the top: square pixel pennants in pumpkin, wheat and berry. */
+#root::before,
+.page::before {
+  content: "";
+  flex-shrink: 0;
+  height: 20px;
+  margin: 0 -16px;
+  /* Each pennant: a 12 × 8 block with a 6 × 4 tip under it, one every 24 px in a 72 px repeat. */
+  background:
+    linear-gradient(var(--wood-dark), var(--wood-dark)) 0 3px / 100% 3px no-repeat,
+    linear-gradient(90deg, var(--pumpkin) 12px, transparent 0, transparent 24px, var(--wheat) 0 36px, transparent 0 48px, var(--berry-light) 0 60px, transparent 0) 6px 6px / 72px 8px repeat-x,
+    linear-gradient(90deg, transparent 3px, var(--pumpkin) 0 9px, transparent 0 27px, var(--wheat) 0 33px, transparent 0 51px, var(--berry-light) 0 57px, transparent 0) 6px 14px / 72px 4px repeat-x;
+}
+
 main {
   flex: 1;
+}
+
+h1,
+h2,
+h3,
+summary,
+.ribbon,
+.turn {
+  font-family: var(--font-pixel);
 }
 
 /* Server-rendered pages (Impressum, Datenschutz, 404): the app's frame, text in a readable column. */
@@ -164,12 +203,12 @@ footer {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  max-width: 1100px;
+  max-width: 1400px;
   width: 100%;
   box-sizing: border-box;
-  margin: 32px auto 0;
-  padding: 16px 0 24px;
-  border-top: 3px dashed var(--line);
+  margin: 24px auto 0;
+  padding: 12px 0 16px;
+  background: linear-gradient(90deg, var(--line) 0 8px, transparent 8px) 0 0 / 12px 3px repeat-x;
   color: var(--muted);
 }
 
@@ -184,7 +223,7 @@ footer a {
 
 :focus-visible {
   outline: 3px solid var(--focus);
-  outline-offset: 3px;
+  outline-offset: 5px;
 }
 
 .sr-only {
@@ -202,12 +241,16 @@ footer a {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
-/* Every control is a pill; teal unless it is the gold call to action or a coral danger. */
+/* Every control is a chunky pixel block: notched frame, light bevel on top, dark bevel below. The
+   variants only swap the custom properties; a press sinks the block by two pixels. */
 .button,
 button {
+  --face: var(--tint);
+  --hi: rgb(255 255 255 / 0.5);
+  --lo: rgb(78 42 18 / 0.22);
   position: relative;
   isolation: isolate;
   display: inline-flex;
@@ -216,73 +259,61 @@ button {
   gap: 8px;
   min-height: 44px;
   box-sizing: border-box;
-  padding: 8px 20px;
-  border: 2px solid var(--teal);
-  border-radius: 999px;
-  background: var(--tint);
-  color: var(--accent);
+  padding: 8px 18px;
+  border: 0;
+  border-radius: 0;
+  background: var(--face);
+  color: var(--fg);
   font: inherit;
   font-weight: 700;
   text-align: center;
   text-decoration: none;
   cursor: pointer;
-  box-shadow: 0 2px 8px var(--glow-card);
-  transition:
-    transform 300ms var(--bounce),
-    box-shadow 200ms ease-out,
-    background-color 200ms ease-out;
+  box-shadow:
+    0 -3px 0 var(--frame),
+    0 3px 0 var(--frame),
+    -3px 0 0 var(--frame),
+    3px 0 0 var(--frame),
+    inset 0 3px 0 var(--hi),
+    inset 0 -4px 0 var(--lo);
+  transition: transform 80ms steps(2);
 }
 
 .button:hover,
 button:hover:not(:disabled) {
-  box-shadow: 0 4px 16px var(--glow-teal);
+  --hi: rgb(255 255 255 / 0.8);
 }
 
 .button:active,
 button:active:not(:disabled) {
-  transform: scale(0.95);
+  --lo: transparent;
+  transform: translateY(2px);
 }
 
 button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
-  box-shadow: none;
 }
 
-/* Gold call to action with a gloss on top. */
+/* Pumpkin: the one thing to press ("Würfeln", "Start", "Weiter"). */
 .primary {
-  border-color: var(--gold-dark);
-  background: linear-gradient(var(--gold-light), var(--gold) 55%, var(--gold-dark));
-  color: var(--on-gold);
+  --face: var(--pumpkin);
+  --hi: var(--pumpkin-light);
+  --lo: var(--pumpkin-dark);
+  --frame: var(--wood-dark);
+  color: var(--on-pumpkin);
   font-weight: 800;
-  letter-spacing: 0.02em;
-  box-shadow: 0 4px 16px var(--glow-gold);
-}
-
-.primary::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: 3px 14px auto;
-  height: 45%;
-  border-radius: 999px;
-  background: linear-gradient(rgb(255 255 255 / 0.7), rgb(255 255 255 / 0));
-  pointer-events: none;
 }
 
 .button.primary:hover,
 .primary:hover:not(:disabled) {
-  box-shadow: 0 6px 22px var(--glow-gold);
+  --hi: var(--wheat-light);
 }
 
 .danger {
-  border-color: var(--coral);
-  background: var(--tint-coral);
+  --face: var(--tint-berry);
+  --frame: var(--berry);
   color: var(--danger);
-}
-
-.danger:hover:not(:disabled) {
-  box-shadow: 0 4px 16px var(--glow-coral);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -103,7 +103,7 @@ function MoreHostTools({ view, d, room }: Props) {
   const send = room.send;
   const late = latecomers(view).map((m) => ({ userId: m.userId, name: m.displayName }));
   return (
-    <details className="card">
+    <details className="card more-tools">
       <summary>Weitere Host-Werkzeuge</summary>
       <div className="stack">
         {can.removePlayer && (
@@ -125,7 +125,7 @@ export function History({ view, d }: { view: RoomView; d: Derived }) {
   const [moderation, setModeration] = useState(false);
   const lines = historyLines(view, d.showModeration && moderation);
   return (
-    <section className="stack" aria-labelledby="history">
+    <section className="panel stack history-panel" aria-labelledby="history">
       <h2 id="history">
         <span className="icon" aria-hidden="true">📜</span>
         Verlauf
@@ -150,7 +150,7 @@ export function History({ view, d }: { view: RoomView; d: Derived }) {
 export function GiftOrder({ view }: { view: RoomView }) {
   const gifts = giftList(view);
   return (
-    <section className="stack" aria-labelledby="gifts">
+    <section className="panel stack gifts-panel" aria-labelledby="gifts">
       <h2 id="gifts">
         <span className="icon" aria-hidden="true">🎁</span>
         Geschenk-Reihenfolge
@@ -170,7 +170,7 @@ export function GiftOrder({ view }: { view: RoomView }) {
 
 function TurnOrder({ view }: { view: RoomView }) {
   return (
-    <section className="stack" aria-labelledby="order">
+    <section className="panel stack turns-panel" aria-labelledby="order">
       <h2 id="order">
         <span className="icon" aria-hidden="true">🎲</span>
         Zugreihenfolge (Runde {view.game.round})
@@ -200,62 +200,66 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
 
   return (
     <div className="game">
-      <section className="reaction-stage stage" aria-labelledby="turn">
-        <p id="turn" className={`turn ${d.isActive ? "is-me" : ""}`} aria-live="polite">
-          {d.turnText}
-        </p>
-        <p className="pause" role="status">
-          {game.pause === "host" ? "Pausiert. Ein Host macht gleich weiter." : ""}
-        </p>
-        {d.showModeration && game.activeUserId && !d.activeConnected && (
-          <p className="warning" role="status">
-            {d.activeName} ist getrennt. Du kannst überspringen oder für {d.activeName} würfeln.
+      {/* Three columns on a desktop (views.css); on a phone the columns dissolve and CSS order restores
+          the reading order: dice, host tools, gifts, turns, reactions, more tools, history, participants. */}
+      <div className="game-col game-main">
+        <section className="reaction-stage stage" aria-labelledby="turn">
+          <p id="turn" className={`turn ${d.isActive ? "is-me" : ""}`} aria-live="polite">
+            {d.turnText}
           </p>
-        )}
-        <Dice values={shownDice(room.roll, view)} rollKey={room.roll.rollKey} count={game.activeDiceCount} onSettled={onSettled} />
-        <p className="roll-caption">{rollCaption(view, d.myId, rollBusy(room.roll))}</p>
-        <FloatingReactions items={room.floating} hidden={hideReactions} />
-        {lastGift && <p className="last-gift">{lastGift}</p>}
-        {(inTurn || d.can.claimLastPlace) && (
-          <p className="actions">
-            {inTurn && (
-              <button type="button" className="primary big" disabled={!d.can.roll || locked} onClick={() => room.send({ type: "roll" })}>
-                {d.isActive && game.activeDiceCount === 2 ? "Mit 2 Würfeln würfeln" : "Würfeln"}
-              </button>
-            )}
-            {d.can.claimLastPlace && (
-              <button type="button" disabled={locked} onClick={() => room.send({ type: "claim_last_place" })}>
-                Letzten Platz nehmen
-              </button>
-            )}
+          <p className="pause" role="status">
+            {game.pause === "host" ? "Pausiert. Ein Host macht gleich weiter." : ""}
           </p>
+          {d.showModeration && game.activeUserId && !d.activeConnected && (
+            <p className="warning" role="status">
+              {d.activeName} ist getrennt. Du kannst überspringen oder für {d.activeName} würfeln.
+            </p>
+          )}
+          <Dice values={shownDice(room.roll, view)} rollKey={room.roll.rollKey} count={game.activeDiceCount} onSettled={onSettled} />
+          <p className="roll-caption">{rollCaption(view, d.myId, rollBusy(room.roll))}</p>
+          <FloatingReactions items={room.floating} hidden={hideReactions} />
+          {lastGift && <p className="last-gift">{lastGift}</p>}
+          {(inTurn || d.can.claimLastPlace) && (
+            <p className="actions">
+              {inTurn && (
+                <button type="button" className="primary big" disabled={!d.can.roll || locked} onClick={() => room.send({ type: "roll" })}>
+                  {d.isActive && game.activeDiceCount === 2 ? "Mit 2 Würfeln würfeln" : "Würfeln"}
+                </button>
+              )}
+              {d.can.claimLastPlace && (
+                <button type="button" disabled={locked} onClick={() => room.send({ type: "claim_last_place" })}>
+                  Letzten Platz nehmen
+                </button>
+              )}
+            </p>
+          )}
+        </section>
+
+        {d.showModeration && <HostBar view={view} d={d} room={room} />}
+
+        {!d.isGuest && (
+          <section className="reactions" aria-label="Reaktionen">
+            {!d.isActive && view.room.settings.reactions && <ReactionBar disabled={!d.can.react} onReact={(emoji) => room.send({ type: "react", emoji })} />}
+            <ReactionsToggle />
+          </section>
         )}
-      </section>
-
-      {d.showModeration && <HostBar view={view} d={d} room={room} />}
-
-      <div className="columns">
-        <GiftOrder view={view} />
-        <TurnOrder view={view} />
       </div>
 
-      {!d.isGuest && (
-        <section className="reactions" aria-label="Reaktionen">
-          {!d.isActive && view.room.settings.reactions && <ReactionBar disabled={!d.can.react} onReact={(emoji) => room.send({ type: "react", emoji })} />}
-          <ReactionsToggle />
-        </section>
-      )}
+      <div className="game-col game-left">
+        <GiftOrder view={view} />
+        {d.showModeration && <MoreHostTools view={view} d={d} room={room} />}
+      </div>
 
-      {d.showModeration && <MoreHostTools view={view} d={d} room={room} />}
-
-      <History view={view} d={d} />
-
-      {!d.isGuest && (
-        <details className="card">
-          <summary>Teilnehmer ({view.members.length})</summary>
-          <Participants view={view} d={d} send={room.send} />
-        </details>
-      )}
+      <div className="game-col game-right">
+        <TurnOrder view={view} />
+        <History view={view} d={d} />
+        {!d.isGuest && (
+          <details className="card people-panel">
+            <summary>Teilnehmer ({view.members.length})</summary>
+            <Participants view={view} d={d} send={room.send} />
+          </details>
+        )}
+      </div>
     </div>
   );
 }
