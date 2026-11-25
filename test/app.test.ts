@@ -58,6 +58,18 @@ describe("every kind of response", () => {
     expect(conf).not.toMatch(/^ {8}add_header/m); // one inside a location would silently drop the server-level ones there
   });
 
+  it("docs/nginx.example.conf logs like the app: shortened IPs, no query strings", () => {
+    const conf = readFileSync(new URL("../docs/nginx.example.conf", import.meta.url), "utf8");
+    const format = conf.match(/^log_format (\w+) '([^;]+)';$/m);
+    expect(format, "a log_format at http level").not.toBeNull();
+    const [, name, line] = format!;
+    expect(line).toContain("$dice_ip");
+    expect(line).not.toMatch(/\$(remote_addr|request|request_uri|args|query_string|http_x_forwarded_for)\b/);
+    expect(conf).toMatch(new RegExp(`^ {4}access_log \\S+ ${name};$`, "m"));
+    // The map shortens IPv4 to /16 and IPv6 to /48, the same as src/server/log-ip.ts.
+    expect(conf).toMatch(/^map \$remote_addr \$dice_ip \{$/m);
+  });
+
   it("also on errors", async () => {
     const res = await app.inject({ method: "POST", url: "/api/nope", payload: "x".repeat(20_000), headers: { "content-type": "application/json" } });
     expect(res.statusCode).toBe(413); // body limit
@@ -138,11 +150,11 @@ describe("legal pages without configuration (development)", () => {
 });
 
 describe("request log", () => {
-  it("logs one line with ip, method, path, status and user id, without cookies or query", async () => {
+  it("logs one line with shortened ip, method, path, status and user id, without cookies or query", async () => {
     logs.length = 0;
     await app.inject({ url: "/impressum?code=secret", headers: { cookie: "session=secret", authorization: "Bearer secret" } });
     const line = logs.find((l) => l.msg === "request");
-    expect(line).toMatchObject({ ip: "127.0.0.1", method: "GET", path: "/impressum", status: 200, userId: null });
+    expect(line).toMatchObject({ ip: "127.0.0.0", method: "GET", path: "/impressum", status: 200, userId: null });
     expect(line?.time).toMatch(/^\d{4}-\d\d-\d\dT/);
     expect(JSON.stringify(logs)).not.toContain("secret");
   });
@@ -173,6 +185,12 @@ describe("raw client errors (before Fastify parses the request)", () => {
     expectHeaders(headers);
     expect(headers["cache-control"]).toBe("no-store");
   });
+
+  it("logs the client error with the shortened address", async () => {
+    logs.length = 0;
+    await rawRequest("GET / HTTP/1.1\r\nHost: x\r\nBad Header\r\n\r\n");
+    expect(logs.find((l) => l.msg === "client error")).toMatchObject({ ip: "127.0.0.0", status: 400 });
+  });
 });
 
 describe("forwarded headers", () => {
@@ -181,14 +199,14 @@ describe("forwarded headers", () => {
   it("are ignored without TRUSTED_PROXIES", async () => {
     logs.length = 0;
     await app.inject({ url: "/robots.txt", remoteAddress: "192.0.2.10", headers: forwarded });
-    expect(logs.find((l) => l.msg === "request")?.ip).toBe("192.0.2.10");
+    expect(logs.find((l) => l.msg === "request")?.ip).toBe("192.0.0.0");
   });
 
   it("are ignored from an untrusted sender and used from a trusted one", async () => {
     const { app: proxied, logs: proxiedLogs } = await makeApp({ TRUSTED_PROXIES: "192.0.2.0/24" });
     await proxied.inject({ url: "/robots.txt", remoteAddress: "198.51.100.9", headers: forwarded });
     await proxied.inject({ url: "/robots.txt", remoteAddress: "192.0.2.10", headers: forwarded });
-    expect(proxiedLogs.filter((l) => l.msg === "request").map((l) => l.ip)).toEqual(["198.51.100.9", "203.0.113.7"]);
+    expect(proxiedLogs.filter((l) => l.msg === "request").map((l) => l.ip)).toEqual(["198.51.0.0", "203.0.0.0"]);
     await proxied.close();
   });
 });

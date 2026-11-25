@@ -49,8 +49,11 @@ How to get the IDs: [deployment.md](deployment.md#1-discord-application).
 | `LEGAL_NOTE` | no | empty | One extra line under the imprint |
 | `PRIVACY_CROWDSEC` | no | `true` | Shows the CrowdSec section of the privacy notice |
 | `PRIVACY_CLOUDFLARE` | no | `false` | Shows the Cloudflare section |
+| `PRIVACY_LOG_DAYS` | no | empty | Days you keep server logs. Set: the notice names the period. Empty: it says you limit it |
+| `PRIVACY_BACKUP_DAYS` | no | empty | Days you keep database backups. Set: the notice names the period, and that a deletion reaches backups only after it |
 
-The `PRIVACY_*` switches change text only. Set them to what actually runs in front of the app.
+The `PRIVACY_*` values change text only. Set them to what actually runs in front of the app and what
+your log rotation and backup jobs actually keep.
 The privacy notice is a draft: check it before going live.
 
 ## Retention

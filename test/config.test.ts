@@ -77,6 +77,15 @@ describe("parseConfig", () => {
     expect(() => parseConfig({ ...baseEnv, PRIVACY_CLOUDFLARE: "yes" })).toThrow(/PRIVACY_CLOUDFLARE/);
   });
 
+  it("parses the retention periods for logs and backups, both optional", () => {
+    expect(parseConfig({ ...baseEnv, PRIVACY_LOG_DAYS: "", PRIVACY_BACKUP_DAYS: " " }).privacyServices).toEqual({ cloudflare: false, crowdsec: true });
+    expect(parseConfig({ ...baseEnv, PRIVACY_LOG_DAYS: "30", PRIVACY_BACKUP_DAYS: "14" }).privacyServices).toMatchObject({ logDays: 30, backupDays: 14 });
+    for (const value of ["0", "-1", "1.5", "14 Tage", "<b>"]) {
+      expect(() => parseConfig({ ...baseEnv, PRIVACY_LOG_DAYS: value })).toThrow(/PRIVACY_LOG_DAYS/);
+      expect(() => parseConfig({ ...baseEnv, PRIVACY_BACKUP_DAYS: value })).toThrow(/PRIVACY_BACKUP_DAYS/);
+    }
+  });
+
   it("requires BASE_URL to be an http(s) URL", () => {
     expect(() => parseConfig({ ...baseEnv, BASE_URL: "dice.example.org" })).toThrow(/BASE_URL/);
   });

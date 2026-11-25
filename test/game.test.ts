@@ -630,6 +630,45 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
     });
   });
 
+  describe("client addresses in the log (spec 8.3)", () => {
+    it("never logs a full address: requests, failed logins, members and guests from IPv4, IPv6 and mapped IPv4", { timeout: 30_000 }, async () => {
+      const proxied = await makeApp({ ...env, TRUSTED_PROXIES: "127.0.0.1" }, dbUrl, timing);
+      const proxiedPort = await listen(proxied.app);
+      try {
+        const slug = await newRoom(false, proxied.app);
+        const ch = await connect(slug, host, proxiedPort);
+        ch.send({ type: "set_watch_link", action: "enable" });
+        await until(() => expect(ch.state.room.watchUrl).toBeDefined());
+        const token = tokenOf(ch.state);
+        const cases = [
+          { address: "198.51.100.23", short: "198.51.0.0", leaks: ["198.51.100.23"] },
+          { address: "2001:db8:abcd:12::7", short: "2001:db8:abcd::", leaks: ["2001:db8:abcd:12", ":12::7"] },
+          { address: "::ffff:203.0.113.45", short: "203.0.0.0", leaks: ["203.0.113.45"] },
+        ];
+        for (const { address, short, leaks } of cases) {
+          const from = { "x-forwarded-for": address };
+          proxied.logs.length = 0;
+          await proxied.app.inject({ url: "/robots.txt", headers: from });
+          await proxied.app.inject({ url: "/%zz", remoteAddress: address }); // frameworkErrors: Fastify ignores TRUSTED_PROXIES there
+          await proxied.app.inject({ url: "/auth/callback", headers: from }); // login failed
+          const member = open(`/ws/rooms/${slug}`, host2, from, proxiedPort);
+          await until(() => member.state);
+          await member.close();
+          await (await watch(token, from, proxiedPort)).close();
+          await until(() => expect(proxied.logs.map((l) => l.msg)).toEqual(expect.arrayContaining(["login failed", "ws closed", "guest connected", "guest closed"])));
+
+          const ips = proxied.logs.filter((l) => "ip" in l).map((l) => l.ip);
+          expect(ips.length, address).toBeGreaterThanOrEqual(5); // three requests, the login, the guest
+          expect(new Set(ips), address).toEqual(new Set([short]));
+          const text = JSON.stringify(proxied.logs);
+          for (const leak of leaks) expect(text, address).not.toContain(leak);
+        }
+      } finally {
+        await proxied.app.close();
+      }
+    });
+  });
+
   describe("reactions (spec 4.11)", () => {
     const reactionsOf = (c: Client) => {
       const counts: Record<string, number> = {};

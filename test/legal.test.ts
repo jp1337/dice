@@ -58,6 +58,29 @@ describe("Datenschutzhinweis", () => {
     expect(datenschutzHtml(legal, { cloudflare: false, crowdsec: true, retentionDays: 30 })).toContain("mehr als 30 Tage zurückliegt");
   });
 
+  it("says the logs hold only shortened IP addresses", () => {
+    const html = datenschutzHtml(legal);
+    expect(html).toContain("nur gekürzt");
+    expect(html).toContain("bei IPv4 die ersten beiden Blöcke, bei IPv6 die ersten drei Blöcke");
+  });
+
+  it("names the retention of logs and backups when configured", async () => {
+    const { app } = await makeApp({ ...legalEnv, PRIVACY_LOG_DAYS: "30", PRIVACY_BACKUP_DAYS: "14" });
+    const html = (await app.inject({ url: "/datenschutz" })).body;
+    await app.close();
+    expect(html).toContain("Server-Protokolle werden höchstens 30 Tage aufbewahrt.");
+    expect(html).toContain("Datenbank-Sicherungen werden höchstens 14 Tage aufbewahrt; eine Löschung wirkt in Sicherungen erst nach Ablauf dieser Frist.");
+    expect(html).not.toMatch(/begrenzt der Betreiber/);
+  });
+
+  it("says the operator limits logs and backups when no period is configured", () => {
+    const html = datenschutzHtml(legal);
+    expect(html).toContain("Ihre Speicherdauer begrenzt der Betreiber auf dem Server.");
+    expect(html).toContain("Die Datenbank wird regelmäßig gesichert.");
+    expect(html).toContain("eine Löschung wirkt in Sicherungen erst nach Ablauf dieser Frist");
+    expect(html).not.toMatch(/höchstens \S* ?Tage aufbewahrt/);
+  });
+
   it("mentions every data category, the rights and the date", () => {
     const html = datenschutzHtml(legal);
     for (const text of [
@@ -87,8 +110,10 @@ describe("Datenschutzhinweis", () => {
     ["configured", legal],
     ["not configured", null],
   ])("contains no undefined/null text and no external resources (%s)", (_name, value) => {
+    for (const html of [datenschutzHtml(value, { cloudflare: true, crowdsec: true }), datenschutzHtml(value, { cloudflare: true, crowdsec: true, logDays: 30, backupDays: 14 })]) {
+      expect(html).not.toMatch(/undefined|null|NaN/);
+    }
     const html = datenschutzHtml(value, { cloudflare: true, crowdsec: true });
-    expect(html).not.toMatch(/undefined|null|NaN/);
     expect(html).not.toMatch(/<(script|link|img|iframe|object|embed|style)\b|\bstyle=|\bsrc=/i);
     // Only plain links: relative, mailto or https.
     for (const [, href] of html.matchAll(/href="([^"]*)"/g)) expect(href).toMatch(/^(\/|mailto:|https:\/\/)/);

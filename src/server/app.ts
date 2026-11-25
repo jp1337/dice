@@ -15,6 +15,7 @@ import type { Pool } from "pg";
 import { registerAuth } from "./auth.js";
 import type { Config } from "./config.js";
 import { datenschutzHtml, escapeHtml, impressumHtml } from "./legal.js";
+import { logIp } from "./log-ip.js";
 import { MAX_CLIENT_MESSAGE_BYTES, PING_INTERVAL_MS, ROLL_COOLDOWN_MS } from "../shared/contracts.js";
 import { rooms } from "./db/schema.js";
 import { GUEST_CONNECTS_PER_MINUTE, SIMULATED_ROLL_DELAY_MS, registerRooms } from "./rooms.js";
@@ -67,7 +68,7 @@ export function serializeError(err: Error & { query?: unknown; params?: unknown;
 function logRequest(request: FastifyRequest, reply: FastifyReply) {
   request.log.info(
     {
-      ip: request.ip,
+      ip: logIp(request.ip),
       method: request.method,
       path: request.url.split("?")[0], // query strings may carry codes or tokens
       status: reply.statusCode,
@@ -114,7 +115,7 @@ export async function buildApp(config: Config, deps: Deps) {
         Connection: "close",
       }).map(([name, value]) => `${name}: ${value}`);
       socket.end(`HTTP/1.1 ${status} ${STATUS_CODES[status]}\r\n${lines.join("\r\n")}\r\n\r\n${body}`);
-      app.log.info({ ip: socket.remoteAddress, status, userId: null }, "client error");
+      app.log.info({ ip: logIp(socket.remoteAddress), status, userId: null }, "client error");
     },
     bodyLimit: 16 * 1024,
     // One line per request from the onResponse hook instead of Fastify's two.
@@ -124,7 +125,11 @@ export async function buildApp(config: Config, deps: Deps) {
       timestamp: () => `,"time":"${new Date().toISOString()}"`,
       redact: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]'],
       // Cast: Fastify's type demands message and stack, which database errors deliberately lack.
-      serializers: { err: serializeError as (err: Error) => { type: string; message: string; stack: string } },
+      // req: Fastify's own lines (all switched off above) would carry the full address and the query string.
+      serializers: {
+        err: serializeError as (err: Error) => { type: string; message: string; stack: string },
+        req: (request: FastifyRequest) => ({ method: request.method, url: request.url.split("?")[0], remoteAddress: logIp(request.ip) }),
+      },
       ...(deps.logStream && { stream: deps.logStream }),
     },
   });

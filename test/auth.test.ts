@@ -219,7 +219,7 @@ describe.skipIf(!dbUrl)("login against a fake Discord", () => {
     expect(res.body).toContain("nicht Mitglied");
     expect(session).toBeUndefined();
     expect(await userRow()).toBeUndefined();
-    expect(logs.some((l) => l.msg === "login rejected: not a guild member")).toBe(true);
+    expect(logs.find((l) => l.msg === "login rejected: not a guild member")?.ip).toBe("10.1.0.0"); // nextIp(), shortened
     fake.state.failStatus = { member: 403 };
     fake.state.member = { nick: null };
     expect((await login(app)).res.statusCode).toBe(403);
