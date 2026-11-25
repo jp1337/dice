@@ -1,5 +1,5 @@
 // Draws the link preview image of spec 10.2: a small square PNG (Discord shows it as the thumbnail of a
-// "summary" card), two dice on a plank table under bunting and sky, nothing about any room. Pixel art in the
+// "summary" card), two dice on a walnut table under icicles, snowy pines and sky, nothing about any room. Pixel art in the
 // app's look: drawn on a 64×64 grid with the colours of src/web/style.css, scaled ×4 without smoothing.
 // Pure Node, with a minimal PNG encoder on node:zlib. Deterministic pixels; the compressed bytes depend on
 // the zlib build. Usage: node scripts/generate-og-image.mjs
@@ -11,22 +11,30 @@ const SCALE = 4;
 const W = GRID * SCALE;
 const H = GRID * SCALE;
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-// Tokens of src/web/style.css (light theme).
+// Tokens of src/web/style.css (light theme) and the colours of its pixel tiles (icicles, pines).
 const c = {
-  sky: hex("#bcd8ee"),
-  cloud: hex("#ffffff"),
-  snow: hex("#f2f7fc"),
-  snowShade: hex("#b9cde4"),
-  plank: hex("#34507a"),
-  wood: hex("#3e5c86"),
-  woodLight: hex("#6a88b0"),
-  woodDark: hex("#1f2f4d"),
+  sky: hex("#b6d7f2"),
+  skyLow: hex("#d3e7f7"),
+  sun: hex("#eef6fd"),
+  snow: hex("#f4f7fb"),
+  snowLip: hex("#f6faff"),
+  snowShade: hex("#d5e3f1"),
+  fleck: hex("#c3d2e4"),
+  iceShade: hex("#a9c8e8"),
+  ice: hex("#eef8ff"),
+  iceDeep: hex("#3b78c0"),
+  pine: hex("#25604f"),
+  pineDark: hex("#163d36"),
+  pineLight: hex("#3f8468"),
+  trunk: hex("#4a332b"),
+  plank: hex("#5e4238"),
+  wood: hex("#6a4a40"),
+  woodLight: hex("#8a6a5e"),
+  woodDark: hex("#3a2722"),
   face: hex("#fbfdff"),
-  faceShade: hex("#dbe7f5"),
-  ink: hex("#1f2f4d"),
+  faceShade: hex("#c3d7ed"),
+  ink: hex("#1b2a40"),
   berry: hex("#a8304a"),
-  holly: hex("#5a9a3e"),
-  wheat: hex("#f2c14e"),
 };
 
 const grid = Array.from({ length: GRID }, () => Array.from({ length: GRID }, () => c.sky));
@@ -34,36 +42,43 @@ const rect = (x, y, w, h, colour) => {
   for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (i >= 0 && j >= 0 && i < GRID && j < GRID) grid[j][i] = colour;
 };
 
-// Clouds.
-rect(8, 12, 10, 3, c.cloud);
-rect(10, 10, 5, 2, c.cloud);
-rect(44, 16, 12, 3, c.cloud);
-rect(47, 14, 6, 2, c.cloud);
-// Meadow behind the table, a darker crest.
+// Sky in two bands, a pale sun, the snowfield with specks below the horizon.
+rect(0, 14, GRID, 16, c.skyLow);
+rect(48, 14, 6, 6, c.sun);
+rect(47, 15, 8, 4, c.sun);
 rect(0, 30, GRID, 10, c.snow);
 rect(0, 30, GRID, 1, c.snowShade);
-// Two low snowy hills, stepped like pixel art.
-for (const [x, w] of [[2, 20], [36, 24]]) {
-  rect(x, 28, w, 2, c.snow);
-  rect(x + 3, 26, w - 6, 2, c.snow);
-  rect(x + 3, 25, w - 6, 1, c.snowShade);
-  rect(x, 27, 3, 1, c.snowShade);
-  rect(x + w - 3, 27, 3, 1, c.snowShade);
+for (const [x, y] of [[4, 33], [19, 36], [27, 32], [41, 37], [52, 33], [60, 36], [11, 38]]) rect(x, y, 1, 1, c.fleck);
+// Snowy pines on the horizon: tiers of evergreen, snow on top of each, a trunk.
+function pine(cx, tiers) {
+  const top = 29 - tiers * 3 - 1;
+  rect(cx, top, 1, 1, c.snowLip);
+  for (let t = 0; t < tiers; t++) {
+    const y = top + 1 + t * 3;
+    rect(cx - t, y, 2 * t + 1, 1, c.snowLip);
+    rect(cx - t - 1, y + 1, 2 * t + 3, 1, c.pine);
+    rect(cx - t - 1, y + 1, 1, 1, c.pineLight);
+    rect(cx - t - 1, y + 2, 2 * t + 3, 1, c.pineDark);
+  }
+  rect(cx, 29, 1, 1, c.trunk);
 }
-// Plank table: boards with seams, a light top edge, grain.
+for (const [x, t] of [[4, 3], [10, 2], [24, 2], [44, 3], [58, 3], [52, 2]]) pine(x, t);
+// Icicles from a lip of snow along the top edge.
+rect(0, 0, GRID, 2, c.snowLip);
+rect(0, 2, GRID, 1, c.iceShade);
+for (const [x, len] of [[1, 6], [6, 3], [10, 8], [16, 4], [21, 3], [25, 7], [31, 4], [36, 8], [42, 3], [47, 6], [53, 4], [58, 7]]) {
+  const wide = Math.ceil(len / 2);
+  rect(x, 3, 2, wide, c.ice);
+  rect(x + 2, 3, 1, wide, c.iceDeep);
+  rect(x + 1, 3 + wide, 1, len - wide - 1, c.ice);
+  rect(x + 2, 3 + wide, 1, len - wide - 1, c.iceDeep);
+  rect(x + 1, 2 + len, 1, 1, c.iceDeep);
+}
+// Walnut cabin table: boards with seams, a light top edge, grain.
 rect(0, 40, GRID, 24, c.plank);
 rect(0, 40, GRID, 1, c.woodLight);
 for (const y of [47, 55]) rect(0, y, GRID, 1, c.woodDark);
 for (const [x, y, w] of [[5, 43, 9], [30, 44, 12], [50, 42, 8], [14, 50, 10], [40, 51, 14], [3, 58, 12], [26, 59, 9], [48, 60, 11]]) rect(x, y, w, 1, c.wood);
-// Bunting: a string with pennants in wheat, holly and berry.
-rect(0, 1, GRID, 1, c.woodDark);
-[c.wheat, c.holly, c.berry].forEach((colour, k) => {
-  for (let x = k * 8; x < GRID; x += 24) {
-    rect(x + 1, 2, 5, 1, colour);
-    rect(x + 2, 3, 3, 1, colour);
-    rect(x + 3, 4, 1, 1, colour);
-  }
-});
 
 // A die: 17×17 with an outline and notched corners, a shaded bottom and right edge, square 3×3 pips.
 const PIPS = { 5: [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]], 6: [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]] };

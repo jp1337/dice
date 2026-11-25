@@ -1,5 +1,5 @@
-/* The one loud moment of the app: a harvest sunburst, the six, the host's text on the wooden sign,
-   confetti. Same colours in both themes. A modal <dialog> in the top layer, over the whole viewport. */
+/* The one loud moment of the app: an ice-and-snow sunburst around a gold sun, snowflakes, the six, the
+   host's text on the wooden sign, confetti. Same colours in both themes. A modal <dialog> in the top layer, over the whole viewport. */
 .six-banner {
   box-sizing: border-box;
   inset: 0;
@@ -24,9 +24,11 @@
   gap: 24px;
   padding: 24px 16px;
   background:
+    var(--snow-big) 60px 0 / 640px 640px,
+    var(--snow-small) 0 0 / 400px 400px,
     radial-gradient(circle at 50% 38%, var(--wheat-light) 0 11%, transparent 11.5%),
-    radial-gradient(circle at 50% 38%, transparent 40%, rgb(15 24 48 / 0.5) 100%) /* night blue */,
-    repeating-conic-gradient(from 0deg at 50% 38%, var(--sky) 0deg 10deg, var(--cream) 10deg 20deg);
+    radial-gradient(circle at 50% 38%, transparent 40%, rgb(20 50 110 / 0.45) 100%) /* deep ice blue */,
+    repeating-conic-gradient(from 0deg at 50% 38%, var(--sky) 0deg 10deg, var(--die-face) 10deg 20deg);
   color: var(--ink);
   text-align: center;
   animation: six-fade 250ms ease-out both;
@@ -34,7 +36,7 @@
 
 .six-die {
   width: clamp(120px, 30vw, 190px);
-  filter: drop-shadow(8px 10px 0 rgb(78 42 18 / 0.5));
+  filter: drop-shadow(8px 10px 0 rgb(20 40 80 / 0.4));
   animation: six-pop 600ms 100ms var(--bounce) both;
 }
 
@@ -65,7 +67,7 @@
 }
 
 .six-actions button:focus-visible {
-  outline-color: var(--wood-dark);
+  outline-color: var(--outline);
 }
 
 @keyframes six-fade {

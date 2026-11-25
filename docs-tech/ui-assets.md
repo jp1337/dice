@@ -24,11 +24,11 @@ compares pixels (`--check`).
 ffmpeg -i dice-shake-2.ogg -i dice-throw-1.ogg -filter_complex "[0]atrim=0:0.65,afade=t=out:st=0.5:d=0.15[s];[s][1]concat=n=2:v=0:a=1,silenceremove=start_periods=1:start_threshold=-50dB,aresample=22050,pan=mono|c0=0.5*c0+0.5*c1,afade=t=out:st=1.14:d=0.05,apad=whole_dur=1.25" -ac 1 -f f32le stage.raw
 # then: volume to a −9.1 dBFS peak, -c:a pcm_s16le -bitexact -map_metadata -1 (plain 44-byte header, the test reads it)
 ```
-- Preview image: pixel art like the app, two dice on a plank table under bunting, sky and hills, drawn
+- Preview image: pixel art like the app, two dice on a walnut table under icicles, snowy pines and sky, drawn
   on a 64×64 grid in the colours of `style.css` and scaled ×4 without smoothing; encoded by a minimal PNG
   writer (`node:zlib`). Square and small: `twitter:card` is `summary`, so Discord shows it as a
   thumbnail beside `og:title` (spec 10.2: "kleines Bild"). No text in it.
-- `src/web/public/` is copied unchanged to `dist/web/`; `favicon.svg` (a 16×16 pixel die showing six, `shape-rendering="crispEdges"`) and `theme-init.js` are hand-written.
+- `src/web/public/` is copied unchanged to `dist/web/`; `favicon.svg` (a 16×16 pixel die showing six in ink, snow and berry, `shape-rendering="crispEdges"`) and `theme-init.js` are hand-written.
 - `src/web/fonts/PixelifySans.ttf` (77 KB, variable 400–700): Pixelify Sans by the Pixelify Sans
   Project Authors, SIL Open Font License 1.1 (`OFL.txt` beside it), unmodified, from
   `github.com/google/fonts/tree/main/ofl/pixelifysans`. `style.css` imports it relatively, so Vite hashes it into `/assets/` (cached for a year).
@@ -37,27 +37,35 @@ ffmpeg -i dice-shake-2.ogg -i dice-throw-1.ogg -filter_complex "[0]atrim=0:0.65,
 
 ## Look
 
-Winter festival in a small snowy valley: snow-paper panels in frosted timber frames, an ice-blue table
-for the dice, pixel bevels on every control, snowflakes in the sky by day, stars by night. Original work;
-no assets, names or UI frames from any game. All in `style.css` as plain custom properties. Wishes of the
-event's host: lots of blue (winter), no orange anywhere.
+A snowed-in village at the year-end gathering: icicles along the top, a snowfield with blue-grey specks under
+a sky band with snowy pines, falling pixel snow, snow-paper panels in evergreen frames, the dice on a warm
+walnut cabin table. Light is a winter morning, dark a moonlit night. Original work; no assets, names, fonts or
+UI frames from any game. All in `style.css` as plain custom properties. Wishes of the event's host: winter,
+no orange anywhere (the wood is low-chroma walnut, oklch hue 38–45; the gold leans yellow, hue 92–95).
 
-| Colour | Used for |
-| --- | --- |
-| Holly `#3f7d2a` | the one call to action ("Würfeln", "Start", "Weiter"), the active turn token |
-| Wheat `#f2c14e` | your turn plaque, first place, the countdown |
-| Frosted timber `#3e5c86` / `#1f2f4d` | frames, the dice table, number tokens |
-| Snow paper `#f3f7fc` | panels (light), signs and dice (both themes) |
-| Ice blue `#2c63a0` / berry `#a8304a` | switches on / title, links, danger, notices |
-| Sky bands `#bcd8ee` → `#f2f7fc` | page background with snowflakes; dark: night `#0f1830` with stars |
-| Six sunburst | sky `#79c0da` and snow, night-blue vignette |
+| Colour | Light | Dark | Used for |
+| --- | --- | --- | --- |
+| Snowfield `--bg-low` | `#f4f7fb` | `#172440` | page; specks `--fleck` `#c3d2e4` / `#31476e` |
+| Sky `--bg` → `--bg-mid` | `#b6d7f2` → `#d3e7f7` | `#0a1430` → `#13244f` | band above the horizon, sun / moon, stars |
+| Snow paper `--surface` | `#fbfcfe` | `#16213a` | panels |
+| Ice blue `--fill` | `#2a68b0` | `#9ccaf2` | number tokens, chosen theme, checkboxes |
+| Berry `--accent` | `#a3233f` | `#f49cb0` | title, links |
+| Evergreen `--holly` | `#2a6a52` (both) | | panel frames, switch "an", active turn, third place |
+| Window gold `--wheat` | `#f3d35c` (both) | | the one call to action ("Würfeln", "Start", "Weiter"), your turn, first place |
+| Walnut `--wood` / `--plank` / `--wood-dark` | `#6a4a40` / `#5e4238` / `#3a2722` (both) | | dice table, signs |
+| Ink `--outline` | `#1b2a40` (both) | | pixel outlines, dice |
+| Ice tiles | `#f6faff` `#bfe0f8` `#7fb3e3` `#3b78c0` | | icicles (SVG data URI in `--icicles`) |
 
 | Pattern | How |
 | --- | --- |
 | Pixel frame | four hard `box-shadow` copies, no blur; the corners stay notched. Buttons swap `--face`, `--hi`, `--lo`, `--frame` |
-| Sign (`.ribbon`) | parchment in a plank frame on two ropes; needs an isolated parent (`.ribbon-wrap`, `.hero`) |
+| Panel frame | outer notched edge (shadows), pine ring = `border`, paper edge = `outline` with negative offset. Never inset shadows: a scrolling panel paints its text over them |
+| Sign (`.ribbon`) | parchment in a walnut frame on two ropes; needs an isolated parent (`.ribbon-wrap`, `.hero`) |
+| Switch | knob left + grey track + "aus", knob right + evergreen track + "an"; text in the `aria-hidden` track |
+| Pixel tiles | icicles, pines, snowflakes: hand-drawn SVG data URIs in custom properties (`img-src data:` allows them), 2 px per pixel, `crispEdges` |
+| Snow | `body::before`/`::after`, `position: fixed`, `z-index: -1`, each tile slides down by its own height (transform only, no seam); still with reduced motion |
 | Headings | Pixelify Sans for `h1`–`h3`, `summary`, sign, turn; body stays the system face. Its 5 reads as an S, so digits come from Silkscreen Bold (`"Pixel Digits"`, `unicode-range` 0–9) |
-| Motion | ≤ 500 ms except the dice (1.3 s) and confetti; stepped bob on the roll button; all off with reduced motion |
+| Motion | ≤ 500 ms except the dice (1.3 s), confetti and the snow; stepped bob on the roll button; all off with reduced motion |
 
 ### Desktop shell
 
@@ -79,26 +87,28 @@ text inside it would stretch the page.
 
 | Pair | Light | Dark |
 | --- | --- | --- |
-| `--fg` on `--bg` / `--bg-low` / `--surface` / `--field` | 9.7 / 13.3 / 13.3 / 14.3 | 15.3 / 12.5 / 12.9 / 14.5 |
-| `--fg` on `--tint` (buttons) | 11.5 | 9.9 |
-| `--muted` on `--bg` / `--surface` | 4.7 / 6.5 | 9.8 / 8.2 |
-| `--accent` on `--bg` / `--surface` (links, title) | 5.8 / 8.0 | 8.4 / 7.1 |
-| `--on-fill` on `--fill` (switches, theme toggle) | 6.2 | 9.1 |
-| `--danger` on `--tint-berry` | 6.1 | 7.0 |
-| `--fg` on `--tint-wheat` / `--tint-sky` / `--tint-meadow` (badges) | 11.2 / 11.2 / 11.9 | 9.2 / 10.2 / 10.4 |
-| `--edge` on `--field` / `--surface` (input border) | 4.0 / 3.7 | 6.2 / 5.6 |
-| `--focus` on `--bg` / `--surface` | 4.5 / 6.1 | 11.1 / 9.4 |
+| `--fg` on `--bg` / `--bg-low` / `--surface` / `--field` | 9.7 / 13.5 / 14.1 / 14.5 | 16.0 / 13.6 / 14.1 / 15.7 |
+| `--fg` on `--tint` (buttons) / `--track-off` (switch "aus") | 12.8 / 9.9 | 11.3 / 8.0 |
+| `--muted` on `--bg` / `--surface` | 5.0 / 7.3 | 9.7 / 8.5 |
+| `--accent` on `--bg` / `--surface` (links, title) | 4.9 / 7.1 | 8.9 / 7.8 |
+| `--on-fill` on `--fill` (tokens, theme toggle) | 5.7 | 10.5 |
+| `--danger` on `--tint-berry` | 6.2 | 7.3 |
+| `--fg` on `--tint-wheat` / `--tint-sky` / `--tint-meadow` (badges) | 12.2 / 11.6 / 11.9 | 9.6 / 10.4 / 11.0 |
+| `--edge` on `--field` / `--surface` (input border) | 4.3 / 4.2 | 6.9 / 6.2 |
+| `--frame` on `--surface` (button, switch track) | 14.1 | 8.4 |
+| `--focus` on `--bg` / `--surface` | 4.1 / 6.0 | 11.5 / 10.1 |
 
 Same in both themes:
 
 | Pair | Ratio |
 | --- | --- |
-| `--on-holly` on holly (primary button, turn token) | 4.8 |
-| `--on-wheat` on wheat | 8.7 |
-| Cream on wood / plank / wood-dark (table text, tokens) | 6.4 / 7.7 / 12.5 |
-| `--ink` on parchment (signs, six banner) | 13.3 |
-| White on berry (notice) / on bronze `#8d6e4f` | 6.6 / 4.7 |
-| `--ink` on silver `#c9d2de` | 9.4 |
+| `--on-holly` on holly (switch "an", turn token, third place) | 6.4 |
+| `--on-wheat` on wheat / hover `#f7dd78` (primary button) | 10.3 / 11.2 |
+| Cream on wood / plank / wood-dark (table text) | 7.3 / 8.4 / 13.1 |
+| Wheat-light on wood (countdown) | 6.4 |
+| `--ink` on parchment (signs, six banner) | 13.6 |
+| White on berry (notice) | 6.6 |
+| `--ink` on silver `#c9d2de` | 9.5 |
 
 The ratios come from the WCAG relative-luminance formula; recompute them when a token changes.
 

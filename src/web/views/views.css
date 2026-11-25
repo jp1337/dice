@@ -81,21 +81,24 @@ input[type="number"] {
   font-size: 1.35rem;
 }
 
-/* Parchment in a wooden frame: dark outer notched edge, a plank ring, a thin paper edge inside. */
+/* Snow paper in an evergreen frame: dark outer notched edge (box-shadows), a pine ring (border) and a thin
+   paper edge (outline, drawn over the content). Both rings sit on or outside the padding box, so a card that
+   scrolls clips its text inside the frame; inset shadows would paint under it. */
 .card,
 .panel,
 .lobby > section[aria-labelledby="lobby-people"] {
   background: var(--surface);
-  padding: 18px;
+  padding: 14px;
+  border: 4px solid var(--holly);
+  outline: 2px solid var(--paper-edge);
+  outline-offset: -6px;
   margin: 4px 4px 16px;
   box-shadow:
-    0 -4px 0 var(--wood-dark),
-    0 4px 0 var(--wood-dark),
-    -4px 0 0 var(--wood-dark),
-    4px 0 0 var(--wood-dark),
-    0 10px 0 var(--shadow),
-    inset 0 0 0 4px var(--wood),
-    inset 0 0 0 6px var(--paper-edge);
+    0 -4px 0 var(--holly-dark),
+    0 4px 0 var(--holly-dark),
+    -4px 0 0 var(--holly-dark),
+    4px 0 0 var(--holly-dark),
+    0 10px 0 var(--shadow);
 }
 
 .stack {
@@ -180,10 +183,10 @@ label {
   color: #ffffff;
   font-weight: 700;
   box-shadow:
-    0 -3px 0 var(--wood-dark),
-    0 3px 0 var(--wood-dark),
-    -3px 0 0 var(--wood-dark),
-    3px 0 0 var(--wood-dark);
+    0 -3px 0 var(--outline),
+    0 3px 0 var(--outline),
+    -3px 0 0 var(--outline),
+    3px 0 0 var(--outline);
 }
 
 /* Notes pinned to the board: a coloured pixel tab on the left says what kind. */
@@ -250,7 +253,7 @@ label {
   width: 8px;
   height: 8px;
   background: var(--meadow);
-  box-shadow: 0 0 0 1px var(--wood-dark);
+  box-shadow: 0 0 0 1px var(--outline);
 }
 
 .conn-lost {
@@ -396,12 +399,12 @@ label {
 }
 
 :root[data-theme="dark"] .hero .ribbon {
-  color: #8c2440; /* the sign stays parchment */
+  color: #a3233f; /* the sign stays parchment: the light accent */
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .hero .ribbon {
-    color: #8c2440;
+    color: #a3233f;
   }
 }
 
@@ -503,11 +506,17 @@ label {
   font-weight: 700;
 }
 
-/* Game: the dice land on a plank table, the same in both themes. */
+/* Game: the dice land on a walnut cabin table under an evergreen garland with berries, the one warm surface
+   on the snowfield; the same in both themes. */
 .stage {
   margin: 5px 5px 16px;
-  padding: 16px 16px 20px;
+  padding: 22px 16px 20px;
   background:
+    conic-gradient(from 270deg at 4px 4px, var(--berry-light) 25%, transparent 0) 14px 8px / 46px 18px repeat-x,
+    conic-gradient(from 270deg at 4px 4px, var(--berry) 25%, transparent 0) 18px 10px / 46px 18px repeat-x,
+    linear-gradient(90deg, var(--holly-light) 0 6px, var(--holly) 6px 14px, var(--holly-dark) 14px 20px) 0 6px / 20px 4px repeat-x,
+    linear-gradient(90deg, var(--holly) 0 8px, var(--holly-dark) 8px 12px, var(--holly-light) 12px 20px) 8px 10px / 20px 4px repeat-x,
+    linear-gradient(var(--holly-dark), var(--holly-dark)) 0 14px / 100% 2px no-repeat,
     repeating-linear-gradient(90deg, rgb(255 255 255 / 0.04) 0 2px, transparent 2px 22px),
     repeating-linear-gradient(var(--wood) 0 37px, var(--plank) 37px 40px, var(--wood-dark) 40px 42px);
   color: var(--cream);
@@ -676,7 +685,7 @@ label {
   }
 }
 
-/* Turn order and gift order: a ledger, one line per person, the number on a wooden token. */
+/* Turn order and gift order: a ledger, one line per person, the number on an ice-blue token. */
 .turns,
 .gifts {
   list-style: none;
@@ -718,9 +727,9 @@ label {
   height: 30px;
   padding: 0 2px;
   box-sizing: border-box;
-  background: var(--wood-dark);
-  color: var(--cream);
-  box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.3);
+  background: var(--fill);
+  color: var(--on-fill);
+  box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.25);
   font-family: var(--font-pixel);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -786,7 +795,7 @@ label {
   color: var(--on-holly);
 }
 
-/* Podium: wheat gold, silver, copper; the medal is decoration (empty alt text where supported). */
+/* Podium: gold, silver, evergreen (no copper: it reads brown); the medal is decoration (empty alt text where supported). */
 .gifts li {
   font-weight: 700;
 }
@@ -829,8 +838,8 @@ label {
 }
 
 .gifts li:nth-child(3)::before {
-  background: #8d6e4f;
-  color: #ffffff;
+  background: var(--holly);
+  color: var(--on-holly);
 }
 
 .gifts li:nth-child(3)::after {
@@ -1146,7 +1155,7 @@ details[open] > summary::after {
   }
 
   .game .host-bar {
-    padding: 12px;
+    padding: 8px;
     font-size: 0.9rem;
   }
 
