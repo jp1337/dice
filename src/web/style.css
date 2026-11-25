@@ -29,7 +29,7 @@
   --muted: #6b4a2f;
   --line: #d9bd85; /* decoration only */
   --edge: #8d6a45; /* borders that must be seen: inputs, 3:1 */
-  --accent: #8a3a10; /* links, title */
+  --accent: #8c2440; /* berry: links, title */
   --fill: #3d7424; /* meadow green as a filled control, with --on-fill text */
   --on-fill: #fffaf0;
   --tint: #f3dfae; /* button face */
@@ -45,14 +45,14 @@
   --avatar-fg: 32% 0.09;
 
   /* Materials and harvest colours, the same in both themes: wood, dice, signs, the six. */
-  --wood: #8a5229;
+  --wood: #7b5434; /* brown, not orange: no orange anywhere (wish of the event's host) */
   --wood-dark: #4e2a12;
-  --wood-light: #b07040;
-  --plank: #7d4a25;
-  --pumpkin: #e9792f;
-  --pumpkin-light: #f6a25a;
-  --pumpkin-dark: #b8551a;
-  --on-pumpkin: #2e1606;
+  --wood-light: #9c7650;
+  --plank: #6f4b2f;
+  --holly: #3f7d2a; /* evergreen: the one thing to press */
+  --holly-light: #5a9a3e;
+  --holly-dark: #2b5a1b;
+  --on-holly: #fffaf0;
   --wheat: #f2c14e;
   --wheat-light: #f9dc8a;
   --wheat-dark: #c9952a;
@@ -96,7 +96,7 @@
     --muted: #d4bb92;
     --line: #6a5038;
     --edge: #a88a63;
-    --accent: #f4a261;
+    --accent: #f29bab;
     --fill: #8cc46c;
     --on-fill: #1b2033;
     --tint: #4a3725;
@@ -104,7 +104,7 @@
     --tint-berry: #4d2228;
     --tint-sky: #1f3a47;
     --tint-meadow: #2a3d22;
-    --frame: #c08a52;
+    --frame: #b09a78;
     --focus: #9fd3ff;
     --danger: #ffa3b0;
     --shadow: rgb(0 0 0 / 0.45);
@@ -127,7 +127,7 @@
   --muted: #d4bb92;
   --line: #6a5038;
   --edge: #a88a63;
-  --accent: #f4a261;
+  --accent: #f29bab;
   --fill: #8cc46c;
   --on-fill: #1b2033;
   --tint: #4a3725;
@@ -135,7 +135,7 @@
   --tint-berry: #4d2228;
   --tint-sky: #1f3a47;
   --tint-meadow: #2a3d22;
-  --frame: #c08a52;
+  --frame: #b09a78;
   --focus: #9fd3ff;
   --danger: #ffa3b0;
   --shadow: rgb(0 0 0 / 0.45);
@@ -161,7 +161,7 @@ body {
   padding: 0 16px;
 }
 
-/* Festival string across the top: square pixel pennants in pumpkin, wheat and berry. */
+/* Festival string across the top: square pixel pennants in holly, wheat and berry. */
 #root::before,
 .page::before {
   content: "";
@@ -171,8 +171,8 @@ body {
   /* Each pennant: a 12 × 8 block with a 6 × 4 tip under it, one every 24 px in a 72 px repeat. */
   background:
     linear-gradient(var(--wood-dark), var(--wood-dark)) 0 3px / 100% 3px no-repeat,
-    linear-gradient(90deg, var(--pumpkin) 12px, transparent 0, transparent 24px, var(--wheat) 0 36px, transparent 0 48px, var(--berry-light) 0 60px, transparent 0) 6px 6px / 72px 8px repeat-x,
-    linear-gradient(90deg, transparent 3px, var(--pumpkin) 0 9px, transparent 0 27px, var(--wheat) 0 33px, transparent 0 51px, var(--berry-light) 0 57px, transparent 0) 6px 14px / 72px 4px repeat-x;
+    linear-gradient(90deg, var(--holly-light) 12px, transparent 0, transparent 24px, var(--wheat) 0 36px, transparent 0 48px, var(--berry-light) 0 60px, transparent 0) 6px 6px / 72px 8px repeat-x,
+    linear-gradient(90deg, transparent 3px, var(--holly-light) 0 9px, transparent 0 27px, var(--wheat) 0 33px, transparent 0 51px, var(--berry-light) 0 57px, transparent 0) 6px 14px / 72px 4px repeat-x;
 }
 
 main {
@@ -295,13 +295,13 @@ button:disabled {
   opacity: 0.5;
 }
 
-/* Pumpkin: the one thing to press ("Würfeln", "Start", "Weiter"). */
+/* Holly green: the one thing to press ("Würfeln", "Start", "Weiter"). */
 .primary {
-  --face: var(--pumpkin);
-  --hi: var(--pumpkin-light);
-  --lo: var(--pumpkin-dark);
+  --face: var(--holly);
+  --hi: var(--holly-light);
+  --lo: var(--holly-dark);
   --frame: var(--wood-dark);
-  color: var(--on-pumpkin);
+  color: var(--on-holly);
   font-weight: 800;
 }
 

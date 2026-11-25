@@ -24,11 +24,12 @@
   user-select: none;
 }
 
-.tone-0 { --hue: 25; }
-.tone-1 { --hue: 60; }
-.tone-2 { --hue: 95; }
-.tone-3 { --hue: 145; }
-.tone-4 { --hue: 185; }
-.tone-5 { --hue: 235; }
-.tone-6 { --hue: 285; }
-.tone-7 { --hue: 330; }
+/* oklch hues 20–80 read as orange or peach: left out. */
+.tone-0 { --hue: 0; }
+.tone-1 { --hue: 100; }
+.tone-2 { --hue: 130; }
+.tone-3 { --hue: 160; }
+.tone-4 { --hue: 200; }
+.tone-5 { --hue: 240; }
+.tone-6 { --hue: 280; }
+.tone-7 { --hue: 320; }
