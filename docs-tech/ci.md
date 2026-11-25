@@ -26,18 +26,18 @@ Measured November 2026, seconds. The wall-clock is the slowest job; on `main` pl
 | `test` | 38–44 | 34–40 |
 | `docker`, source changed | 31–49 | 23–25 |
 | `docker`, nothing in the image changed | 13–20 | 10–13 |
+| `docker`, lock file changed | 58–66 | not yet measured |
 | `main`, wall-clock | 72–90 | not yet measured |
 
 | Choice | Why | Saves |
 | --- | --- | --- |
 | PostgreSQL service without health check, step `Wait for PostgreSQL` | Boots during checkout, Node, `npm ci` instead of before them | 6 s |
 | `docker` without `setup-buildx-action` | The runner's Docker uses the containerd image store: its own builder reads and writes the `gha` cache | 10–20 s |
-| `docker` with `outputs: type=cacheonly` | Loading the image would download every layer for nothing | 6 s |
+| `docker` with `outputs: type=cacheonly` | Loading the image would download every layer for nothing | 6 s against loading |
 | `publish` keeps `setup-buildx-action` | Proven push path; reads the cache `docker` wrote (checked: every step cached) | – |
 
-Not changed: Vitest (one file,
-`game.test.ts`, takes 13 s of 16), `npm` cache (restore 2 s, `npm ci` 3 s), checkout depth (only the
-history scan fetches everything, 1 s).
+Not changed: Vitest (one file, `game.test.ts`, takes 13 s of 16), `npm` cache (restore 2 s, `npm ci` 3 s),
+checkout depth (only the history scan fetches everything, 1 s).
 
 ## Deployment
 
