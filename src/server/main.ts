@@ -30,4 +30,4 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
     process.exit(0);
   });
 }
-// TEMP measure 1, removed before merge
+// TEMP measure 2, removed before merge
