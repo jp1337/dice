@@ -103,6 +103,11 @@
       "groupName": "Node.js runtime"
     },
     {
+      "description": "TypeScript 7 (the native compiler) has no JavaScript API yet, and typescript-eslint refuses it (peer typescript <6.1.0). Lift this once typescript-eslint supports TypeScript 7",
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<7"
+    },
+    {
       "description": "Our own image is built by CI, not a dependency",
       "matchPackageNames": ["ghcr.io/jp1337/dice"],
       "enabled": false
