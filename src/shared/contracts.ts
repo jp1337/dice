@@ -23,7 +23,7 @@ const visibleText = (max: number) =>
       z
         .string()
         .min(1)
-        .max(max)
+        .refine((text) => [...text].length <= max) // characters, not UTF-16 units: an emoji counts once
         .refine(isVisibleText),
     );
 

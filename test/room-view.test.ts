@@ -2,7 +2,7 @@
 // reconnect), what each viewer may click, history and result texts, the roll animation timing.
 import { NEXT_ROLL_COUNTDOWN_MS, PING_INTERVAL_MS, ROLL_ANIMATION_MS, ROLL_COOLDOWN_MS } from "../src/shared/constants.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defaultSettings } from "../src/shared/contracts.js";
+import { defaultSettings, patchMeRequestSchema } from "../src/shared/contracts.js";
 import type { GameEvent, MemberView, RoomView } from "../src/shared/contracts.js";
 import { initialGameState, reduce } from "../src/shared/game/reduce.js";
 import {
@@ -545,6 +545,11 @@ describe("form checks mirror the server", () => {
     expect(nicknameError("   ")).toMatch(/Spitznamen/);
     expect(nicknameError("x".repeat(33))).toBe("Höchstens 32 Zeichen.");
     expect(nicknameError("x".repeat(32))).toBeNull();
+    // Characters, as the label says, not UTF-16 units: 32 emoji fit, 33 do not; the server agrees.
+    expect(nicknameError("😀".repeat(32))).toBeNull();
+    expect(nicknameError("😀".repeat(33))).toBe("Höchstens 32 Zeichen.");
+    expect(patchMeRequestSchema.safeParse({ nickname: "😀".repeat(32) }).success).toBe(true);
+    expect(patchMeRequestSchema.safeParse({ nickname: "😀".repeat(33) }).success).toBe(false);
     for (const bad of ["a\u200Bb", "a\u202Eb", "\u3164", "a\u00A0b", "x\u0301\u0302\u0303"]) expect(nicknameError(bad), JSON.stringify(bad)).toMatch(/sichtbare/);
     expect(cleanText(" e\u0301 ")).toBe("\u00E9");
   });

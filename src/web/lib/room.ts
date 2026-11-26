@@ -257,7 +257,7 @@ export function historyLines(view: RoomView, withModeration: boolean, timeZone?:
 function textError(value: string, max: number, empty: string): string | null {
   const text = value.normalize("NFC").trim();
   if (text.length === 0) return empty;
-  if (text.length > max) return `Höchstens ${max} Zeichen.`;
+  if ([...text].length > max) return `Höchstens ${max} Zeichen.`;
   if (!isVisibleText(text)) return "Bitte nur sichtbare Zeichen: keine Steuerzeichen, Sonderleerzeichen oder unsichtbaren Zeichen.";
   return null;
 }
