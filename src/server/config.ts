@@ -59,7 +59,8 @@ const envSchema = z
     ),
     LEGAL_EMAIL: optional(z.string().trim().pipe(z.email())),
     LEGAL_NOTE: optional(z.string().trim()),
-    RETENTION_DAYS: optional(z.coerce.number().int().min(1)).transform((value) => value ?? 90),
+    // At most ten years: a huge value made the cleanup's cutoff an Invalid Date, and every daily run failed.
+    RETENTION_DAYS: optional(z.coerce.number().int().min(1).max(3650)).transform((value) => value ?? 90),
     // Only switch sections of the privacy notice on and off (spec 9.2).
     PRIVACY_CLOUDFLARE: flag(false),
     PRIVACY_CROWDSEC: flag(true),

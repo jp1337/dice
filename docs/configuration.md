@@ -59,7 +59,7 @@ The privacy notice is a draft: check it before going live.
 
 | Variable | Required | Default | Meaning |
 | --- | --- | --- | --- |
-| `RETENTION_DAYS` | no | `90` | Days after the last activity before rooms, their events and inactive users are deleted. See [data-and-deletion.md](data-and-deletion.md) |
+| `RETENTION_DAYS` | no | `90` | Days (1–3650) after the last activity before rooms, their events and inactive users are deleted. See [data-and-deletion.md](data-and-deletion.md) |
 
 ## Trying it on your own machine
 

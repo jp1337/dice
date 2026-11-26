@@ -192,7 +192,7 @@ KB at most. The game never depends on one connection, a host's included.
   without a session per IP.
 - Standard methods, small size-limited JSON bodies, no user data in URLs except the room slug.
 - Everything from the own domain. Headers: CSP `default-src 'self'`, `connect-src 'self'` + own `wss`,
-  `img-src 'self' data:`, `frame-ancestors 'none'`; `X-Content-Type-Options: nosniff`;
+  `img-src 'self' data:`, `frame-ancestors 'none'`, `base-uri 'none'`, `form-action 'self'`; `X-Content-Type-Options: nosniff`;
   `Referrer-Policy: same-origin`. Hashed assets `immutable`; HTML, `/api`, `/auth` `no-store`.
 - No indexing, three layers at once: `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, noimageindex`
   on **every** response; the same as meta tag; `robots.txt` disallowing all, allowing major search engines

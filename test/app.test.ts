@@ -10,7 +10,7 @@ const ROBOTS = "noindex, nofollow, noarchive, nosnippet, noimageindex";
 function expectHeaders(headers: Record<string, unknown>) {
   expect(headers["x-robots-tag"]).toBe(ROBOTS);
   expect(headers["content-security-policy"]).toBe(
-    "default-src 'self'; connect-src 'self' wss://dice.example.org; img-src 'self' data:; frame-ancestors 'none'",
+    "default-src 'self'; connect-src 'self' wss://dice.example.org; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   );
   expect(headers["x-content-type-options"]).toBe("nosniff");
   expect(headers["referrer-policy"]).toBe("same-origin");
