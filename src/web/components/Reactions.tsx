@@ -6,10 +6,10 @@ import "./Reactions.css";
 
 type BarProps = {
   onReact: (emoji: ReactionEmoji) => void; // send {type: "react", emoji}
-  disabled?: boolean; // active player, or reactions switched off for the room
+  disabled?: boolean; // reactions switched off for the room
 };
 
-// aria-disabled instead of disabled: the button keeps keyboard focus through the 2 s cooldown.
+// aria-disabled instead of disabled: the button keeps keyboard focus through the short cooldown.
 export function ReactionBar({ onReact, disabled = false }: BarProps) {
   const [lastSentAt, setLastSentAt] = useState<number | null>(null);
   const [cooling, setCooling] = useState(false);

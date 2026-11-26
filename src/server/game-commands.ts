@@ -39,7 +39,7 @@ export function handleGameCommand(ctx: GameCommandContext, command: GameCommand)
   const players = [...room.members].flatMap(([userId, m]) => (m.participation === "player" ? [userId] : []));
   const result = decide(room.game, command, { actorUserId: ctx.actor.userId, actorIsHost: ctx.actor.canModerate, players, randomInt: ctx.randomInt, settings: room.settings });
   if ("error" in result) throw new CommandError(result.error.code, result.error.message);
-  // Spec 7: no roll for about 2 s after a roll, so the animation runs through for everyone.
+  // Spec 7: no roll for ROLL_COOLDOWN_MS after a roll: the animation and the countdown run through for everyone.
   if (result.events.some((e) => e.type === "rolled") && ctx.now < room.lastRollAt + ctx.rollCooldownMs)
     throw new CommandError("cooldown", "Der Würfel rollt noch. Bitte warte einen Moment.");
   if (command.type !== "remove_player" && command.type !== "add_player") return { events: result.events };
