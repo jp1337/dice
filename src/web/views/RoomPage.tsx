@@ -6,7 +6,7 @@ import type { RoomSummary, RoomView } from "../../shared/contracts.js";
 import { SixBanner } from "../components/SixBanner.js";
 import { type ProbeResult, showErrorPage, statusLabel } from "../lib/connection.js";
 import { deriveRoom, finalSixOpen, sixBannerValues } from "../lib/room.js";
-import { SIX_BANNER_DELAY_MS, rollBusy } from "../lib/roll.js";
+import { SIX_BANNER_DELAY_MS, landedSix, rollBusy } from "../lib/roll.js";
 import { loginHref, socketUrl } from "../lib/routes.js";
 import { useRoom } from "../lib/useRoom.js";
 import { Game } from "./Game.js";
@@ -130,12 +130,10 @@ function RoomScreen({ view, room, label }: { view: RoomView; room: ReturnType<ty
 
   // A six that ends the game has no pause, so no host "Weiter": everyone closes the banner themselves.
   const onSettled = () => {
+    const { six, finalSeq } = landedSix(room.roll);
     room.settled();
-    const dice = room.roll.dice ?? [];
-    if (dice.includes(6)) {
-      room.play("six");
-      if (view.game.status === "finished") setFinalSixSeq(d.newestRollSeq);
-    }
+    if (six) room.play("six");
+    if (finalSeq !== null) setFinalSixSeq(finalSeq);
   };
   const six = sixBannerValues(view);
   // A chime when it becomes your turn: after the dice have landed (view is held until then) and not

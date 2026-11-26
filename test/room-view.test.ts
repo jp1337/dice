@@ -40,7 +40,7 @@ import {
   turnList,
   turnText,
 } from "../src/web/lib/room.js";
-import { countdown, displayedView, initialRoll, rollBusy, rollLocked, rollStep, shownDice } from "../src/web/lib/roll.js";
+import { countdown, displayedView, initialRoll, landedSix, rollBusy, rollLocked, rollStep, shownDice } from "../src/web/lib/roll.js";
 import { loginHref, parseRoute, socketUrl } from "../src/web/lib/routes.js";
 
 // Fictitious ids and names only.
@@ -375,6 +375,25 @@ describe("what a viewer may click", () => {
     const undone = makeView({ game: reduce([...start, six, ev("undone", { seq: six.seq }), ev("last_place_taken", { userId: BEN })], defaultSettings) });
     expect(undone.game.status).toBe("finished");
     expect(finalSixOpen(undone, six.seq)).toBe(false);
+  });
+
+  it("opens the final six banner when the six that ended the game lands", () => {
+    // While the dice tumble every panel shows the held view (still running); the landing must read the newest.
+    const start = [ev("game_started", { order: [ANNA, BEN] }), ev("rolled", { userId: ANNA, dice: [6] }, ANNA), ev("continued", {})];
+    const six = ev("rolled", { userId: BEN, dice: [6] }, BEN);
+    const before = makeView({ game: reduce(start, defaultSettings) });
+    const done = makeView({ game: reduce([...start, six], defaultSettings) });
+    expect(done.game.status).toBe("finished");
+    let s = rollStep(initialRoll, { type: "state", view: before, first: true });
+    s = rollStep(s, { type: "state", view: done, first: false });
+    s = rollStep(s, { type: "rolled", dice: [6] });
+    expect(displayedView(s, done).game.status).toBe("running"); // what RoomScreen sees as `view` at landing
+    const landed = landedSix(s);
+    expect(landed).toEqual({ six: true, finalSeq: six.seq });
+    expect(finalSixOpen(done, landed.finalSeq)).toBe(true);
+    // A six mid-game: the sound, no final banner.
+    const mid = rollStep(rollStep(rollStep(initialRoll, { type: "state", view: makeView({ game: reduce(start.slice(0, 1), defaultSettings) }), first: true }), { type: "state", view: before, first: false }), { type: "rolled", dice: [6] });
+    expect(landedSix(mid)).toEqual({ six: true, finalSeq: null });
   });
 
   it("guests can do nothing", () => {

@@ -67,6 +67,14 @@ export function countdown(state: RollState, now: number) {
   return Math.max(0, Math.ceil((state.rolledAt + ROLL_COOLDOWN_MS - now) / 1000));
 }
 
+// What the dice that just landed mean. Read from the newest state, not the displayed one: when they land
+// the panels still show the held view, which knows neither this roll nor that it ended the game.
+export function landedSix(state: RollState) {
+  const six = state.dice?.includes(6) ?? false;
+  const latest = state.latest;
+  return { six, finalSeq: six && latest?.game.status === "finished" ? newestRollSeq(latest) : null };
+}
+
 // The view every panel shows: until the dice land, the one from before the roll, so neither the
 // history, the gift order, the turn order nor a badge gives the result away before the dice do.
 export function displayedView(state: RollState, latest: RoomView) {
