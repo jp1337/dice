@@ -60,7 +60,16 @@ repository: it pulls; nothing in this repository pushes to a server.
 
 ```bash
 docker compose exec -T postgres pg_dump -U dice dice > dice-$(date +%F).sql
-docker compose exec -T postgres psql -U dice dice < dice-2026-12-01.sql   # restore into an empty database
+```
+
+Restore: the app migrates at start, so its database is never empty. Stop it and recreate the database first:
+
+```bash
+docker compose stop app
+docker compose exec -T postgres dropdb -U dice dice
+docker compose exec -T postgres createdb -U dice dice
+docker compose exec -T postgres psql -U dice -v ON_ERROR_STOP=1 dice < dice-2026-12-01.sql
+docker compose start app
 ```
 
 ## 6. Logs
