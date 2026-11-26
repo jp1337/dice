@@ -797,7 +797,8 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       ch.send({ type: "roll_for", userId: ch.state.game.activeUserId });
       await new Promise((resolve) => setTimeout(resolve, 300));
       const closing = own.app.close();
-      const release = new Promise((resolve) => setTimeout(resolve, 2500)) // past SHUTDOWN_GRACE_MS.then(async () => {
+      // Released past SHUTDOWN_GRACE_MS, so close() has no other reason to still be waiting.
+      const release = new Promise((resolve) => setTimeout(resolve, 2500)).then(async () => {
         await blocker.query("commit");
         blocker.release();
       });
