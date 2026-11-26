@@ -564,13 +564,14 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       expect(tabs.flatMap((t) => t.errors).filter((e) => e === "rate_limited").length).toBeGreaterThanOrEqual(4);
     });
 
-    it(`allows ${MAX_SOCKETS_PER_USER} sockets per person and room and closes the next one`, async () => {
+    it(`allows ${MAX_SOCKETS_PER_USER} sockets per person and room; the next one closes the oldest`, async () => {
       const slug = await newRoom(host);
       const user = await makeUser();
-      for (let i = 0; i < MAX_SOCKETS_PER_USER; i++) await connect(slug, user);
-      const extra = open(slug, user);
-      expect(await extra.closed).toEqual({ code: 1008, reason: "Zu viele offene Tabs in diesem Raum." });
-      expect(extra.messages).toEqual([]);
+      const tabs: Awaited<ReturnType<typeof connect>>[] = [];
+      for (let i = 0; i < MAX_SOCKETS_PER_USER; i++) tabs.push(await connect(slug, user));
+      const extra = await connect(slug, user); // a phone back on the network is let in
+      expect(extra.state.room.slug).toBe(slug);
+      expect(await tabs[0]!.closed).toEqual({ code: 1008, reason: "Dieser Raum ist in zu vielen Tabs offen. Dieser Tab wurde geschlossen." });
       const other = await connect(slug, await makeUser()); // others are not affected
       expect(other.state.room.slug).toBe(slug);
     });

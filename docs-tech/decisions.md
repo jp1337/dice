@@ -49,3 +49,4 @@ Newest first. A decision changes by a new row, not by editing an old one.
 | 2026-11-24 | Node.js 26 | The Active LTS line |
 | 2026-11-24 | `.dockerignore` is an allowlist | `.env`, the denylist, the German concept and `docs-tech/` can never reach the build context |
 | 2026-11-24 | The personal-data denylist lives outside the repository: local file, CI secret | The list itself is the personal data it guards against |
+| 2026-11-26 | A sixth socket of one person in a room closes their oldest, instead of being refused | A phone hopping between networks leaves dead sockets until the ping catches them; refusing the new one locked the person out until a reload |

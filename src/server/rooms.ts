@@ -74,7 +74,7 @@ const OPEN = 1;
 
 // Close codes and the German reason the client may show; the key is what the log says.
 const CLOSE = {
-  "too many tabs": [1008, "Zu viele offene Tabs in diesem Raum."],
+  "too many tabs": [1008, "Dieser Raum ist in zu vielen Tabs offen. Dieser Tab wurde geschlossen."],
   "rate limit": [1008, "Zu viele Nachrichten."],
   "room gone": [4004, "Raum existiert nicht mehr."],
   "reload failed": [1012, "Der Raum wird neu geladen. Bitte verbinde dich neu."],
@@ -545,7 +545,10 @@ export function registerRooms(
   async function join(room: Room, socket: Socket, conn: Conn & { userId: string }) {
     if (socket.readyState !== OPEN) return; // closed while waiting in the queue
     const { userId } = conn;
-    if ((room.sockets.get(userId)?.size ?? 0) >= MAX_SOCKETS_PER_USER) return closeSocket(socket, "too many tabs");
+    // The newest connection wins: a phone that hops between networks leaves dead sockets behind until the
+    // ping catches them, and refusing the new one locked the person out (the client does not retry 1008).
+    const mine = [...(room.sockets.get(userId) ?? [])].filter((s) => s.readyState === OPEN);
+    if (mine.length >= MAX_SOCKETS_PER_USER) closeSocket(mine[0]!, "too many tabs");
     const [[user], [kept]] = await Promise.all([
       db.select(userColumns).from(users).where(eq(users.id, userId)),
       db.update(rooms).set({ lastActivityAt: new Date() }).where(eq(rooms.id, room.id)).returning({ id: rooms.id }),
