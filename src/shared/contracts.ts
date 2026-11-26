@@ -207,7 +207,7 @@ export interface RoomView {
 }
 
 export type ServerMessage =
-  | { type: "state"; state: RoomView }
+  | { type: "state"; state: RoomView; cooldownMs?: number } // cooldownMs: until the server takes the next roll
   | { type: "rolled"; userId: UserId; dice: number[]; rolledBy?: UserId }
   | { type: "reactions"; emojis: { emoji: (typeof reactionEmojis)[number]; count: number }[] }
   | { type: "error"; code: string; message: string }; // message in German

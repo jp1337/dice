@@ -400,7 +400,9 @@ export function registerRooms(
     const viewer: RoomView["viewer"] = member
       ? { kind: "member", userId: member.userId, isHost: audience === "host", canModerate: audience !== "member" }
       : { kind: "guest" };
-    send(socket, `{"type":"state","state":{"viewer":${JSON.stringify(viewer)},${rendered.body}}`);
+    // A client that (re)connects inside the cooldown would otherwise unlock its roll buttons too early.
+    const cooldownMs = Math.max(0, room.lastRollAt + timing.rollCooldownMs - Date.now());
+    send(socket, `{"type":"state","cooldownMs":${cooldownMs},"state":{"viewer":${JSON.stringify(viewer)},${rendered.body}}`);
     conn.version = room.version;
   }
 

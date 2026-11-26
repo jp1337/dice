@@ -37,7 +37,7 @@ export function useRoom(url: string, probe?: () => Promise<ProbeResult>, goneMes
       onMessage: (message) => {
         switch (message.type) {
           case "state":
-            dispatchRoll({ type: "state", view: message.state, first: firstState.current });
+            dispatchRoll({ type: "state", view: message.state, first: firstState.current, cooldownMs: message.cooldownMs, at: Date.now() });
             firstState.current = false;
             setView(message.state);
             break;
@@ -70,9 +70,10 @@ export function useRoom(url: string, probe?: () => Promise<ProbeResult>, goneMes
   // The server refuses the next roll for ROLL_COOLDOWN_MS after one; the buttons wait as long.
   useEffect(() => {
     if (!roll.cooling) return;
-    const timer = setTimeout(() => dispatchRoll({ type: "cooled" }), ROLL_COOLDOWN_MS);
+    const left = roll.rolledAt === null ? ROLL_COOLDOWN_MS : roll.rolledAt + ROLL_COOLDOWN_MS - Date.now();
+    const timer = setTimeout(() => dispatchRoll({ type: "cooled" }), left);
     return () => clearTimeout(timer);
-  }, [roll.cooling, roll.rollKey]);
+  }, [roll.cooling, roll.rollKey, roll.rolledAt]);
 
   // Phones freeze background tabs and drop sockets: back in front, or back online, try at once.
   useEffect(() => {

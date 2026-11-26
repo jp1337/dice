@@ -751,6 +751,10 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
         for (const c of [ch, ...cs]) await c.close();
         await until(() => expect(first.app.live.roomIds()).not.toContain(roomId));
         ch = await connect(slug, host, firstPort);
+        // The first state tells the client how long the buttons stay locked.
+        const left = (ch.messages.find((m) => m.type === "state") as { cooldownMs?: number }).cooldownMs;
+        expect(left).toBeGreaterThan(50_000);
+        expect(left).toBeLessThanOrEqual(LONG.rollCooldownMs);
         expect(await tryRoll(ch)).toBe("cooldown");
 
         // A restart: another app reads the room from the database.

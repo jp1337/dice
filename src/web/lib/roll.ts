@@ -19,7 +19,7 @@ export type RollState = {
 };
 
 export type RollAction =
-  | { type: "state"; view: RoomView; first: boolean }
+  | { type: "state"; view: RoomView; first: boolean; cooldownMs?: number; at?: number } // cooldownMs: the server's, at a (re)connect
   | { type: "rolled"; dice: number[]; at?: number }
   | { type: "settled" }
   | { type: "cooled" } // ROLL_COOLDOWN_MS after `rolled`
@@ -38,7 +38,10 @@ export function rollStep(state: RollState, action: RollAction): RollState {
       const seq = newestRollSeq(action.view);
       // A reconnect or a reset unmounts the dice mid-tumble, and their onSettled never comes.
       if (action.first || action.view.game.status === "lobby") {
-        return { ...state, seenSeq: Math.max(seq, state.seenSeq), waiting: false, tumbling: false, cooling: false, held: action.view, latest: action.view };
+        // Back inside the cooldown: the buttons stay locked and the countdown runs for what is left.
+        const left = action.first ? (action.cooldownMs ?? 0) : 0;
+        const cooling = left > 0 ? { cooling: true, rolledAt: (action.at ?? 0) + left - ROLL_COOLDOWN_MS } : { cooling: false };
+        return { ...state, seenSeq: Math.max(seq, state.seenSeq), waiting: false, tumbling: false, ...cooling, held: action.view, latest: action.view };
       }
       // A new roll: keep showing the state from just before it (not an older one: after the last roll
       // landed no further state may have come). Other states while the dice tumble wait too.

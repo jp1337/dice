@@ -401,6 +401,15 @@ describe("what a viewer may click", () => {
     expect(finalSixOpen(undone, six.seq)).toBe(false);
   });
 
+  it("keeps the roll buttons locked after a reconnect inside the server's cooldown", () => {
+    const view = makeView({ game: running() });
+    const back = rollStep(initialRoll, { type: "state", view, first: true, cooldownMs: 3200, at: 10_000 });
+    expect(rollLocked(back)).toBe(true);
+    expect(countdown(back, 10_000)).toBe(4); // whole seconds, rounded up
+    expect(countdown(back, 13_200)).toBe(0);
+    expect(rollLocked(rollStep(initialRoll, { type: "state", view, first: true, cooldownMs: 0, at: 10_000 }))).toBe(false);
+  });
+
   it("opens the final six banner when the six that ended the game lands", () => {
     // While the dice tumble every panel shows the held view (still running); the landing must read the newest.
     const start = [ev("game_started", { order: [ANNA, BEN] }), ev("rolled", { userId: ANNA, dice: [6] }, ANNA), ev("continued", {})];
