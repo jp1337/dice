@@ -236,7 +236,7 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
               {d.activeName} ist getrennt. Du kannst überspringen oder für {d.activeName} würfeln.
             </p>
           )}
-          <Dice values={shownDice(room.roll, view)} rollKey={room.roll.rollKey} count={game.activeDiceCount} onSettled={onSettled} />
+          <Dice values={shownDice(room.roll, view)} rollKey={room.roll.rollKey} count={game.activeDiceCount} onSettled={onSettled} announce={rollCaption(room.latest ?? view, d.myId, false)} />
           <p className="roll-caption">{rollCaption(room.latest ?? view, d.myId, busy)}</p>
           {!game.pause && <NextRollCountdown roll={room.roll} />}
           <FloatingReactions items={room.floating} />

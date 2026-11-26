@@ -10,6 +10,7 @@ type Props = {
   rollKey: string | number | null; // changes once per roll, e.g. the event seq
   count?: 1 | 2; // number of blank dice while values is null
   onSettled?: () => void; // the dice show the result: play the six sound, open the banner
+  announce?: string; // read out when they land, e.g. "Anna hat 3 gewürfelt."; else just the values
 };
 
 const randomFace = () => 1 + Math.floor(Math.random() * 6);
@@ -24,7 +25,7 @@ export function DieFace({ value, className = "" }: { value: number | null; class
   );
 }
 
-export function Dice({ values, rollKey, count = 1, onSettled }: Props) {
+export function Dice({ values, rollKey, count = 1, onSettled, announce }: Props) {
   const reduced = useReducedMotion();
   const [tumble, setTumble] = useState<number[] | null>(null);
   const [announcement, setAnnouncement] = useState(values ? rollText(values) : "");
@@ -43,7 +44,7 @@ export function Dice({ values, rollKey, count = 1, onSettled }: Props) {
       () => {
         clearInterval(tick);
         setTumble(null);
-        setAnnouncement(rollText(values));
+        setAnnouncement(announce ?? rollText(values));
         settled();
       },
       reduced ? 50 : ROLL_ANIMATION_MS,
