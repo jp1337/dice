@@ -733,6 +733,7 @@ export function registerRooms(
       } else {
         conn.alive = false;
         socket.ping();
+        send(socket, '{"type":"alive"}'); // the browser hides pings; the client's watchdog listens for this
       }
     }
     for (const [key, bucket] of buckets) {

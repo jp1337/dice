@@ -1,6 +1,6 @@
 // The logic behind the room views, without a DOM: routing, the WebSocket client (backoff, close codes,
 // reconnect), what each viewer may click, history and result texts, the roll animation timing.
-import { NEXT_ROLL_COUNTDOWN_MS, ROLL_ANIMATION_MS, ROLL_COOLDOWN_MS } from "../src/shared/constants.js";
+import { NEXT_ROLL_COUNTDOWN_MS, PING_INTERVAL_MS, ROLL_ANIMATION_MS, ROLL_COOLDOWN_MS } from "../src/shared/constants.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultSettings } from "../src/shared/contracts.js";
 import type { GameEvent, MemberView, RoomView } from "../src/shared/contracts.js";
@@ -169,9 +169,11 @@ describe("the room connection", () => {
   const connect = (probe?: () => Promise<ProbeResult>, random = () => 1) => {
     const conn = createConnection({ url: "wss://dice.example.org/ws/rooms/x", makeSocket: fake, onStatus: (s) => statuses.push(s), onMessage: (m) => messages.push(m), probe, random });
     conn.start();
+    connections.push(conn);
     return conn;
   };
   const last = () => sockets.at(-1)!;
+  const connections: ReturnType<typeof createConnection>[] = [];
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -222,6 +224,28 @@ describe("the room connection", () => {
     last().drop(1013); // no state in between
     await vi.advanceTimersByTimeAsync(0);
     expect(statuses.at(-1)).toMatchObject({ kind: "retrying", attempt: 2, delayMs: backoffDelay(2, () => 0.25) });
+  });
+
+  it("replaces a socket that went silent: no alive for two ping intervals, or on retryNow after one", async () => {
+    connect();
+    last().open();
+    last().message(state);
+    for (let i = 0; i < 4; i++) {
+      await vi.advanceTimersByTimeAsync(PING_INTERVAL_MS);
+      last().message('{"type":"alive"}'); // the server's heartbeat keeps it, and is not passed on
+    }
+    expect(sockets).toHaveLength(1);
+    expect(messages).toHaveLength(1);
+    // Half-open after a network change: still "open", nothing arrives, no close event ever comes.
+    await vi.advanceTimersByTimeAsync(2 * PING_INTERVAL_MS + 10_000);
+    expect(sockets[0]!.closedWith).toBeDefined();
+    expect(sockets.length).toBeGreaterThan(1);
+    last().open();
+    last().message(state);
+    await vi.advanceTimersByTimeAsync(PING_INTERVAL_MS + 6_000);
+    const conn = connections.at(-1)!;
+    conn.retryNow(); // back in front after a while: no waiting for the next check
+    expect(sockets.at(-2)!.closedWith).toBeDefined();
   });
 
   it("ignores retryNow while the HTTP probe is still asking", async () => {

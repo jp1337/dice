@@ -179,7 +179,9 @@ KB at most. The game never depends on one connection, a host's included.
 ## Proxy, security, no indexing
 
 - Path: client → maybe Cloudflare → nginx with CrowdSec → app; both variants without code changes.
-- `wss` only, under `/ws/` only. Server ping every 25 s, unanswered connections closed. Client reconnects
+- `wss` only, under `/ws/` only. Server ping every 25 s, unanswered connections closed; with it an app-level
+  `{"type":"alive"}`, since browsers hide pings: a client that hears nothing for 55 s (30 s when the tab
+  comes back to the front) drops the socket as half-open. Client reconnects
   with growing, jittered delay and receives the current `state`; no connection → a clear error, not a blank
   page. nginx example in `docs/`; the real config lives in the operator's infrastructure.
 - Forwarded headers trusted only from `TRUSTED_PROXIES`. IP used for logs and rate limits only.

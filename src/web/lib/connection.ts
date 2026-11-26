@@ -3,6 +3,7 @@
 // connection gets a fresh `state` from the server, so nothing is replayed. Free of React and the DOM: the
 // socket factory is injected, the tests drive it with fakes.
 import type { ClientMessage, ServerMessage } from "../../shared/contracts.js";
+import { PING_INTERVAL_MS } from "../../shared/constants.js";
 
 export const BACKOFF_BASE_MS = 500;
 export const BACKOFF_CAP_MS = 30_000;
@@ -96,8 +97,16 @@ type Options = {
 
 const OPEN = 1;
 
+// A socket can die without a close event (a phone hopping networks leaves it half-open): the badge says
+// "verbunden" and every click vanishes. The server says "alive" every ping interval; this long without a
+// word, the socket is replaced. On retryNow (tab back in front, network back) one missed beat is enough.
+export const SILENT_AFTER_MS = 2 * PING_INTERVAL_MS + 5_000;
+const SILENT_ON_RETRY_MS = PING_INTERVAL_MS + 5_000;
+
 export function createConnection({ url, makeSocket, onStatus, onMessage, probe, goneMessage, random = Math.random }: Options) {
   let socket: SocketLike | null = null;
+  let heardAt = 0; // last message on the current socket
+  let watchdog: ReturnType<typeof setInterval> | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let attempt = 0;
   let stopped = false;
@@ -106,7 +115,18 @@ export function createConnection({ url, makeSocket, onStatus, onMessage, probe, 
   const finish = (status: Extract<Status, { kind: "login" | "stopped" }>) => {
     stopped = true;
     clearTimeout(timer);
+    clearInterval(watchdog);
     onStatus(status);
+  };
+
+  // Give up on an open socket that went silent, as if the network had dropped it.
+  const dropIfSilent = (limitMs: number) => {
+    const current = socket;
+    if (!current || current.readyState !== OPEN || Date.now() - heardAt < limitMs) return false;
+    socket = null;
+    current.close(4000); // its close event, if it ever comes, is ignored: socket !== current
+    void closed(1006, "", true);
+    return true;
   };
 
   const connect = () => {
@@ -117,9 +137,12 @@ export function createConnection({ url, makeSocket, onStatus, onMessage, probe, 
     let opened = false;
     current.onopen = () => {
       opened = true;
+      heardAt = Date.now();
       onStatus({ kind: "open" });
     };
     current.onmessage = (event) => {
+      if (socket === current) heardAt = Date.now();
+      if (event.data === '{"type":"alive"}') return;
       const message = parseServerMessage(event.data);
       if (!message) return;
       // Only a state proves the connection works: a socket that opens and is closed at once (join
@@ -154,10 +177,14 @@ export function createConnection({ url, makeSocket, onStatus, onMessage, probe, 
   };
 
   return {
-    start: connect,
+    start() {
+      watchdog = setInterval(() => dropIfSilent(SILENT_AFTER_MS), 5_000);
+      connect();
+    },
     stop() {
       stopped = true;
       clearTimeout(timer);
+      clearInterval(watchdog);
       const current = socket;
       socket = null;
       current?.close(1000);
@@ -165,7 +192,8 @@ export function createConnection({ url, makeSocket, onStatus, onMessage, probe, 
     // The error page's button, the tab becoming visible, the network coming back: try now instead of
     // waiting for the timer.
     retryNow() {
-      if (stopped || socket || probing) return;
+      if (stopped || probing) return;
+      if (socket && !dropIfSilent(SILENT_ON_RETRY_MS)) return;
       clearTimeout(timer);
       connect();
     },
