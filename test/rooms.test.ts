@@ -77,6 +77,44 @@ describe("guest view (spec 4.8)", () => {
   });
 });
 
+describe("same names (spec: nicknames)", () => {
+  it("tells equal names apart by join order, the same for every audience", () => {
+    const config = parseConfig({ ...baseEnv, ...env });
+    const member = (userId: string, displayName: string, nickname: string | null, participation: "player" | "spectator" = "player"): Member => ({
+      userId,
+      discordId: newDiscordId(),
+      username: `user-${userId}`,
+      displayName,
+      nickname,
+      avatarHash: null,
+      isSimulated: false,
+      participation,
+      isCohost: false,
+    });
+    const room: Parameters<typeof roomView>[0] = {
+      id: "r",
+      slug: "slug",
+      name: "Feier",
+      isTest: false,
+      settings: defaultSettings,
+      isPublic: true,
+      members: new Map([
+        ["a", member("a", "Anna", null, "spectator")],
+        ["b", member("b", "Bea", "anna")], // a nickname equal to an earlier Discord name
+        ["c", member("c", "Anna (2)", null)], // a real name that looks like a suffix
+        ["d", member("d", "Bob", null)],
+      ]),
+      sockets: new Map(),
+      guests: new Set(),
+      events: [],
+      game: initialGameState(),
+    };
+    const names = (audience: "host" | "guest") => Object.fromEntries(roomView(room, audience, config).members.map((m) => [m.userId, m.displayName]));
+    expect(names("host")).toEqual({ a: "Anna", b: "anna (3)", c: "Anna (2)", d: "Bob" });
+    expect(names("guest")).toEqual({ b: "anna (3)", c: "Anna (2)", d: "Bob" }); // the hidden first Anna still counts
+  });
+});
+
 describe("settings during a game (spec 4.6, 4.11)", () => {
   it("allows only switching reactions outside the lobby", () => {
     expect(() => checkSettingsChange("running", { reactions: false })).not.toThrow();

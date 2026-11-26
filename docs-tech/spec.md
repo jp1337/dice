@@ -112,7 +112,8 @@ connected/disconnected; a disconnected active player is flagged to hosts. Still 
 
 - Nickname: 1–32 characters of plain text (control characters and whitespace-only refused), valid in all
   rooms. Shown: nickname, else server nickname, else global Discord name. Hosts also see the Discord name
-  and can reset a nickname.
+  and can reset a nickname. A nickname equal to a name already in a room is refused; names that still
+  match (two Discord names) are told apart in join order: "Anna", "Anna (2)", the same for every audience.
 - Reactions: six fixed emojis, by anyone logged in (the active player too), flying over the dice without
   names, never stored. 1 per 0.5 s per person (made for spamming), enforced by the server, which batches bursts. Only hosts and
   co-hosts switch them on and off, for the whole room (lobby settings, in the game under "Weitere Host-Werkzeuge"); players have no switch. Respect

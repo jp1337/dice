@@ -178,6 +178,24 @@ const lastRollAtOf = (game: GameState) => {
   return roll ? Date.parse(roll.createdAt) : 0;
 };
 
+// Equal names (two Discord names, a Discord name and a nickname) are told apart in join order: the
+// first keeps it, later ones get " (2)", " (3)", skipping any name someone already has.
+function distinctNames(members: Iterable<Member>) {
+  const all = [...members];
+  const key = (name: string) => name.toLowerCase();
+  const bases = new Set(all.map((m) => key(m.nickname ?? m.displayName)));
+  const used = new Set<string>();
+  const names = new Map<Member["userId"], string>();
+  for (const m of all) {
+    const base = m.nickname ?? m.displayName;
+    let name = base;
+    for (let n = 2; used.has(key(name)) || (name !== base && bases.has(key(name))); n++) name = `${base} (${n})`;
+    used.add(key(name));
+    names.set(m.userId, name);
+  }
+  return names;
+}
+
 // The room as one audience may see it (spec 4.5, 4.8, 4.10), without the per-socket `viewer`.
 export function roomView(room: RoomData & Pick<Room, "sockets" | "guests">, audience: Audience, config: Config): Omit<RoomView, "viewer"> {
   const isHostMember = (m: Member) => m.discordId !== null && config.hostDiscordIds.includes(m.discordId);
@@ -188,12 +206,13 @@ export function roomView(room: RoomData & Pick<Room, "sockets" | "guests">, audi
   // (a host who rolled for someone, a removed player's rolls): by display name, like everyone.
   const named = [room.game.lastRoll, ...history.map((e) => ({ ...e.payload, actor: e.actorUserId }))].flatMap(idsIn);
   const shown = new Set([...room.game.giftOrder, ...named]);
+  const names = distinctNames(room.members.values());
   const members = [...room.members.values()]
     .filter((m) => !guest || m.participation === "player" || shown.has(m.userId))
     .map(
       (m): MemberView => ({
         userId: m.userId,
-        displayName: m.nickname ?? m.displayName,
+        displayName: names.get(m.userId)!,
         ...(audience === "host" && { discordName: m.username }),
         ...(canModerate && { hasNickname: m.nickname !== null }),
         avatarUrl: !guest && m.avatarHash ? `/avatars/${m.userId}/${m.avatarHash}` : null,
