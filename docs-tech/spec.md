@@ -149,6 +149,9 @@ The game state is never stored; it is `reduce(events, settings) -> GameState` ov
 - `undone` names the roll it takes back (`seq`) and counts only while that roll is the newest one still in
   effect: two hosts clicking at once undo one roll. Undone rolls leave the computation, stay in the history,
   and are listed in `GameState.undoneSeqs`.
+- Host commands name what the host saw, so a late click of one of several hosts misses instead of hitting
+  something else: `skip`/`roll_for` the player, `undo` the roll, `continue` the pause (six or host),
+  `assign_last_place` the last player.
 - Game commands are checked by the pure `decide(state, command, ctx)`, which returns the events to append.
 - The server keeps state per room in memory and rebuilds it from the events after a restart.
 

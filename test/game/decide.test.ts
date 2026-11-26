@@ -164,6 +164,15 @@ describe("pause and continue", () => {
     expect(running().do(HOST, { type: "pause" }).do(HOST, { type: "continue" }).state.pause).toBeNull();
     expect(running().roll(6).do(HOST, { type: "continue" }).state).toMatchObject({ pause: null, activeUserId: B });
   });
+
+  it("refuses a late continue meant for another pause, and a last place for someone no longer last", () => {
+    // Host 1 lifts the six pause, host 2 pauses; host 3's click for the six arrives late.
+    const g = running().roll(6).do(HOST, { type: "continue", pause: "six" }).do(HOST, { type: "pause" });
+    expect(errorOf(g.try(HOST, { type: "continue", pause: "six" }))).toBe("pause_changed");
+    expect(g.do(HOST, { type: "continue", pause: "host" }).state.pause).toBeNull();
+    expect(errorOf(running([A, B]).roll(6).do(HOST, { type: "continue" }).try(HOST, { type: "assign_last_place", userId: A }))).toBe("turn_changed");
+    expect(running([A, B]).roll(6).do(HOST, { type: "continue" }).do(HOST, { type: "assign_last_place", userId: B }).state.status).toBe("finished");
+  });
 });
 
 describe("skip", () => {

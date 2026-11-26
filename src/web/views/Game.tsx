@@ -79,7 +79,7 @@ function HostBar({ view, d, room }: Props) {
     <section className="card stack host-bar" aria-label="Host-Werkzeuge">
       <div className="grid2">
         {view.game.pause ? (
-          <button type="button" className="primary" disabled={!can.continue} onClick={() => send({ type: "continue" })}>
+          <button type="button" className="primary" disabled={!can.continue} onClick={() => send({ type: "continue", pause: view.game.pause ?? undefined })}>
             Weiter
           </button>
         ) : (
@@ -110,7 +110,7 @@ function HostBar({ view, d, room }: Props) {
       </div>
       {/* The last player who is a host too has their own "Letzten Platz nehmen" on the stage. */}
       {can.assignLastPlace && d.lastPlayer !== d.myId && (
-        <ConfirmButton key={d.lastPlayer} label="Letzten Platz vergeben" question={`Letzten Platz an ${d.name(d.lastPlayer)} vergeben?`} onConfirm={() => send({ type: "assign_last_place" })} />
+        <ConfirmButton key={d.lastPlayer} label="Letzten Platz vergeben" question={`Letzten Platz an ${d.name(d.lastPlayer)} vergeben?`} onConfirm={() => send({ type: "assign_last_place", userId: d.lastPlayer ?? undefined })} />
       )}
     </section>
   );

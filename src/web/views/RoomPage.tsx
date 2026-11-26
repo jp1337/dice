@@ -185,7 +185,7 @@ function RoomScreen({ view, room, label }: { view: RoomView; room: ReturnType<ty
             </button>
           ) : (
             d.showModeration && (
-              <button type="button" className="primary" disabled={!d.can.continue} onClick={() => room.send({ type: "continue" })}>
+              <button type="button" className="primary" disabled={!d.can.continue} onClick={() => room.send({ type: "continue", pause: view.game.pause ?? undefined })}>
                 Weiter
               </button>
             )

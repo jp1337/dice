@@ -113,12 +113,14 @@ export function decide(state: GameState, command: GameCommand, ctx: DecideContex
       return ev("last_place_taken", { userId: active });
     case "assign_last_place":
       if (!lastPlayer) return fail("no_last_player", "Es würfeln noch mehrere Spieler.");
+      if (command.userId !== undefined && command.userId !== lastPlayer) return fail("turn_changed", "Inzwischen ist jemand anderes dran.");
       return ev("last_place_taken", { userId: lastPlayer });
     case "pause":
       if (state.pause) return fail("already_paused", "Das Spiel ist schon pausiert.");
       return ev("paused", {});
     case "continue":
       if (!state.pause) return fail("not_paused", "Das Spiel ist nicht pausiert.");
+      if (command.pause !== undefined && command.pause !== state.pause) return fail("pause_changed", "Inzwischen hat jemand anderes pausiert.");
       return ev("continued", {});
     case "skip":
       return ev("skipped", { userId: active });
