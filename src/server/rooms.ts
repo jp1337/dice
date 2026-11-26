@@ -652,13 +652,15 @@ export function registerRooms(
         if (!canModerate) throw forbidden();
         testRoomOnly();
         lobbyOnly();
-        const taken = new Set([...room.members.values()].filter((m) => m.isSimulated).map((m) => m.username));
-        if (taken.size + message.count > MAX_SIMULATED_PLAYERS)
+        const members = [...room.members.values()];
+        // Free names skip every name shown in the room, so a member called "Testspieler 1" is not doubled.
+        const taken = new Set(members.map((m) => (m.nickname ?? m.displayName).toLowerCase()));
+        if (members.filter((m) => m.isSimulated).length + message.count > MAX_SIMULATED_PLAYERS)
           throw fail("too_many_simulated", `Höchstens ${MAX_SIMULATED_PLAYERS} simulierte Mitspieler pro Raum.`);
         const added: Member[] = [];
         for (let n = 1; added.length < message.count; n++) {
           const name = `Testspieler ${n}`; // unique within the room (spec 4.7)
-          if (taken.has(name)) continue;
+          if (taken.has(name.toLowerCase())) continue;
           added.push({ userId: randomUUID(), discordId: null, username: name, displayName: name, nickname: null, avatarHash: null, isSimulated: true, participation: "player", isCohost: false });
         }
         return commit(room, {

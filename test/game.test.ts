@@ -367,6 +367,14 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       await until(() => expect(ch.errors.slice(-2)).toEqual(["not_in_lobby", "not_in_lobby"]));
     });
 
+    it("names simulated players around a member who already shows a Testspieler name", async () => {
+      const slug = await newRoom(true);
+      const ch = await connect(slug, host);
+      await connect(slug, await makeUser("testspieler 1"));
+      ch.send({ type: "add_simulated_players", count: 2 });
+      await until(() => expect(ch.state.members.filter((m) => m.isSimulated).map((m) => m.displayName)).toEqual(["Testspieler 2", "Testspieler 3"]));
+    });
+
     it("lets simulated players roll by themselves, only on their turn and never in a pause", { timeout: 30_000 }, async () => {
       const { slug, ch, players, users } = await startGame(1, { isTest: true, sims: 2 });
       const real = users[0]!.id;
