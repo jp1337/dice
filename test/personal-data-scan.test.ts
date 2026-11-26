@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 
 const script = path.resolve("scripts/scan-personal-data.sh");
 
-function repo(denylist = "Mustermann\nMüller\n") {
+function repo(denylist = "Mustermann\nMüller\n@beispiel.example\n") {
   const dir = mkdtempSync(path.join(tmpdir(), "dice-scan-"));
   const git = (...args: string[]) => execFileSync("git", args, { cwd: dir, env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null" } });
   git("init", "-q");
@@ -39,6 +39,7 @@ describe("personal-data scan", () => {
     ["an added line starting with ++", () => ["c.txt", "++ Mustermann\n"]],
     ["a name glued to an underscore", () => ["d.txt", "see max_mustermann_cv.pdf\n"]],
     ["a name glued to digits", () => ["e.txt", "login mustermann2024\n"]],
+    ["a domain entry inside an e-mail address", () => ["f.txt", "mail erika@beispiel.example\n"]],
   ];
   it.each(cases)("catches %s when staged, and in the history after it is deleted", (_name, make) => {
     const { dir, git, scan } = repo();
@@ -78,6 +79,16 @@ describe("personal-data scan", () => {
     writeFileSync(path.join(dir, "a.txt"), "Mustermannstraße ist ein Beispiel\n");
     git("add", "a.txt");
     expect(scan("staged")).toBe(0);
+  });
+
+  it("fails, never passes, when grep itself fails", () => {
+    const { dir, git, scan } = repo();
+    const bin = mkdtempSync(path.join(tmpdir(), "dice-grep-"));
+    // A grep that breaks on the pattern file, as on a pattern PCRE refuses.
+    writeFileSync(path.join(bin, "grep"), '#!/bin/bash\nfor a in "$@"; do [[ "$a" == "-f" ]] && exit 2; done\nexec /usr/bin/grep "$@"\n', { mode: 0o755 });
+    writeFileSync(path.join(dir, "a.txt"), "nothing\n");
+    git("add", "a.txt");
+    expect(scan("staged", { PATH: `${bin}:${process.env.PATH}` })).not.toBe(0);
   });
 
   it("reads a denylist with CRLF line ends", () => {

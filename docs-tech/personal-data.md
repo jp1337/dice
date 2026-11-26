@@ -19,7 +19,8 @@ tools; `test/personal-data-scan.test.ts` has one case for each, since each once 
 
 `.personal-denylist` in the repository root, git-ignored: one name, address line, e-mail, domain or ID per
 line; `#` comments allowed. An entry matches as a fixed string, case-insensitive in any locale, unless a
-letter touches it: `max_mustermann` and `mustermann2024` are hits, `Mustermannstraße` is not
+letter touches one of its letter ends: `max_mustermann` and `mustermann2024` are hits, `Mustermannstraße`
+is not; `@beispiel.de` hits `erika@beispiel.de`. If `grep` itself fails, the check fails too
 ([`scripts/check-personal-data.sh`](../scripts/check-personal-data.sh)). A missing or empty list fails, it
 never passes silently. Hits are reported as line numbers only, so the log does not repeat them.
 
