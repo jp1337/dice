@@ -14,28 +14,43 @@ const GESTURES = ["pointerup", "touchend", "keydown"];
 
 export function createSoundPlayer(makeClip: (url: string) => Clip, target: Target, alreadyActive: boolean) {
   let clips: Record<SoundName, Clip> | null = null;
+  const unlocked = new Set<Clip>(); // played once inside a gesture: iOS lets it play from now on
   const warming = new Set<Clip>();
 
-  const unlock = () => {
-    if (clips) return;
-    for (const type of GESTURES) target.removeEventListener(type, unlock, true);
-    clips = { roll: makeClip(SOUND_URLS.roll), six: makeClip(SOUND_URLS.six), turn: makeClip(SOUND_URLS.turn) };
-    // iOS unlocks each media element separately, by playing it inside a gesture: once, muted.
-    for (const clip of Object.values(clips)) {
-      warming.add(clip);
-      clip.muted = true;
-      const done = () => {
-        if (!warming.delete(clip)) return; // a real play() came first
-        clip.pause();
-        clip.currentTime = 0;
-        clip.muted = false;
-      };
-      clip.play().then(done, done);
-    }
+  const listen = (on: boolean) => {
+    for (const type of GESTURES) (on ? target.addEventListener : target.removeEventListener).call(target, type, unlock, true);
+  };
+  const played = (clip: Clip) => {
+    unlocked.add(clip);
+    if (unlocked.size === Object.keys(SOUND_URLS).length) listen(false);
   };
 
+  // Every gesture until each clip played once: the browser can refuse one (the end of a scroll swipe is no
+  // tap, Escape is no activation), and with the listeners gone the sounds would stay silent for good.
+  function unlock() {
+    clips ??= { roll: makeClip(SOUND_URLS.roll), six: makeClip(SOUND_URLS.six), turn: makeClip(SOUND_URLS.turn) };
+    // iOS unlocks each media element separately, by playing it inside a gesture: once, muted.
+    for (const clip of Object.values(clips)) {
+      if (unlocked.has(clip) || warming.has(clip)) continue;
+      warming.add(clip);
+      clip.muted = true;
+      clip.play().then(
+        () => {
+          played(clip);
+          if (!warming.delete(clip)) return; // a real play() came first
+          clip.pause();
+          clip.currentTime = 0;
+          clip.muted = false;
+        },
+        () => {
+          if (warming.delete(clip)) clip.muted = false; // refused: the next gesture tries again
+        },
+      );
+    }
+  }
+
+  listen(true);
   if (alreadyActive) unlock();
-  else for (const type of GESTURES) target.addEventListener(type, unlock, true);
 
   return {
     // Returns whether the sound was started.
@@ -45,7 +60,7 @@ export function createSoundPlayer(makeClip: (url: string) => Clip, target: Targe
       warming.delete(clip);
       clip.muted = false;
       clip.currentTime = 0;
-      clip.play().catch(() => {}); // e.g. the file failed to load: silence, not an error
+      clip.play().then(() => played(clip), () => {}); // e.g. the file failed to load: silence, not an error
       return true;
     },
   };

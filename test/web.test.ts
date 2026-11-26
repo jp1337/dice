@@ -134,6 +134,27 @@ describe("sound player", () => {
   it("plays right away when the page already had a gesture", () => {
     expect(setup(true).player.play("roll", false)).toBe(true);
   });
+
+  it("tries again on the next gesture when the browser refused the unlock (iOS: a scroll is no tap)", async () => {
+    const clips: (Clip & { plays: number })[] = [];
+    let allowed = false;
+    const makeClip = () => {
+      const clip = { currentTime: 0, muted: false, plays: 0, pause() {}, play: () => (clip.plays++, allowed ? Promise.resolve() : Promise.reject(new Error("NotAllowedError"))) };
+      clips.push(clip);
+      return clip;
+    };
+    const target = new EventTarget();
+    createSoundPlayer(makeClip, target, false);
+    target.dispatchEvent(new Event("touchend")); // the end of a scroll swipe: refused
+    await new Promise((resolve) => setTimeout(resolve));
+    allowed = true;
+    target.dispatchEvent(new Event("touchend")); // a real tap
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(clips).toHaveLength(3); // the same elements, warmed again
+    expect(clips.map((c) => c.plays)).toEqual([2, 2, 2]);
+    target.dispatchEvent(new Event("touchend")); // unlocked: no more warming
+    expect(clips.map((c) => c.plays)).toEqual([2, 2, 2]);
+  });
 });
 
 describe("six banner text", () => {
