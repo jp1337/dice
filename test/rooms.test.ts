@@ -1,5 +1,6 @@
 // Rooms, lobby and the room WebSocket (spec 4.2, 4.9, 4.10, 7, 13) against a real PostgreSQL and a listening server.
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import type { AddressInfo, Socket as NetSocket } from "node:net";
 import pg from "pg";
@@ -62,6 +63,11 @@ describe("guest view (spec 4.8)", () => {
     expect(view.members.map((m) => m.userId)).toEqual(["p"]);
     expect(view.members[0]).toMatchObject({ avatarUrl: null, displayName: "Name p" });
     expect(view.members[0]).not.toHaveProperty("discordName");
+    // Exactly what the privacy notice tells guests they see (legal.ts "Wer was sieht").
+    expect(Object.keys(view.members[0]!).sort()).toEqual(["avatarUrl", "connected", "displayName", "isCohost", "isHost", "isSimulated", "participation", "userId"]);
+    const notice = readFileSync(new URL("../src/server/legal.ts", import.meta.url), "utf8");
+    expect(notice).toContain("Anzeigename, Rolle und Verbindungsstatus");
+    expect(notice).toContain("zufällige interne Kennung");
     expect(view.game.history).toEqual([]);
     expect(view.room).not.toHaveProperty("guestCount");
     const host = roomView(room, "host", config);

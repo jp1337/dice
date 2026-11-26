@@ -54,7 +54,7 @@ export function impressumHtml(legal: Legal | null, css: string | null = null) {
   return page("Impressum", `<p>Angaben gemäß § 5 DDG</p>\n${contact(legal)}${note}`, css);
 }
 
-export const PRIVACY_UPDATED = "25. November 2026";
+export const PRIVACY_UPDATED = "26. November 2026";
 
 export type PrivacyServices = { cloudflare: boolean; crowdsec: boolean; retentionDays?: number; logDays?: number; backupDays?: number };
 
@@ -108,7 +108,7 @@ ${legal ? contact(legal) : notConfigured}
 
 <h2>Wer was sieht</h2>
 <p>Angemeldete Personen in einem Raum sehen von den anderen Teilnehmern Anzeigename oder Spitzname, Avatar, Rolle, Verbindungsstatus und Würfe. Hosts sehen zusätzlich den Discord-Namen. Hosts und Co-Hosts können Spitznamen zurücksetzen.</p>
-<p>Neue Räume sind öffentlich; ein Host kann das für jeden Raum ausschalten. In einem öffentlichen Raum sehen auch Personen ohne Anmeldung, die den Raum-Link haben, den Spielverlauf mit den Anzeigenamen der Würfler und aller, die darin vorkommen (etwa ein Host, der für jemanden würfelt), aber ohne Avatare, Discord-IDs und Benutzernamen. Solange der Raum öffentlich ist, zeigt er angemeldeten Personen einen Hinweis.</p>
+<p>Neue Räume sind öffentlich; ein Host kann das für jeden Raum ausschalten. In einem öffentlichen Raum sehen auch Personen ohne Anmeldung, die den Raum-Link haben, den Spielverlauf und die Mitspieler: Anzeigename, Rolle und Verbindungsstatus der Würfler und aller, die im Verlauf vorkommen (etwa ein Host, der für jemanden würfelt), dazu eine zufällige interne Kennung je Person, aber ohne Avatare, Discord-IDs und Benutzernamen. Solange der Raum öffentlich ist, zeigt er angemeldeten Personen einen Hinweis.</p>
 <p>Emoji-Reaktionen erscheinen ohne Namen bei allen im Raum und werden nicht gespeichert.</p>
 
 <h2>Cookies und lokaler Speicher</h2>
