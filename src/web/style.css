@@ -399,6 +399,25 @@ button:disabled {
   --face: var(--primary-hover);
 }
 
+/* Locked for a moment (LockButton): looks disabled, keeps keyboard focus, does not react to the pointer. */
+button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+button[aria-disabled="true"]:hover {
+  --face: var(--tint);
+}
+
+.primary[aria-disabled="true"]:hover {
+  --face: var(--primary);
+}
+
+button[aria-disabled="true"]:active {
+  --lo: var(--shadow);
+  transform: none;
+}
+
 .danger {
   --face: var(--tint-berry);
   --frame: var(--berry);

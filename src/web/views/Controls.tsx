@@ -1,6 +1,6 @@
 // Small shared controls: a button that asks once more in the page (no window.confirm), and copying text
 // with a fallback where the clipboard API is missing or refused (plain http, older in-app browsers).
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from "react";
 
 type ConfirmProps = {
   label: string;
@@ -97,4 +97,10 @@ export function CopyButton({ text, label, multiline = false }: { text: string; l
       {fallback}
     </span>
   );
+}
+
+// A button that is locked for a moment (a roll tumbling, the cooldown) instead of disabled: a disabled button
+// drops keyboard focus to the page (checked in Chromium), and the host's next "Für … würfeln" is this button.
+export function LockButton({ locked, onClick, ...rest }: Omit<ComponentProps<"button">, "disabled" | "type"> & { locked: boolean }) {
+  return <button type="button" {...rest} aria-disabled={locked} onClick={(event) => !locked && onClick?.(event)} />;
 }
