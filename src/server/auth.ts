@@ -202,6 +202,9 @@ export async function registerAuth(app: FastifyInstance, config: Config, db: Nod
         .returning({ id: users.id, avatarHash: users.avatarHash });
       request.user = { id: user!.id, discordId: profile.discordId };
       if (profile.avatarHash !== user!.avatarHash) await updateAvatar(request, user!.id, profile);
+      // A login from a browser that still had a session replaces it; the old token would stay valid for days.
+      const previous = request.cookies[SESSION_COOKIE];
+      if (previous) await db.delete(sessions).where(eq(sessions.id, sessionId(previous)));
       const token = randomBytes(32).toString("base64url");
       await db.insert(sessions).values({ id: sessionId(token), userId: user!.id, expiresAt: new Date(Date.now() + SESSION_DAYS * 86_400_000) });
       reply.setCookie(SESSION_COOKIE, token, { ...cookieBase, path: "/", maxAge: SESSION_DAYS * 86_400 });

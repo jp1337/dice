@@ -45,6 +45,9 @@ FROM users WHERE discord_id = '<discord-id>' OR username = '<username>';
 DELETE FROM users WHERE id = '<id from step 1>';
 ```
 
+3. Restart the app: `docker compose restart app`. Rooms live in its memory; the restart reloads them
+   without the person, and their open connections end (their session is gone, so they cannot reconnect).
+
 | Left behind | Personal? | To remove it too |
 | --- | --- | --- |
 | `rooms.created_by`, `game_events.actor_user_id` | No: `NULL` | Nothing to do |
