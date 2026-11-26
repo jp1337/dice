@@ -780,6 +780,32 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
   });
 
   describe("restart (spec 6, 16)", () => {
+    it("writes queued room commands before it closes, so the pool can end after it", { timeout: 30_000 }, async () => {
+      const own = await makeApp(env, dbUrl, timing);
+      const port = await listen(own.app);
+      const slug = await newRoom(false, own.app);
+      const ch = await connect(slug, host, port);
+      for (const user of await Promise.all([makeUser(), makeUser()])) await connect(slug, user, port);
+      await until(() => expect(ch.state.members.filter((m) => m.participation === "player")).toHaveLength(2));
+      ch.send({ type: "start" });
+      await until(() => expect(ch.state.room.status).toBe("running"));
+      const before = (await eventsOf(slug)).length;
+      // Hold the room row, so the roll waits in its transaction while the app shuts down.
+      const blocker = await pool.connect();
+      await blocker.query("begin");
+      await blocker.query("select 1 from rooms where id = $1 for update", [await roomIdOf(slug)]);
+      ch.send({ type: "roll_for", userId: ch.state.game.activeUserId });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const closing = own.app.close();
+      const release = new Promise((resolve) => setTimeout(resolve, 2500)) // past SHUTDOWN_GRACE_MS.then(async () => {
+        await blocker.query("commit");
+        blocker.release();
+      });
+      await closing;
+      expect((await eventsOf(slug)).length).toBe(before + 1); // main.ts ends the pool right after close
+      await release;
+    });
+
     it("rebuilds a running game, loses no roll, and the simulated players go on", { timeout: 60_000 }, async () => {
       const first = await makeApp(env, dbUrl, timing);
       await first.app.listen({ port: 0, host: "127.0.0.1" });
