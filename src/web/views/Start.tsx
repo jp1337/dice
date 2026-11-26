@@ -6,9 +6,28 @@ import { Avatar } from "../components/Avatar.js";
 import { cleanText, createRoomResponseMessage, roomNameError } from "../lib/room.js";
 import { loginHref } from "../lib/routes.js";
 
-async function logout() {
-  await fetch("/auth/logout", { method: "POST" });
-  location.assign("/");
+// Offline or refused, the page must not look logged out (or stay silent) while the session still holds.
+function LogoutButton() {
+  const [error, setError] = useState<string | null>(null);
+  const logout = async () => {
+    try {
+      const res = await fetch("/auth/logout", { method: "POST" });
+      if (!res.ok) return setError("Abmelden hat nicht geklappt. Bitte lade die Seite neu und versuche es noch einmal.");
+      location.assign("/");
+    } catch {
+      setError("Der Server ist gerade nicht erreichbar.");
+    }
+  };
+  return (
+    <>
+      <button type="button" onClick={() => void logout()}>
+        Abmelden
+      </button>
+      <span className="form-error" role="status">
+        {error}
+      </span>
+    </>
+  );
 }
 
 export function LoginPrompt({ intro }: { intro: string }) {
@@ -109,9 +128,7 @@ export function StartPage() {
       <p className="me">
         <Avatar userId={me.userId} name={me.displayName} avatarUrl={me.avatarUrl} />
         <span>Angemeldet als {me.displayName}</span>
-        <button type="button" onClick={logout}>
-          Abmelden
-        </button>
+        <LogoutButton />
       </p>
       {me.isHost ? (
         <CreateRoom />
