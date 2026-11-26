@@ -17,7 +17,7 @@ image and temp dir are removed afterwards, also on Ctrl-C.
 
 | Part | How |
 | --- | --- |
-| Network | own podman network, fixed addresses: nginx `.10`, app `.11`, PostgreSQL `.12`, probe client `.50` |
+| Network | own podman network, a random `10.x.0.0/15`: nginx `.0.10`, app `.0.11`, PostgreSQL `.0.12`, probe client `10.x+1.0.50`, in another /16, since the log keeps only the /16 |
 | nginx | the example file; only `proxy_pass` (app address) and the certificate lines are filled in. Throwaway self-signed cert for `dice.example.org`, made at run time |
 | App | built from the `Dockerfile`, `NODE_ENV=production`, `TRUSTED_PROXIES` = nginx only |
 | PostgreSQL | the image pinned in `docker-compose.yml` |
@@ -35,9 +35,9 @@ Order 1, 2, 3, 4, 6, 5: the restart would cut the idle socket.
 | --- | --- | --- |
 | 1 | The stack is wired like production | `/healthz` 200 over TLS from nginx, PostgreSQL 19 |
 | 2 | Spec 8.3, 8.4: headers on every response | `X-Robots-Tag`, CSP, `nosniff`, `Referrer-Policy` on `/`, `/r/<slug>`, legal pages, `robots.txt`, `/healthz`, an asset, 404s, `/%zz`, 401 |
-| 3 | Spec 8.2: client IP | the log shows the probe client's address for a request through nginx, through nginx with a forged `X-Forwarded-For`, and straight to the app port with one |
+| 3 | Spec 8.2: client IP | the log shows the probe client's address, shortened to /16, for a request through nginx, through nginx with a forged `X-Forwarded-For`, and straight to the app port with one |
 | 4 | Spec 8.1, 16: idle WebSocket | open after the idle time with only server pings, ≥ one ping per 25 s, then one round trip |
-| 5 | Spec 4.9, 16: restart mid-game | 3 connected clients + 4 offline players, real rolls until a gift place exists, then `podman restart`. Clients reconnect by themselves (growing delay, jitter) and get the identical state (events, gift order, co-host). A roll right after the restart, inside 2 s of the last, is refused with `cooldown`. Two more rolls follow, event seqs without gaps. nginx's 502s meanwhile carry `X-Robots-Tag` |
+| 5 | Spec 4.9, 16: restart mid-game | 3 connected clients + 4 offline players, real rolls until a gift place exists, then `podman restart`. Clients reconnect by themselves (growing delay, jitter) and get the identical state (events, gift order, co-host). A roll right after the restart, inside the cooldown of the last, is refused with `cooldown`. Two more rolls follow, event seqs without gaps. nginx's 502s meanwhile carry `X-Robots-Tag` |
 | 6 | Spec 16: 100 clients | 100 sockets join one room; time until all see all; one host broadcast to all, p95 under 1 s |
 
 ## Last results
@@ -48,7 +48,7 @@ Order 1, 2, 3, 4, 6, 5: the restart would cut the idle socket.
 | --- | --- |
 | 1 | `/healthz` 200 via nginx/1.31.6, PostgreSQL 19.0 |
 | 2 | all 4 headers on 11 responses (200, 404, 400 from nginx, 401) |
-| 3 | logged the client's address all 3 times; nginx's and the forged one never |
+| 3 | logged the client's /16 all 3 times; nginx's and the forged one never |
 | 4 | open after 3 min, 7 server pings, round trip answered |
 | 5 | restart 0.4 s; all 3 back with identical state (6 events, 3 rolls, 1 gift place) after 2.5 s; a roll 976 ms after the last refused with `cooldown`; 2 more rolls, seqs 1..8 without gaps |
 | 6 | first state for all 100 after 1.5 s, all see 101 members after 1.8 s; broadcast p50 18 ms, p95 22 ms, max 23 ms |

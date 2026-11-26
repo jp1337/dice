@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { logIp } from "../src/server/log-ip.js";
+import { limitKey, logIp } from "../src/server/log-ip.js";
 
 describe("logIp (IPv4 to /16, IPv6 to /48)", () => {
   it.each([
@@ -23,4 +23,14 @@ describe("logIp (IPv4 to /16, IPv6 to /48)", () => {
     "%j -> invalid",
     (ip) => expect(logIp(ip)).toBe("invalid"),
   );
+});
+
+describe("limitKey (whom a per-address limit counts)", () => {
+  it.each([
+    ["198.51.100.23", "198.51.100.23"],
+    ["2001:db8:1:2::7", "2001:db8:1:2::/64"],
+    ["2001:db8:1:2:ffff:1:2:3", "2001:db8:1:2::/64"],
+    ["::ffff:203.0.113.45", "203.0.113.45"],
+    ["not an address", "not an address"],
+  ])("%s -> %s", (ip, expected) => expect(limitKey(ip)).toBe(expected));
 });

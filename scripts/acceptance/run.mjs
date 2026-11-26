@@ -13,6 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import WebSocket from "ws"; // shortcut: transitive dependency of @fastify/websocket; Node's own WebSocket cannot set Host/SNI or a CA
 import { SESSION_COOKIE, sessionIdFor } from "../../src/server/auth.ts";
+import { logIp } from "../../src/server/log-ip.ts";
 import { PING_INTERVAL_MS, ROLL_COOLDOWN_MS } from "../../src/shared/constants.ts";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
@@ -137,11 +138,11 @@ let ips;
 async function setup() {
   // Network with fixed addresses: nginx must be the only trusted proxy (TRUSTED_PROXIES), and the probe
   // client gets an address of its own so the log can be checked against it.
-  podman("network", "create", names.net);
-  const subnet = podman("network", "inspect", names.net, "--format", "{{range .Subnets}}{{.Subnet}}{{end}}");
-  const prefix = subnet.match(/^(\d+\.\d+\.\d+)\.0\/24$/)?.[1];
-  if (!prefix) throw new Error(`unexpected subnet ${subnet}`);
-  ips = { nginx: `${prefix}.10`, app: `${prefix}.11`, pg: `${prefix}.12`, client: `${prefix}.50` };
+  // The log keeps IPv4 to /16 (log-ip.ts), so the client sits in another /16 than nginx: a /15, a random one
+  // to keep clear of other podman networks.
+  const second = 100 + 2 * Math.floor(Math.random() * 60);
+  podman("network", "create", "--subnet", `10.${second}.0.0/15`, names.net);
+  ips = { nginx: `10.${second}.0.10`, app: `10.${second}.0.11`, pg: `10.${second}.0.12`, client: `10.${second + 1}.0.50` };
 
   const pgPassword = randomBytes(16).toString("hex");
   log(`postgres ${PG_IMAGE}`);
@@ -314,7 +315,7 @@ async function clientIp() {
   for (const [name, p] of Object.entries(probes)) {
     const line = lines.find((l) => l.msg === "request" && l.path === p);
     if (!line) problems.push(`${name}: no log line`);
-    else if (line.ip !== ips.client) problems.push(`${name}: logged ${line.ip}, expected ${ips.client}`);
+    else if (line.ip !== logIp(ips.client)) problems.push(`${name}: logged ${line.ip}, expected ${logIp(ips.client)}`);
     else seen.push(`${name}=${line.ip}`);
   }
   return problems.length > 0

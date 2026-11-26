@@ -100,7 +100,7 @@ public on/off · reset a nickname · switch reactions off · end the game, back 
   public history. **Display names with initials only:** no avatars, Discord IDs, usernames, moderation
   entries, or lobby members who neither play nor hold a place.
 - Guests send nothing (messages are dropped) and are not listed; hosts see their count.
-- Limits: 200 guests per room, 5 guest connections per IP.
+- Limits: 200 guests per room, 5 guest connections per IP (an IPv6 /64 counts as one).
 
 ## Reconnecting
 

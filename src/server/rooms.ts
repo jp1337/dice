@@ -30,7 +30,7 @@ import {
 import { reduce } from "../shared/game/reduce.js";
 import type { LiveRooms } from "./cleanup.js";
 import type { Config } from "./config.js";
-import { logIp } from "./log-ip.js";
+import { limitKey, logIp } from "./log-ip.js";
 import { gameEvents, roomMembers, rooms, users } from "./db/schema.js";
 import { CommandError, type NewEvent, handleGameCommand } from "./game-commands.js";
 
@@ -848,10 +848,11 @@ export function registerRooms(
       }).catch((err) => err instanceof Evicted || log.error({ err, roomId: room.id }, "guest leave failed"));
     });
 
-    const fromIp = guestsPerIp.get(request.ip) ?? 0;
+    const ipKey = limitKey(request.ip);
+    const fromIp = guestsPerIp.get(ipKey) ?? 0;
     if (fromIp >= MAX_GUESTS_PER_IP) return closeSocket(socket, "too many guest connections");
-    guestsPerIp.set(request.ip, fromIp + 1);
-    conn.ip = request.ip;
+    guestsPerIp.set(ipKey, fromIp + 1);
+    conn.ip = ipKey;
     run(room, async () => {
       if (socket.readyState !== OPEN) return;
       if (!room.isPublic) return closeSocket(socket, "not public"); // switched off while waiting

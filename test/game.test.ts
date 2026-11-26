@@ -613,6 +613,23 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
     });
   });
 
+  describe("guests over IPv6", () => {
+    it("counts the guest limit per /64: one home cannot fill a room with its addresses", { timeout: 30_000 }, async () => {
+      const proxied = await makeApp({ ...env, TRUSTED_PROXIES: "127.0.0.1" }, dbUrl, timing);
+      const proxiedPort = await listen(proxied.app);
+      try {
+        const slug = await newRoom(false, proxied.app);
+        const from = (address: string) => ({ "x-forwarded-for": address });
+        await Promise.all(Array.from({ length: MAX_GUESTS_PER_IP }, (_, i) => watch(slug, from(`2001:db8:1:2::${i + 1}`), proxiedPort)));
+        const sameHome = open(`/ws/rooms/${slug}`, undefined, from("2001:db8:1:2:ffff::9"), proxiedPort);
+        expect(await sameHome.closed).toEqual({ code: 1008, reason: "Zu viele Zuschauer-Verbindungen von deiner Adresse." });
+        await watch(slug, from("2001:db8:1:3::1"), proxiedPort); // the next /64 is someone else
+      } finally {
+        await proxied.app.close();
+      }
+    });
+  });
+
   describe("client addresses in the log (spec 8.3)", () => {
     it("never logs a full address: requests, failed logins, members and guests from IPv4, IPv6 and mapped IPv4", { timeout: 30_000 }, async () => {
       const proxied = await makeApp({ ...env, TRUSTED_PROXIES: "127.0.0.1" }, dbUrl, timing);
