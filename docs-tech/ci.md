@@ -8,7 +8,7 @@ every push to `main`. Workflow permissions: `contents: read`; only `publish` get
 | `lint` | ESLint | yes |
 | `typecheck` | `tsc` over source, tests and configs | yes |
 | `test` | Vitest against a PostgreSQL 19 service container | yes |
-| `docker` | The image builds | yes |
+| `docker` | The image builds, starts as in production (`NODE_ENV=production`, PostgreSQL from compose) and reports healthy as user `node` ([`scripts/smoke-image.sh`](../scripts/smoke-image.sh)) | yes |
 | `secrets-and-personal-data` | gitleaks over the full history; the denylist over file names, contents, history, commit messages and authors ([personal-data.md](personal-data.md)) | yes |
 | `CodeQL` | GitHub's default code scanning setup, no workflow file | yes |
 | `publish` | Push to `main` only, after the jobs above except CodeQL (default setup cannot be a `needs`; it ran on the pull request): `ghcr.io/jp1337/dice:sha-<commit>` and `:latest` | |
@@ -33,7 +33,7 @@ Measured November 2026, seconds. The wall-clock is the slowest job; on `main` pl
 | --- | --- | --- |
 | PostgreSQL service without health check, step `Wait for PostgreSQL` | Boots during checkout, Node, `npm ci` instead of before them | 6 s |
 | `docker` without `setup-buildx-action` | The runner's Docker uses the containerd image store: its own builder reads and writes the `gha` cache | 10–20 s |
-| `docker` with `outputs: type=cacheonly` | Loading the image would download every layer for nothing | 6 s against loading |
+| `docker` loads the image and starts it | A build that succeeds can still not start (CMD, migrations, `dist/` layout); `cacheonly` saved 6 s but never ran the image | costs the load and the smoke start |
 | `publish` keeps `setup-buildx-action` | Proven push path; reads the cache `docker` wrote (checked: every step cached) | – |
 
 Not changed: Vitest (one file, `game.test.ts`, takes 13 s of 16), `npm` cache (restore 2 s, `npm ci` 3 s),
