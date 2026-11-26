@@ -165,6 +165,10 @@ it("follows the room's settings", () => {
   expect(guide({})).toContain("crypto.randomInt(1, 7)");
   expect(readFileSync(new URL("../src/shared/game/decide.ts", import.meta.url), "utf8")).toContain("ctx.randomInt(1, 7)");
   expect(readFileSync(new URL("../src/server/app.ts", import.meta.url), "utf8")).toMatch(/import \{[^}]*\brandomInt\b[^}]*\} from "node:crypto"/);
+
+  // A host can take a roll back (decide.ts undo); the guide says so, with the label everyone sees on it.
+  expect(guide({})).toContain("„zurückgenommen“");
+  expect(readFileSync(new URL("../src/web/views/Game.tsx", import.meta.url), "utf8")).toContain('<span className="badge">zurückgenommen</span>');
 });
 });
 
