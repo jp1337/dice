@@ -300,16 +300,22 @@ async function clientIp() {
     `curl -s -o /dev/null -H 'Host: ${HOST}' -H 'X-Forwarded-For: ${FORGED_IP}' -H 'X-Forwarded-Proto: https' http://${ips.app}:3000${probes.forgedDirect}`,
   ].join(" && ");
   podman("run", "--rm", "--network", names.net, "--ip", ips.client, "--entrypoint", "sh", NGINX_IMAGE, "-c", script);
-  await sleep(500);
-  const lines = podman("logs", names.app)
-    .split("\n")
-    .flatMap((line) => {
-      try {
-        return [JSON.parse(line)];
-      } catch {
-        return [];
-      }
-    });
+  // The log reaches podman a moment later; a fixed pause sometimes read it too early (run 3: no line at all).
+  const readLog = () =>
+    podman("logs", names.app)
+      .split("\n")
+      .flatMap((line) => {
+        try {
+          return [JSON.parse(line)];
+        } catch {
+          return [];
+        }
+      });
+  let lines = readLog();
+  for (let i = 0; i < 50 && !Object.values(probes).every((p) => lines.some((l) => l.msg === "request" && l.path === p)); i++) {
+    await sleep(100);
+    lines = readLog();
+  }
   const problems = [];
   const seen = [];
   for (const [name, p] of Object.entries(probes)) {
