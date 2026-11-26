@@ -14,16 +14,21 @@ if [[ ! -s "$denylist" ]]; then
   exit 1
 fi
 
-# Drop comments and blank lines; match whole words, case-insensitive, as fixed strings.
-patterns="$(mktemp)"
-trap 'rm -f "$patterns"' EXIT
-tr -d '\r' < "$denylist" | grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' > "$patterns" || true
-if [[ ! -s "$patterns" ]]; then
+# Drop comments, blank lines and the spaces around an entry. An entry matches as a fixed string,
+# case-insensitive, unless a letter touches it: "Mustermann_cv.pdf" and "mustermann2024" are hits,
+# "Mustermannstraße" is not (a plain substring match hits ordinary words). The locale is fixed, so
+# "MÜLLER" matches "Müller" from a hook or GUI client running under LC_ALL=C too.
+entries="$(tr -d '\r' < "$denylist" | grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)"
+if [[ -z "$entries" ]]; then
   echo "personal-data check: denylist has no entries, refusing to continue." >&2
   exit 1
 fi
+# The pattern goes through a file, not argv, so the entries never show in a process list.
+pattern="$(mktemp)"
+trap 'rm -f "$pattern"' EXIT
+printf '(?<!\\p{L})(?:%s)(?!\\p{L})\n' "$(sed 's/\\E//g; s/.*/\\Q&\\E/' <<<"$entries" | paste -sd'|')" > "$pattern"
 
-if hits="$(grep -n -i -w -F -f "$patterns")"; then
+if hits="$(LC_ALL=C.UTF-8 grep -n -i -a -P -f "$pattern")"; then
   echo "personal-data check: found personal data in $label:" >&2
   # Show only line numbers, so the hit is not echoed into logs again.
   cut -d: -f1 <<<"$hits" | sed 's/^/  line /' >&2
