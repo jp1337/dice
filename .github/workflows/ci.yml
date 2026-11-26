@@ -95,10 +95,13 @@ jobs:
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          # The cache is the result: loading the image into Docker would download every layer for nothing.
-          outputs: type=cacheonly
+          # Loaded into Docker, so the next step can start it; publish reuses the cache.
+          load: true
+          tags: dice:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # A build that succeeds can still not start (CMD, migrations, dist/ layout, user): start it as production does.
+      - run: scripts/smoke-image.sh dice:ci
 
   secrets-and-personal-data:
     runs-on: ubuntu-latest

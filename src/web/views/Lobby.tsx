@@ -1,6 +1,6 @@
 // Lobby (spec 10): who is here, who rolls, own nickname, the room link; for hosts and co-hosts settings, public switch,
 // simulated players (test rooms) and "Start".
-import { type FormEvent, useEffect, useId, useState } from "react";
+import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { MAX_SIMULATED_PLAYERS, NICKNAME_MAX, SIX_MESSAGE_MAX } from "../../shared/constants.js";
 import type { ClientMessage, MeResponse, PatchMeRequest, RoomView } from "../../shared/contracts.js";
 import { HowTo } from "../components/HowTo.js";
@@ -14,22 +14,27 @@ type Props = { view: RoomView; d: Derived; send: (message: ClientMessage) => voi
 function Nickname({ d }: { d: Derived }) {
   const [value, setValue] = useState("");
   const [current, setCurrent] = useState<string | null>(null); // the saved nickname, null = the Discord name
+  const saved = useRef<string | null>(null); // the same, for the field: it follows only while untouched
   const [discordName, setDiscordName] = useState("");
+  // Read again whenever the room shows another name for me: a host may have reset the nickname, and a
+  // stale field would put it back with one click on "Speichern".
+  const shown = d.me?.displayName;
   useEffect(() => {
     let alive = true;
     fetch("/api/me")
       .then(async (res) => {
         if (!res.ok || !alive) return;
         const me = (await res.json()) as MeResponse;
+        setValue((typed) => (typed === (saved.current ?? "") ? (me.nickname ?? "") : typed));
+        saved.current = me.nickname;
         setCurrent(me.nickname);
         if (me.nickname === null) setDiscordName(me.displayName); // without a nickname, the shown name is the Discord one
-        setValue((typed) => typed || (me.nickname ?? ""));
       })
       .catch(() => undefined);
     return () => {
       alive = false;
     };
-  }, []);
+  }, [shown]);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const id = useId();
@@ -46,6 +51,7 @@ function Nickname({ d }: { d: Derived }) {
       const error = nicknameResponseMessage(res.status);
       setMessage(error ? { ok: false, text: error } : { ok: true, text: nickname === null ? "Zurückgesetzt auf deinen Discord-Namen." : "Gespeichert." });
       if (!error) {
+        saved.current = body.nickname;
         setCurrent(body.nickname);
         if (nickname === null) setValue("");
       }

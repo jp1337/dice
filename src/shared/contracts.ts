@@ -23,7 +23,7 @@ const visibleText = (max: number) =>
       z
         .string()
         .min(1)
-        .max(max)
+        .refine((text) => [...text].length <= max) // characters, not UTF-16 units: an emoji counts once
         .refine(isVisibleText),
     );
 
@@ -154,13 +154,14 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
   msg("remove_simulated_player", { userId }),
   msg("start", {}),
   msg("pause", {}),
-  msg("continue", {}),
+  // pause: the one the host saw; a late click must not lift another host's pause.
+  msg("continue", { pause: z.enum(["six", "host"]).optional() }),
   // userId: the player the host saw as active; a stale one is refused (two hosts clicking at once).
   msg("skip", { userId }),
   msg("roll_for", { userId }),
   msg("remove_player", { userId }),
   msg("add_player", { userId }),
-  msg("assign_last_place", {}),
+  msg("assign_last_place", { userId: userId.optional() }), // the last player the host saw
   // seq: the roll the host saw as the newest; a stale target is refused (two hosts clicking at once).
   msg("undo", { seq: z.int().min(1).optional() }),
   msg("set_public", { isPublic: z.boolean() }),
@@ -206,7 +207,7 @@ export interface RoomView {
 }
 
 export type ServerMessage =
-  | { type: "state"; state: RoomView }
+  | { type: "state"; state: RoomView; cooldownMs?: number } // cooldownMs: until the server takes the next roll
   | { type: "rolled"; userId: UserId; dice: number[]; rolledBy?: UserId }
   | { type: "reactions"; emojis: { emoji: (typeof reactionEmojis)[number]; count: number }[] }
   | { type: "error"; code: string; message: string }; // message in German

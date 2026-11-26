@@ -50,6 +50,9 @@
       "matchPackageNames": [
         "fastify",
         "@fastify/cookie",
+        "@fastify/rate-limit",
+        "react",
+        "react-dom",
         "@fastify/websocket",
         "@fastify/static",
         "pg",
@@ -62,10 +65,13 @@
       "labels": ["renovate", "needs-review"]
     },
     {
-      "description": "Mark packages that handle sessions, sockets, input validation or SQL",
+      "description": "Mark packages that handle sessions, sockets, rate limits, output escaping, input validation or SQL",
       "matchPackageNames": [
         "fastify",
         "@fastify/cookie",
+        "@fastify/rate-limit",
+        "react",
+        "react-dom",
         "@fastify/websocket",
         "@fastify/static",
         "pg",

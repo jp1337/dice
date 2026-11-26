@@ -8,7 +8,7 @@ import { SESSION_COOKIE } from "../src/server/auth.js";
 import { runCleanup } from "../src/server/cleanup.js";
 import { runMigrations } from "../src/server/db/migrate.js";
 import { CommandError, type GameCommandContext, handleGameCommand } from "../src/server/game-commands.js";
-import { MAX_SIMULATED_PLAYERS } from "../src/shared/constants.js";
+import { MAX_SIMULATED_PLAYERS, REACTION_INTERVAL_MS } from "../src/shared/constants.js";
 import { MAX_GUESTS_PER_IP, MAX_GUESTS_PER_ROOM } from "../src/server/rooms.js";
 import { type GameEvent, type Participation, type Settings, defaultSettings } from "../src/shared/contracts.js";
 import { reduce } from "../src/shared/game/reduce.js";
@@ -367,6 +367,14 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       await until(() => expect(ch.errors.slice(-2)).toEqual(["not_in_lobby", "not_in_lobby"]));
     });
 
+    it("names simulated players around a member who already shows a Testspieler name", async () => {
+      const slug = await newRoom(true);
+      const ch = await connect(slug, host);
+      await connect(slug, await makeUser("testspieler 1"));
+      ch.send({ type: "add_simulated_players", count: 2 });
+      await until(() => expect(ch.state.members.filter((m) => m.isSimulated).map((m) => m.displayName)).toEqual(["Testspieler 2", "Testspieler 3"]));
+    });
+
     it("lets simulated players roll by themselves, only on their turn and never in a pause", { timeout: 30_000 }, async () => {
       const { slug, ch, players, users } = await startGame(1, { isTest: true, sims: 2 });
       const real = users[0]!.id;
@@ -605,6 +613,23 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
     });
   });
 
+  describe("guests over IPv6", () => {
+    it("counts the guest limit per /64: one home cannot fill a room with its addresses", { timeout: 30_000 }, async () => {
+      const proxied = await makeApp({ ...env, TRUSTED_PROXIES: "127.0.0.1" }, dbUrl, timing);
+      const proxiedPort = await listen(proxied.app);
+      try {
+        const slug = await newRoom(false, proxied.app);
+        const from = (address: string) => ({ "x-forwarded-for": address });
+        await Promise.all(Array.from({ length: MAX_GUESTS_PER_IP }, (_, i) => watch(slug, from(`2001:db8:1:2::${i + 1}`), proxiedPort)));
+        const sameHome = open(`/ws/rooms/${slug}`, undefined, from("2001:db8:1:2:ffff::9"), proxiedPort);
+        expect(await sameHome.closed).toEqual({ code: 1008, reason: "Zu viele Zuschauer-Verbindungen von deiner Adresse." });
+        await watch(slug, from("2001:db8:1:3::1"), proxiedPort); // the next /64 is someone else
+      } finally {
+        await proxied.app.close();
+      }
+    });
+  });
+
   describe("client addresses in the log (spec 8.3)", () => {
     it("never logs a full address: requests, failed logins, members and guests from IPv4, IPv6 and mapped IPv4", { timeout: 30_000 }, async () => {
       const proxied = await makeApp({ ...env, TRUSTED_PROXIES: "127.0.0.1" }, dbUrl, timing);
@@ -667,6 +692,16 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
       expect((await eventsOf(slug)).length).toBe(events);
     });
 
+    it("lets a reaction through that arrives a little early, as network jitter makes it", async () => {
+      const slug = await newRoom();
+      const cu = await connect(slug, await makeUser());
+      cu.send({ type: "react", emoji: "🎉" });
+      await new Promise((resolve) => setTimeout(resolve, REACTION_INTERVAL_MS - 100)); // sent on time, arrived 100 ms early
+      cu.send({ type: "react", emoji: "🎉" });
+      await until(() => expect(reactionsOf(cu)).toEqual({ "🎉": 2 }));
+      expect(cu.errors).toEqual([]);
+    });
+
     it("refuses reactions when the hosts switched them off", async () => {
       const slug = await newRoom();
       const ch = await connect(slug, host);
@@ -716,6 +751,10 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
         for (const c of [ch, ...cs]) await c.close();
         await until(() => expect(first.app.live.roomIds()).not.toContain(roomId));
         ch = await connect(slug, host, firstPort);
+        // The first state tells the client how long the buttons stay locked.
+        const left = (ch.messages.find((m) => m.type === "state") as { cooldownMs?: number }).cooldownMs;
+        expect(left).toBeGreaterThan(50_000);
+        expect(left).toBeLessThanOrEqual(LONG.rollCooldownMs);
         expect(await tryRoll(ch)).toBe("cooldown");
 
         // A restart: another app reads the room from the database.
@@ -741,6 +780,33 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
   });
 
   describe("restart (spec 6, 16)", () => {
+    it("writes queued room commands before it closes, so the pool can end after it", { timeout: 30_000 }, async () => {
+      const own = await makeApp(env, dbUrl, timing);
+      const port = await listen(own.app);
+      const slug = await newRoom(false, own.app);
+      const ch = await connect(slug, host, port);
+      for (const user of await Promise.all([makeUser(), makeUser()])) await connect(slug, user, port);
+      await until(() => expect(ch.state.members.filter((m) => m.participation === "player")).toHaveLength(2));
+      ch.send({ type: "start" });
+      await until(() => expect(ch.state.room.status).toBe("running"));
+      const before = (await eventsOf(slug)).length;
+      // Hold the room row, so the roll waits in its transaction while the app shuts down.
+      const blocker = await pool.connect();
+      await blocker.query("begin");
+      await blocker.query("select 1 from rooms where id = $1 for update", [await roomIdOf(slug)]);
+      ch.send({ type: "roll_for", userId: ch.state.game.activeUserId });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const closing = own.app.close();
+      // Released past SHUTDOWN_GRACE_MS, so close() has no other reason to still be waiting.
+      const release = new Promise((resolve) => setTimeout(resolve, 2500)).then(async () => {
+        await blocker.query("commit");
+        blocker.release();
+      });
+      await closing;
+      expect((await eventsOf(slug)).length).toBe(before + 1); // main.ts ends the pool right after close
+      await release;
+    });
+
     it("rebuilds a running game, loses no roll, and the simulated players go on", { timeout: 60_000 }, async () => {
       const first = await makeApp(env, dbUrl, timing);
       await first.app.listen({ port: 0, host: "127.0.0.1" });

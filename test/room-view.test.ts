@@ -1,8 +1,8 @@
 // The logic behind the room views, without a DOM: routing, the WebSocket client (backoff, close codes,
 // reconnect), what each viewer may click, history and result texts, the roll animation timing.
-import { NEXT_ROLL_COUNTDOWN_MS, ROLL_ANIMATION_MS, ROLL_COOLDOWN_MS } from "../src/shared/constants.js";
+import { NEXT_ROLL_COUNTDOWN_MS, PING_INTERVAL_MS, ROLL_ANIMATION_MS, ROLL_COOLDOWN_MS } from "../src/shared/constants.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defaultSettings } from "../src/shared/contracts.js";
+import { defaultSettings, patchMeRequestSchema } from "../src/shared/contracts.js";
 import type { GameEvent, MemberView, RoomView } from "../src/shared/contracts.js";
 import { initialGameState, reduce } from "../src/shared/game/reduce.js";
 import {
@@ -40,7 +40,7 @@ import {
   turnList,
   turnText,
 } from "../src/web/lib/room.js";
-import { countdown, displayedView, initialRoll, rollBusy, rollLocked, rollStep, shownDice } from "../src/web/lib/roll.js";
+import { countdown, displayedView, initialRoll, landedSix, rollBusy, rollLocked, rollStep, shownDice } from "../src/web/lib/roll.js";
 import { loginHref, parseRoute, socketUrl } from "../src/web/lib/routes.js";
 
 // Fictitious ids and names only.
@@ -169,9 +169,11 @@ describe("the room connection", () => {
   const connect = (probe?: () => Promise<ProbeResult>, random = () => 1) => {
     const conn = createConnection({ url: "wss://dice.example.org/ws/rooms/x", makeSocket: fake, onStatus: (s) => statuses.push(s), onMessage: (m) => messages.push(m), probe, random });
     conn.start();
+    connections.push(conn);
     return conn;
   };
   const last = () => sockets.at(-1)!;
+  const connections: ReturnType<typeof createConnection>[] = [];
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -222,6 +224,28 @@ describe("the room connection", () => {
     last().drop(1013); // no state in between
     await vi.advanceTimersByTimeAsync(0);
     expect(statuses.at(-1)).toMatchObject({ kind: "retrying", attempt: 2, delayMs: backoffDelay(2, () => 0.25) });
+  });
+
+  it("replaces a socket that went silent: no alive for two ping intervals, or on retryNow after one", async () => {
+    connect();
+    last().open();
+    last().message(state);
+    for (let i = 0; i < 4; i++) {
+      await vi.advanceTimersByTimeAsync(PING_INTERVAL_MS);
+      last().message('{"type":"alive"}'); // the server's heartbeat keeps it, and is not passed on
+    }
+    expect(sockets).toHaveLength(1);
+    expect(messages).toHaveLength(1);
+    // Half-open after a network change: still "open", nothing arrives, no close event ever comes.
+    await vi.advanceTimersByTimeAsync(2 * PING_INTERVAL_MS + 10_000);
+    expect(sockets[0]!.closedWith).toBeDefined();
+    expect(sockets.length).toBeGreaterThan(1);
+    last().open();
+    last().message(state);
+    await vi.advanceTimersByTimeAsync(PING_INTERVAL_MS + 6_000);
+    const conn = connections.at(-1)!;
+    conn.retryNow(); // back in front after a while: no waiting for the next check
+    expect(sockets.at(-2)!.closedWith).toBeDefined();
   });
 
   it("ignores retryNow while the HTTP probe is still asking", async () => {
@@ -377,6 +401,34 @@ describe("what a viewer may click", () => {
     expect(finalSixOpen(undone, six.seq)).toBe(false);
   });
 
+  it("keeps the roll buttons locked after a reconnect inside the server's cooldown", () => {
+    const view = makeView({ game: running() });
+    const back = rollStep(initialRoll, { type: "state", view, first: true, cooldownMs: 3200, at: 10_000 });
+    expect(rollLocked(back)).toBe(true);
+    expect(countdown(back, 10_000)).toBe(4); // whole seconds, rounded up
+    expect(countdown(back, 13_200)).toBe(0);
+    expect(rollLocked(rollStep(initialRoll, { type: "state", view, first: true, cooldownMs: 0, at: 10_000 }))).toBe(false);
+  });
+
+  it("opens the final six banner when the six that ended the game lands", () => {
+    // While the dice tumble every panel shows the held view (still running); the landing must read the newest.
+    const start = [ev("game_started", { order: [ANNA, BEN] }), ev("rolled", { userId: ANNA, dice: [6] }, ANNA), ev("continued", {})];
+    const six = ev("rolled", { userId: BEN, dice: [6] }, BEN);
+    const before = makeView({ game: reduce(start, defaultSettings) });
+    const done = makeView({ game: reduce([...start, six], defaultSettings) });
+    expect(done.game.status).toBe("finished");
+    let s = rollStep(initialRoll, { type: "state", view: before, first: true });
+    s = rollStep(s, { type: "state", view: done, first: false });
+    s = rollStep(s, { type: "rolled", dice: [6] });
+    expect(displayedView(s, done).game.status).toBe("running"); // what RoomScreen sees as `view` at landing
+    const landed = landedSix(s);
+    expect(landed).toEqual({ six: true, finalSeq: six.seq });
+    expect(finalSixOpen(done, landed.finalSeq)).toBe(true);
+    // A six mid-game: the sound, no final banner.
+    const mid = rollStep(rollStep(rollStep(initialRoll, { type: "state", view: makeView({ game: reduce(start.slice(0, 1), defaultSettings) }), first: true }), { type: "state", view: before, first: false }), { type: "rolled", dice: [6] });
+    expect(landedSix(mid)).toEqual({ six: true, finalSeq: null });
+  });
+
   it("guests can do nothing", () => {
     const d = deriveRoom(makeView({ game: running(), viewer: { kind: "guest" } }), true);
     expect(d.isGuest).toBe(true);
@@ -502,6 +554,11 @@ describe("form checks mirror the server", () => {
     expect(nicknameError("   ")).toMatch(/Spitznamen/);
     expect(nicknameError("x".repeat(33))).toBe("Höchstens 32 Zeichen.");
     expect(nicknameError("x".repeat(32))).toBeNull();
+    // Characters, as the label says, not UTF-16 units: 32 emoji fit, 33 do not; the server agrees.
+    expect(nicknameError("😀".repeat(32))).toBeNull();
+    expect(nicknameError("😀".repeat(33))).toBe("Höchstens 32 Zeichen.");
+    expect(patchMeRequestSchema.safeParse({ nickname: "😀".repeat(32) }).success).toBe(true);
+    expect(patchMeRequestSchema.safeParse({ nickname: "😀".repeat(33) }).success).toBe(false);
     for (const bad of ["a\u200Bb", "a\u202Eb", "\u3164", "a\u00A0b", "x\u0301\u0302\u0303"]) expect(nicknameError(bad), JSON.stringify(bad)).toMatch(/sichtbare/);
     expect(cleanText(" e\u0301 ")).toBe("\u00E9");
   });

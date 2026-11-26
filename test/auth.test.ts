@@ -211,6 +211,19 @@ describe.skipIf(!dbUrl)("login against a fake Discord", () => {
     expect(fake.tokenForms.at(-1)?.get("redirect_uri")).toBe(`${ORIGIN}/auth/callback`);
   });
 
+  it("replaces the browser's previous session on a new login", async () => {
+    const first = await login(app);
+    const { state, cookie } = await startLogin(app);
+    const again = await app.inject({
+      url: `/auth/callback?code=fake-code&state=${state}`,
+      cookies: { [STATE_COOKIE]: cookie.value, [SESSION_COOKIE]: first.token! },
+      remoteAddress: nextIp(),
+    });
+    const second = again.cookies.find((c) => c.name === SESSION_COOKIE)?.value;
+    expect((await me(app, second)).statusCode).toBe(200);
+    expect((await me(app, first.token)).statusCode).toBe(401);
+  });
+
   it("uses global name, then username as display name and updates them on the next login", async () => {
     await login(app);
     expect((await userRow())?.display_name).toBe("Erika");

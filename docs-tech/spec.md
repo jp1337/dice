@@ -100,7 +100,7 @@ public on/off · reset a nickname · switch reactions off · end the game, back 
   public history. **Display names with initials only:** no avatars, Discord IDs, usernames, moderation
   entries, or lobby members who neither play nor hold a place.
 - Guests send nothing (messages are dropped) and are not listed; hosts see their count.
-- Limits: 200 guests per room, 5 guest connections per IP.
+- Limits: 200 guests per room, 5 guest connections per IP (an IPv6 /64 counts as one).
 
 ## Reconnecting
 
@@ -149,6 +149,9 @@ The game state is never stored; it is `reduce(events, settings) -> GameState` ov
 - `undone` names the roll it takes back (`seq`) and counts only while that roll is the newest one still in
   effect: two hosts clicking at once undo one roll. Undone rolls leave the computation, stay in the history,
   and are listed in `GameState.undoneSeqs`.
+- Host commands name what the host saw, so a late click of one of several hosts misses instead of hitting
+  something else: `skip`/`roll_for` the player, `undo` the roll, `continue` the pause (six or host),
+  `assign_last_place` the last player.
 - Game commands are checked by the pure `decide(state, command, ctx)`, which returns the events to append.
 - The server keeps state per room in memory and rebuilds it from the events after a restart.
 
@@ -179,7 +182,9 @@ KB at most. The game never depends on one connection, a host's included.
 ## Proxy, security, no indexing
 
 - Path: client → maybe Cloudflare → nginx with CrowdSec → app; both variants without code changes.
-- `wss` only, under `/ws/` only. Server ping every 25 s, unanswered connections closed. Client reconnects
+- `wss` only, under `/ws/` only. Server ping every 25 s, unanswered connections closed; with it an app-level
+  `{"type":"alive"}`, since browsers hide pings: a client that hears nothing for 55 s (30 s when the tab
+  comes back to the front) drops the socket as half-open. Client reconnects
   with growing, jittered delay and receives the current `state`; no connection → a clear error, not a blank
   page. nginx example in `docs/`; the real config lives in the operator's infrastructure.
 - Forwarded headers trusted only from `TRUSTED_PROXIES`. IP used for logs and rate limits only.
@@ -190,7 +195,7 @@ KB at most. The game never depends on one connection, a host's included.
   without a session per IP.
 - Standard methods, small size-limited JSON bodies, no user data in URLs except the room slug.
 - Everything from the own domain. Headers: CSP `default-src 'self'`, `connect-src 'self'` + own `wss`,
-  `img-src 'self' data:`, `frame-ancestors 'none'`; `X-Content-Type-Options: nosniff`;
+  `img-src 'self' data:`, `frame-ancestors 'none'`, `base-uri 'none'`, `form-action 'self'`; `X-Content-Type-Options: nosniff`;
   `Referrer-Policy: same-origin`. Hashed assets `immutable`; HTML, `/api`, `/auth` `no-store`.
 - No indexing, three layers at once: `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, noimageindex`
   on **every** response; the same as meta tag; `robots.txt` disallowing all, allowing major search engines

@@ -12,6 +12,11 @@ describe("parseConfig", () => {
   });
 
   // config.ts promises that `KEY=` means "not set"; these three refused to start instead.
+  it("refuses a retention the cleanup cannot compute", () => {
+    expect(parseConfig({ ...baseEnv, RETENTION_DAYS: "3650" }).retentionDays).toBe(3650);
+    expect(() => parseConfig({ ...baseEnv, RETENTION_DAYS: "1000000000" })).toThrow(/RETENTION_DAYS/);
+  });
+
   it("treats empty PORT, RETENTION_DAYS and NODE_ENV as not set", () => {
     const config = parseConfig({ ...baseEnv, PORT: "", RETENTION_DAYS: " ", NODE_ENV: "" });
     expect(config.port).toBe(3000);

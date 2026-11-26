@@ -11,7 +11,7 @@ import { Switch } from "../components/Toggles.js";
 import { type Derived, giftList, historyLines, lastGiftText, latecomers, pickOption, rollCaption, turnList, turnText } from "../lib/room.js";
 import { type RollState, countdown, rollBusy, rollLocked, shownDice } from "../lib/roll.js";
 import type { useRoom } from "../lib/useRoom.js";
-import { ConfirmButton } from "./Controls.js";
+import { ConfirmButton, LockButton } from "./Controls.js";
 import { RoomLink } from "./Lobby.js";
 import { Participants } from "./Participants.js";
 
@@ -79,7 +79,7 @@ function HostBar({ view, d, room }: Props) {
     <section className="card stack host-bar" aria-label="Host-Werkzeuge">
       <div className="grid2">
         {view.game.pause ? (
-          <button type="button" className="primary" disabled={!can.continue} onClick={() => send({ type: "continue" })}>
+          <button type="button" className="primary" disabled={!can.continue} onClick={() => send({ type: "continue", pause: view.game.pause ?? undefined })}>
             Weiter
           </button>
         ) : (
@@ -90,14 +90,14 @@ function HostBar({ view, d, room }: Props) {
         {/* The player named on the button: if the turn moved on meanwhile, the server answers turn_changed.
             No one active (the last six is still on screen): no name to put on them. */}
         {active && (
-          <button type="button" disabled={!can.skip || busy} onClick={() => send({ type: "skip", userId: active })}>
+          <LockButton locked={!can.skip || busy} onClick={() => send({ type: "skip", userId: active })}>
             {d.name(active)} überspringen
-          </button>
+          </LockButton>
         )}
         {active && active !== d.myId && (
-          <button type="button" disabled={!can.rollFor || locked} onClick={() => send({ type: "roll_for", userId: active })}>
+          <LockButton locked={!can.rollFor || locked} onClick={() => send({ type: "roll_for", userId: active })}>
             Für {d.name(active)} würfeln
-          </button>
+          </LockButton>
         )}
         {/* key: a newer roll closes an open question instead of taking back the wrong one */}
         <ConfirmButton
@@ -110,7 +110,7 @@ function HostBar({ view, d, room }: Props) {
       </div>
       {/* The last player who is a host too has their own "Letzten Platz nehmen" on the stage. */}
       {can.assignLastPlace && d.lastPlayer !== d.myId && (
-        <ConfirmButton key={d.lastPlayer} label="Letzten Platz vergeben" question={`Letzten Platz an ${d.name(d.lastPlayer)} vergeben?`} onConfirm={() => send({ type: "assign_last_place" })} />
+        <ConfirmButton key={d.lastPlayer} label="Letzten Platz vergeben" question={`Letzten Platz an ${d.name(d.lastPlayer)} vergeben?`} onConfirm={() => send({ type: "assign_last_place", userId: d.lastPlayer ?? undefined })} />
       )}
     </section>
   );
@@ -236,7 +236,7 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
               {d.activeName} ist getrennt. Du kannst überspringen oder für {d.activeName} würfeln.
             </p>
           )}
-          <Dice values={shownDice(room.roll, view)} rollKey={room.roll.rollKey} count={game.activeDiceCount} onSettled={onSettled} />
+          <Dice values={shownDice(room.roll, view)} rollKey={room.roll.rollKey} count={game.activeDiceCount} onSettled={onSettled} announce={rollCaption(room.latest ?? view, d.myId, false)} />
           <p className="roll-caption">{rollCaption(room.latest ?? view, d.myId, busy)}</p>
           {!game.pause && <NextRollCountdown roll={room.roll} />}
           <FloatingReactions items={room.floating} />
@@ -244,14 +244,14 @@ export function Game({ view, d, room, onSettled }: Props & { onSettled: () => vo
           {(inTurn || d.can.claimLastPlace) && (
             <p className="actions">
               {inTurn && (
-                <button type="button" className="primary big" disabled={!d.can.roll || locked} onClick={() => room.send({ type: "roll" })}>
+                <LockButton className="primary big" locked={!d.can.roll || locked} onClick={() => room.send({ type: "roll" })}>
                   {d.isActive && game.activeDiceCount === 2 ? "Mit 2 Würfeln würfeln" : "Würfeln"}
-                </button>
+                </LockButton>
               )}
               {d.can.claimLastPlace && (
-                <button type="button" className="big" disabled={locked} onClick={() => room.send({ type: "claim_last_place" })}>
+                <LockButton className="big" locked={locked} onClick={() => room.send({ type: "claim_last_place" })}>
                   Letzten Platz nehmen
-                </button>
+                </LockButton>
               )}
             </p>
           )}

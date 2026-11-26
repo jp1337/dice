@@ -19,6 +19,7 @@ import {
   type ServerMessage,
   type Settings,
   REACTION_INTERVAL_MS,
+  REACTION_SLACK_MS,
   clientMessageSchema,
   createRoomRequestSchema,
   defaultSettings,
@@ -29,7 +30,7 @@ import {
 import { reduce } from "../shared/game/reduce.js";
 import type { LiveRooms } from "./cleanup.js";
 import type { Config } from "./config.js";
-import { logIp } from "./log-ip.js";
+import { limitKey, logIp } from "./log-ip.js";
 import { gameEvents, roomMembers, rooms, users } from "./db/schema.js";
 import { CommandError, type NewEvent, handleGameCommand } from "./game-commands.js";
 
@@ -74,7 +75,7 @@ const OPEN = 1;
 
 // Close codes and the German reason the client may show; the key is what the log says.
 const CLOSE = {
-  "too many tabs": [1008, "Zu viele offene Tabs in diesem Raum."],
+  "too many tabs": [1008, "Dieser Raum ist in zu vielen Tabs offen. Dieser Tab wurde geschlossen."],
   "rate limit": [1008, "Zu viele Nachrichten."],
   "room gone": [4004, "Raum existiert nicht mehr."],
   "reload failed": [1012, "Der Raum wird neu geladen. Bitte verbinde dich neu."],
@@ -399,7 +400,9 @@ export function registerRooms(
     const viewer: RoomView["viewer"] = member
       ? { kind: "member", userId: member.userId, isHost: audience === "host", canModerate: audience !== "member" }
       : { kind: "guest" };
-    send(socket, `{"type":"state","state":{"viewer":${JSON.stringify(viewer)},${rendered.body}}`);
+    // A client that (re)connects inside the cooldown would otherwise unlock its roll buttons too early.
+    const cooldownMs = Math.max(0, room.lastRollAt + timing.rollCooldownMs - Date.now());
+    send(socket, `{"type":"state","cooldownMs":${cooldownMs},"state":{"viewer":${JSON.stringify(viewer)},${rendered.body}}`);
     conn.version = room.version;
   }
 
@@ -545,7 +548,10 @@ export function registerRooms(
   async function join(room: Room, socket: Socket, conn: Conn & { userId: string }) {
     if (socket.readyState !== OPEN) return; // closed while waiting in the queue
     const { userId } = conn;
-    if ((room.sockets.get(userId)?.size ?? 0) >= MAX_SOCKETS_PER_USER) return closeSocket(socket, "too many tabs");
+    // The newest connection wins: a phone that hops between networks leaves dead sockets behind until the
+    // ping catches them, and refusing the new one locked the person out (the client does not retry 1008).
+    const mine = [...(room.sockets.get(userId) ?? [])].filter((s) => s.readyState === OPEN);
+    if (mine.length >= MAX_SOCKETS_PER_USER) closeSocket(mine[0]!, "too many tabs");
     const [[user], [kept]] = await Promise.all([
       db.select(userColumns).from(users).where(eq(users.id, userId)),
       db.update(rooms).set({ lastActivityAt: new Date() }).where(eq(rooms.id, room.id)).returning({ id: rooms.id }),
@@ -642,7 +648,7 @@ export function registerRooms(
       case "react": {
         if (!room.settings.reactions) throw fail("reactions_off", "Reaktionen sind in diesem Raum abgeschaltet.");
         const now = Date.now();
-        if (now < (room.lastReaction.get(actorId) ?? -Infinity) + REACTION_INTERVAL_MS) throw fail("reaction_too_fast", "Kurz warten, dann geht die nächste Reaktion.");
+        if (now < (room.lastReaction.get(actorId) ?? -Infinity) + REACTION_INTERVAL_MS - REACTION_SLACK_MS) throw fail("reaction_too_fast", "Kurz warten, dann geht die nächste Reaktion.");
         room.lastReaction.set(actorId, now);
         room.reactions.set(message.emoji, (room.reactions.get(message.emoji) ?? 0) + 1);
         room.reactionTimer ??= setTimeout(() => sendReactions(room), REACTION_BUNDLE_MS);
@@ -652,13 +658,15 @@ export function registerRooms(
         if (!canModerate) throw forbidden();
         testRoomOnly();
         lobbyOnly();
-        const taken = new Set([...room.members.values()].filter((m) => m.isSimulated).map((m) => m.username));
-        if (taken.size + message.count > MAX_SIMULATED_PLAYERS)
+        const members = [...room.members.values()];
+        // Free names skip every name shown in the room, so a member called "Testspieler 1" is not doubled.
+        const taken = new Set(members.map((m) => (m.nickname ?? m.displayName).toLowerCase()));
+        if (members.filter((m) => m.isSimulated).length + message.count > MAX_SIMULATED_PLAYERS)
           throw fail("too_many_simulated", `Höchstens ${MAX_SIMULATED_PLAYERS} simulierte Mitspieler pro Raum.`);
         const added: Member[] = [];
         for (let n = 1; added.length < message.count; n++) {
           const name = `Testspieler ${n}`; // unique within the room (spec 4.7)
-          if (taken.has(name)) continue;
+          if (taken.has(name.toLowerCase())) continue;
           added.push({ userId: randomUUID(), discordId: null, username: name, displayName: name, nickname: null, avatarHash: null, isSimulated: true, participation: "player", isCohost: false });
         }
         return commit(room, {
@@ -728,6 +736,7 @@ export function registerRooms(
       } else {
         conn.alive = false;
         socket.ping();
+        send(socket, '{"type":"alive"}'); // the browser hides pings; the client's watchdog listens for this
       }
     }
     for (const [key, bucket] of buckets) {
@@ -841,10 +850,11 @@ export function registerRooms(
       }).catch((err) => err instanceof Evicted || log.error({ err, roomId: room.id }, "guest leave failed"));
     });
 
-    const fromIp = guestsPerIp.get(request.ip) ?? 0;
+    const ipKey = limitKey(request.ip);
+    const fromIp = guestsPerIp.get(ipKey) ?? 0;
     if (fromIp >= MAX_GUESTS_PER_IP) return closeSocket(socket, "too many guest connections");
-    guestsPerIp.set(request.ip, fromIp + 1);
-    conn.ip = request.ip;
+    guestsPerIp.set(ipKey, fromIp + 1);
+    conn.ip = ipKey;
     run(room, async () => {
       if (socket.readyState !== OPEN) return;
       if (!room.isPublic) return closeSocket(socket, "not public"); // switched off while waiting

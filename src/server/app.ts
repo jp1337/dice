@@ -89,6 +89,9 @@ export async function buildApp(config: Config, deps: Deps) {
       `connect-src 'self' wss://${config.baseUrl.host}`,
       "img-src 'self' data:",
       "frame-ancestors 'none'",
+      // default-src does not cover these two: an injected <base> or <form> could point elsewhere.
+      "base-uri 'none'",
+      "form-action 'self'",
     ].join("; "),
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "same-origin",

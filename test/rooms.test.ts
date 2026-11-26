@@ -1,5 +1,6 @@
 // Rooms, lobby and the room WebSocket (spec 4.2, 4.9, 4.10, 7, 13) against a real PostgreSQL and a listening server.
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import type { AddressInfo, Socket as NetSocket } from "node:net";
 import pg from "pg";
@@ -62,6 +63,11 @@ describe("guest view (spec 4.8)", () => {
     expect(view.members.map((m) => m.userId)).toEqual(["p"]);
     expect(view.members[0]).toMatchObject({ avatarUrl: null, displayName: "Name p" });
     expect(view.members[0]).not.toHaveProperty("discordName");
+    // Exactly what the privacy notice tells guests they see (legal.ts "Wer was sieht").
+    expect(Object.keys(view.members[0]!).sort()).toEqual(["avatarUrl", "connected", "displayName", "isCohost", "isHost", "isSimulated", "participation", "userId"]);
+    const notice = readFileSync(new URL("../src/server/legal.ts", import.meta.url), "utf8");
+    expect(notice).toContain("Anzeigename, Rolle und Verbindungsstatus");
+    expect(notice).toContain("zufällige interne Kennung");
     expect(view.game.history).toEqual([]);
     expect(view.room).not.toHaveProperty("guestCount");
     const host = roomView(room, "host", config);
@@ -564,13 +570,14 @@ describe.skipIf(!dbUrl)("rooms with PostgreSQL", () => {
       expect(tabs.flatMap((t) => t.errors).filter((e) => e === "rate_limited").length).toBeGreaterThanOrEqual(4);
     });
 
-    it(`allows ${MAX_SOCKETS_PER_USER} sockets per person and room and closes the next one`, async () => {
+    it(`allows ${MAX_SOCKETS_PER_USER} sockets per person and room; the next one closes the oldest`, async () => {
       const slug = await newRoom(host);
       const user = await makeUser();
-      for (let i = 0; i < MAX_SOCKETS_PER_USER; i++) await connect(slug, user);
-      const extra = open(slug, user);
-      expect(await extra.closed).toEqual({ code: 1008, reason: "Zu viele offene Tabs in diesem Raum." });
-      expect(extra.messages).toEqual([]);
+      const tabs: Awaited<ReturnType<typeof connect>>[] = [];
+      for (let i = 0; i < MAX_SOCKETS_PER_USER; i++) tabs.push(await connect(slug, user));
+      const extra = await connect(slug, user); // a phone back on the network is let in
+      expect(extra.state.room.slug).toBe(slug);
+      expect(await tabs[0]!.closed).toEqual({ code: 1008, reason: "Dieser Raum ist in zu vielen Tabs offen. Dieser Tab wurde geschlossen." });
       const other = await connect(slug, await makeUser()); // others are not affected
       expect(other.state.room.slug).toBe(slug);
     });
