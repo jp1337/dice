@@ -15,6 +15,9 @@ export const ROLL_ANIMATION_MS = 1300;
 export const NEXT_ROLL_COUNTDOWN_MS = 5000;
 export const ROLL_COOLDOWN_MS = ROLL_ANIMATION_MS + NEXT_ROLL_COUNTDOWN_MS;
 export const REACTION_INTERVAL_MS = 500; // per person; short on purpose: reactions are for spamming
+// The client waits REACTION_INTERVAL_MS between sends; arrival gaps shrink with network jitter, so the server
+// lets a reaction through this much early instead of answering a steady spammer with error notices.
+export const REACTION_SLACK_MS = 150;
 export const PING_INTERVAL_MS = 25_000;
 export const ROOM_NAME_MAX = 60;
 export const SIX_MESSAGE_MAX = 200;

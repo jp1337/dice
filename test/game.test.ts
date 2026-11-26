@@ -8,7 +8,7 @@ import { SESSION_COOKIE } from "../src/server/auth.js";
 import { runCleanup } from "../src/server/cleanup.js";
 import { runMigrations } from "../src/server/db/migrate.js";
 import { CommandError, type GameCommandContext, handleGameCommand } from "../src/server/game-commands.js";
-import { MAX_SIMULATED_PLAYERS } from "../src/shared/constants.js";
+import { MAX_SIMULATED_PLAYERS, REACTION_INTERVAL_MS } from "../src/shared/constants.js";
 import { MAX_GUESTS_PER_IP, MAX_GUESTS_PER_ROOM } from "../src/server/rooms.js";
 import { type GameEvent, type Participation, type Settings, defaultSettings } from "../src/shared/contracts.js";
 import { reduce } from "../src/shared/game/reduce.js";
@@ -673,6 +673,16 @@ describe.skipIf(!dbUrl)("the game with PostgreSQL", () => {
         expect(c.messages.filter((m) => m.type === "reactions").length).toBeLessThanOrEqual(2);
       }
       expect((await eventsOf(slug)).length).toBe(events);
+    });
+
+    it("lets a reaction through that arrives a little early, as network jitter makes it", async () => {
+      const slug = await newRoom();
+      const cu = await connect(slug, await makeUser());
+      cu.send({ type: "react", emoji: "🎉" });
+      await new Promise((resolve) => setTimeout(resolve, REACTION_INTERVAL_MS - 100)); // sent on time, arrived 100 ms early
+      cu.send({ type: "react", emoji: "🎉" });
+      await until(() => expect(reactionsOf(cu)).toEqual({ "🎉": 2 }));
+      expect(cu.errors).toEqual([]);
     });
 
     it("refuses reactions when the hosts switched them off", async () => {

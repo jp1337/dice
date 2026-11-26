@@ -19,6 +19,7 @@ import {
   type ServerMessage,
   type Settings,
   REACTION_INTERVAL_MS,
+  REACTION_SLACK_MS,
   clientMessageSchema,
   createRoomRequestSchema,
   defaultSettings,
@@ -645,7 +646,7 @@ export function registerRooms(
       case "react": {
         if (!room.settings.reactions) throw fail("reactions_off", "Reaktionen sind in diesem Raum abgeschaltet.");
         const now = Date.now();
-        if (now < (room.lastReaction.get(actorId) ?? -Infinity) + REACTION_INTERVAL_MS) throw fail("reaction_too_fast", "Kurz warten, dann geht die nächste Reaktion.");
+        if (now < (room.lastReaction.get(actorId) ?? -Infinity) + REACTION_INTERVAL_MS - REACTION_SLACK_MS) throw fail("reaction_too_fast", "Kurz warten, dann geht die nächste Reaktion.");
         room.lastReaction.set(actorId, now);
         room.reactions.set(message.emoji, (room.reactions.get(message.emoji) ?? 0) + 1);
         room.reactionTimer ??= setTimeout(() => sendReactions(room), REACTION_BUNDLE_MS);
