@@ -19,6 +19,10 @@
   --face: var(--tint-hover);
 }
 
+.reaction-bar button[aria-disabled="true"]:hover {
+  --face: var(--field); /* the slot's own face, not the global locked-hover tint */
+}
+
 .reaction-bar button[aria-disabled="true"]:active {
   transform: none;
 }
